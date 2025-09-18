@@ -45,8 +45,7 @@ foreach ($modules as $module) {
     "status"=> $module['status']
   ];
   foreach ($quizzes as $quiz) {
-    // If quiz matches module, attach (requires module_id in quizzes)
-    // For now, show all quizzes after each module
+    // TODO: If you have module_id in quizzes, filter by module
     $journey[] = [
       "title" => $quiz['title'],
       "type"  => "quiz",
@@ -212,36 +211,34 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
       </div>
 
       <!-- Quizzes -->
-    <!-- Quizzes -->
-<div class="bg-white/80 backdrop-blur-xl p-6 rounded-2xl shadow-lg border border-gray-200">
-  <h2 class="text-lg font-semibold mb-4">📝 Quizzes</h2>
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-    <?php foreach ($quizzes as $quiz): ?>
-      <div class="flex flex-col justify-between p-5 bg-white rounded-xl shadow border hover:shadow-lg transition">
-        <h4 class="font-semibold text-gray-800 mb-3 text-lg"><?= htmlspecialchars($quiz['title']) ?></h4>
-        <span class="inline-block self-start px-3 py-1 mb-4 rounded-full text-sm font-medium
-          <?php if ($quiz['status'] === 'Completed') echo 'bg-green-100 text-green-700'; ?>
-          <?php if ($quiz['status'] === 'Pending') echo 'bg-yellow-100 text-yellow-700'; ?>
-          <?php if ($quiz['status'] === 'Failed') echo 'bg-red-100 text-red-700'; ?>">
-          <?= htmlspecialchars($quiz['status']) ?>
-        </span>
-        <div class="mt-auto">
-          <a href="../actions/attempt_quiz.php $quiz['id'] ?>" 
-             class="block text-center bg-gradient-to-r from-teal-600 to-blue-600 text-white px-4 py-2 rounded-lg shadow hover:from-teal-700 hover:to-blue-700 transition">
-            <?php if ($quiz['status'] === 'Completed'): ?>
-              Retake Quiz
-            <?php elseif ($quiz['status'] === 'Failed'): ?>
-              Retry Quiz
-            <?php else: ?>
-              Take Quiz
-            <?php endif; ?>
-          </a>
+      <div class="bg-white/80 backdrop-blur-xl p-6 rounded-2xl shadow-lg border border-gray-200">
+        <h2 class="text-lg font-semibold mb-4">📝 Quizzes</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <?php foreach ($quizzes as $quiz): ?>
+            <div class="flex flex-col justify-between p-5 bg-white rounded-xl shadow border hover:shadow-lg transition">
+              <h4 class="font-semibold text-gray-800 mb-3 text-lg"><?= htmlspecialchars($quiz['title']) ?></h4>
+              <span class="inline-block self-start px-3 py-1 mb-4 rounded-full text-sm font-medium
+                <?php if ($quiz['status'] === 'Completed') echo 'bg-green-100 text-green-700'; ?>
+                <?php if ($quiz['status'] === 'Pending') echo 'bg-yellow-100 text-yellow-700'; ?>
+                <?php if ($quiz['status'] === 'Failed') echo 'bg-red-100 text-red-700'; ?>">
+                <?= htmlspecialchars($quiz['status']) ?>
+              </span>
+              <div class="mt-auto">
+                <a href="../member/take_quiz.php?id=<?= $quiz['id'] ?>" 
+                   class="block text-center bg-gradient-to-r from-teal-600 to-blue-600 text-white px-4 py-2 rounded-lg shadow hover:from-teal-700 hover:to-blue-700 transition">
+                  <?php if ($quiz['status'] === 'Completed'): ?>
+                    Retake Quiz
+                  <?php elseif ($quiz['status'] === 'Failed'): ?>
+                    Retry Quiz
+                  <?php else: ?>
+                    Take Quiz
+                  <?php endif; ?>
+                </a>
+              </div>
+            </div>
+          <?php endforeach; ?>
         </div>
       </div>
-    <?php endforeach; ?>
-  </div>
-</div>
-
 
       <!-- Daily Tip -->
       <div class="bg-gradient-to-r from-indigo-500 to-teal-500 text-white p-5 rounded-2xl shadow-lg">

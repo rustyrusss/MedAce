@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Sep 17, 2025 at 09:27 AM
+-- Generation Time: Sep 18, 2025 at 11:51 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -33,6 +33,20 @@ CREATE TABLE `answers` (
   `answer_text` varchar(255) NOT NULL,
   `is_correct` tinyint(1) DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `answers`
+--
+
+INSERT INTO `answers` (`id`, `question_id`, `answer_text`, `is_correct`) VALUES
+(1, 1, 'Hev Abi', 1),
+(2, 1, 'Buzz Cut', 0),
+(3, 1, 'Lapu-Lapu', 0),
+(4, 1, 'Fishball Man', 0),
+(5, 2, 'Diwata Pares', 0),
+(6, 2, 'Jose P. Rizal', 1),
+(7, 2, 'Vic Sotto', 0),
+(8, 2, 'Renejay', 0);
 
 -- --------------------------------------------------------
 
@@ -91,8 +105,18 @@ CREATE TABLE `nursing_tips` (
 CREATE TABLE `questions` (
   `id` int(11) NOT NULL,
   `quiz_id` int(11) NOT NULL,
-  `question_text` text NOT NULL
+  `question_text` text NOT NULL,
+  `options` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`options`)),
+  `correct_answer` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `questions`
+--
+
+INSERT INTO `questions` (`id`, `quiz_id`, `question_text`, `options`, `correct_answer`) VALUES
+(1, 8, 'Sino ang pumatay kay Magellan?', NULL, NULL),
+(2, 8, 'Sino ang Pambansang Bayani ng Pilipinas?', NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -135,6 +159,36 @@ CREATE TABLE `quiz_attempts` (
   `score` int(11) DEFAULT NULL,
   `attempted_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `quiz_attempts`
+--
+
+INSERT INTO `quiz_attempts` (`id`, `quiz_id`, `student_id`, `status`, `score`, `attempted_at`) VALUES
+(17, 8, 10, 'Completed', 2, '2025-09-17 14:25:08');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `student_answers`
+--
+
+CREATE TABLE `student_answers` (
+  `id` int(11) NOT NULL,
+  `attempt_id` int(11) NOT NULL,
+  `question_id` int(11) NOT NULL,
+  `answer_id` int(11) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `answered_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `student_answers`
+--
+
+INSERT INTO `student_answers` (`id`, `attempt_id`, `question_id`, `answer_id`, `created_at`, `answered_at`) VALUES
+(10, 17, 1, 1, '2025-09-17 14:25:08', '2025-09-17 14:25:08'),
+(11, 17, 2, 6, '2025-09-17 14:25:08', '2025-09-17 14:25:08');
 
 -- --------------------------------------------------------
 
@@ -193,7 +247,8 @@ INSERT INTO `users` (`id`, `firstName`, `lastName`, `username`, `email`, `passwo
 (13, '', '', 'Dean', '', '123456', 'dean', NULL, NULL, '', 'approved', '2025-09-12 18:41:36'),
 (14, 'Dean', 'Dean', 'dean1', 'dean@gmail.com', '$2y$10$/WQUetNkYay0vy1fug8PculcJSCwoT6gEhEimNr6HAINWEVjUZ3wG', 'dean', '3D', '3', '', 'approved', '2025-09-12 18:41:36'),
 (15, 'John', 'Cena', 'John', 'John@gmail.com', '$2y$10$Q.7GemI/uZG9/wh0gqGacOVSWBsxiUmeDlH3TAJK9VwpbmYjTrY.6', 'professor', NULL, NULL, '', 'approved', '2025-09-12 18:41:36'),
-(16, 'Prof', 'Rey', 'Rey', 'ReyMysterio@gmail.com', '$2y$10$MriO2TabyDUTXUz7TieoN.FZFgU89Fdpln3vyLnNIzLZRZ9Z2ZVyW', 'professor', NULL, NULL, '', 'pending', '2025-09-12 18:46:53');
+(16, 'Prof', 'Rey', 'Rey', 'ReyMysterio@gmail.com', '$2y$10$MriO2TabyDUTXUz7TieoN.FZFgU89Fdpln3vyLnNIzLZRZ9Z2ZVyW', 'professor', NULL, NULL, '', 'pending', '2025-09-12 18:46:53'),
+(17, 'Mavs', 'Austria', 'mavs', 'Mavs1@gmail.com', '$2y$10$UIgwN7D5goIzOblv96t.4eEFHX9w8fOfxLJIlLgUsC1Xi7MloNTfK', 'student', '3A', '3', '', 'approved', '2025-09-17 13:41:52');
 
 --
 -- Indexes for dumped tables
@@ -250,6 +305,15 @@ ALTER TABLE `quiz_attempts`
   ADD KEY `fk_quiz_attempts_quiz` (`quiz_id`);
 
 --
+-- Indexes for table `student_answers`
+--
+ALTER TABLE `student_answers`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_attempt` (`attempt_id`),
+  ADD KEY `fk_question` (`question_id`),
+  ADD KEY `fk_answer` (`answer_id`);
+
+--
 -- Indexes for table `student_progress`
 --
 ALTER TABLE `student_progress`
@@ -271,7 +335,7 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `answers`
 --
 ALTER TABLE `answers`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- AUTO_INCREMENT for table `lessons`
@@ -295,7 +359,7 @@ ALTER TABLE `nursing_tips`
 -- AUTO_INCREMENT for table `questions`
 --
 ALTER TABLE `questions`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `quizzes`
@@ -307,7 +371,13 @@ ALTER TABLE `quizzes`
 -- AUTO_INCREMENT for table `quiz_attempts`
 --
 ALTER TABLE `quiz_attempts`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
+
+--
+-- AUTO_INCREMENT for table `student_answers`
+--
+ALTER TABLE `student_answers`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT for table `student_progress`
@@ -319,7 +389,7 @@ ALTER TABLE `student_progress`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int(255) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
+  MODIFY `id` int(255) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
 
 --
 -- Constraints for dumped tables
@@ -359,6 +429,14 @@ ALTER TABLE `quiz_attempts`
   ADD CONSTRAINT `fk_quiz_attempts_student` FOREIGN KEY (`student_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `quiz_attempts_ibfk_1` FOREIGN KEY (`quiz_id`) REFERENCES `quizzes` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `quiz_attempts_ibfk_2` FOREIGN KEY (`student_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `student_answers`
+--
+ALTER TABLE `student_answers`
+  ADD CONSTRAINT `fk_answer` FOREIGN KEY (`answer_id`) REFERENCES `answers` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_attempt` FOREIGN KEY (`attempt_id`) REFERENCES `quiz_attempts` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_question` FOREIGN KEY (`question_id`) REFERENCES `questions` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `student_progress`

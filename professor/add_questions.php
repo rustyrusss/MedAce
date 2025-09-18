@@ -22,33 +22,71 @@ if (!$quiz) {
 
 $message = "";
 
-// Handle form submit
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// ✅ Handle Add Question
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_question'])) {
     $question_text = trim($_POST['question_text']);
     $answers = $_POST['answers'];
     $correct = $_POST['correct']; // index of correct answer
 
     if ($question_text !== "" && !empty($answers)) {
-        // Insert question
         $stmt = $conn->prepare("INSERT INTO questions (quiz_id, question_text) VALUES (?, ?)");
         $stmt->execute([$quiz_id, $question_text]);
         $question_id = $conn->lastInsertId();
 
-        // Insert answers
         foreach ($answers as $i => $answer_text) {
             if (trim($answer_text) !== "") {
                 $stmt = $conn->prepare("INSERT INTO answers (question_id, answer_text, is_correct) VALUES (?, ?, ?)");
                 $stmt->execute([$question_id, $answer_text, ($i == $correct ? 1 : 0)]);
             }
         }
-
         $message = "✅ Question added successfully!";
     } else {
         $message = "⚠️ Please enter a question and at least one answer.";
     }
 }
 
-// Fetch existing questions for display
+// ✅ Handle Delete Question
+if (isset($_POST['delete_question'])) {
+    $qid = intval($_POST['question_id']);
+    // Delete answers first
+    $stmt = $conn->prepare("DELETE FROM answers WHERE question_id = ?");
+    $stmt->execute([$qid]);
+    // Then delete question
+    $stmt = $conn->prepare("DELETE FROM questions WHERE id = ? AND quiz_id = ?");
+    $stmt->execute([$qid, $quiz_id]);
+    $message = "🗑 Question deleted successfully.";
+}
+
+// ✅ Handle Edit Question
+if (isset($_POST['edit_question'])) {
+    $qid = intval($_POST['question_id']);
+    $question_text = trim($_POST['question_text']);
+    $answers = $_POST['answers'];
+    $correct = $_POST['correct'];
+
+    if ($question_text !== "" && !empty($answers)) {
+        // Update question
+        $stmt = $conn->prepare("UPDATE questions SET question_text = ? WHERE id = ? AND quiz_id = ?");
+        $stmt->execute([$question_text, $qid, $quiz_id]);
+
+        // Delete old answers
+        $stmt = $conn->prepare("DELETE FROM answers WHERE question_id = ?");
+        $stmt->execute([$qid]);
+
+        // Insert new answers
+        foreach ($answers as $i => $answer_text) {
+            if (trim($answer_text) !== "") {
+                $stmt = $conn->prepare("INSERT INTO answers (question_id, answer_text, is_correct) VALUES (?, ?, ?)");
+                $stmt->execute([$qid, $answer_text, ($i == $correct ? 1 : 0)]);
+            }
+        }
+        $message = "✏️ Question updated successfully!";
+    } else {
+        $message = "⚠️ Please enter a question and at least one answer.";
+    }
+}
+
+// Fetch existing questions
 $stmt = $conn->prepare("SELECT * FROM questions WHERE quiz_id = ?");
 $stmt->execute([$quiz_id]);
 $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -70,6 +108,7 @@ $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     <!-- Add Question Form -->
     <form method="POST" class="space-y-4 mb-8">
+      <input type="hidden" name="add_question" value="1">
       <div>
         <label class="block text-sm font-medium">Question</label>
         <textarea name="question_text" required class="w-full p-2 border rounded"></textarea>
@@ -86,7 +125,7 @@ $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
       </div>
 
       <div class="flex justify-between">
-        <a href="dashboard_professor.php" class="px-4 py-2 bg-gray-300 rounded-lg hover:bg-gray-400">⬅ Back</a>
+        <a href="../professor/dashboard.php" class="px-4 py-2 bg-gray-300 rounded-lg hover:bg-gray-400">⬅ Back</a>
         <button type="submit" class="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Add Question</button>
       </div>
     </form>
@@ -97,19 +136,32 @@ $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
       <ul class="space-y-4">
         <?php foreach ($questions as $q): ?>
           <li class="p-4 border rounded-lg bg-gray-50">
-            <p class="font-medium"><?= htmlspecialchars($q['question_text']) ?></p>
-            <ul class="list-disc pl-6 mt-2 text-gray-700">
-              <?php
-                $stmt = $conn->prepare("SELECT * FROM answers WHERE question_id = ?");
-                $stmt->execute([$q['id']]);
-                $answers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                foreach ($answers as $a): ?>
-                  <li class="<?= $a['is_correct'] ? 'text-green-600 font-semibold' : '' ?>">
-                    <?= htmlspecialchars($a['answer_text']) ?>
-                    <?= $a['is_correct'] ? '(Correct)' : '' ?>
-                  </li>
-              <?php endforeach; ?>
-            </ul>
+            <form method="POST" class="space-y-3">
+              <input type="hidden" name="question_id" value="<?= $q['id'] ?>">
+
+              <!-- Editable Question -->
+              <textarea name="question_text" class="w-full p-2 border rounded"><?= htmlspecialchars($q['question_text']) ?></textarea>
+
+              <!-- Editable Answers -->
+              <div>
+                <?php
+                  $stmt = $conn->prepare("SELECT * FROM answers WHERE question_id = ?");
+                  $stmt->execute([$q['id']]);
+                  $answers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                  foreach ($answers as $i => $a): ?>
+                    <div class="flex items-center mb-2">
+                      <input type="radio" name="correct" value="<?= $i ?>" class="mr-2" <?= $a['is_correct'] ? 'checked' : '' ?>>
+                      <input type="text" name="answers[]" value="<?= htmlspecialchars($a['answer_text']) ?>" class="flex-1 p-2 border rounded">
+                    </div>
+                <?php endforeach; ?>
+              </div>
+
+              <!-- Action buttons -->
+              <div class="flex justify-between">
+                <button type="submit" name="delete_question" value="1" class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600" onclick="return confirm('Are you sure you want to delete this question?')">Delete</button>
+                <button type="submit" name="edit_question" value="1" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">Save Changes</button>
+              </div>
+            </form>
           </li>
         <?php endforeach; ?>
       </ul>
