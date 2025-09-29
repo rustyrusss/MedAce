@@ -12,7 +12,12 @@ $professor_id = $_SESSION['user_id'];
 $professor_name = $_SESSION['firstname'] . " " . $_SESSION['lastname'];
 
 // === Fetch Quizzes for this professor ===
-$stmt = $conn->prepare("SELECT id, title, created_at, status FROM quizzes WHERE professor_id = ? ORDER BY created_at DESC");
+$stmt = $conn->prepare("
+    SELECT id, title, created_at, publish_time, deadline_time, status 
+    FROM quizzes 
+    WHERE professor_id = ? 
+    ORDER BY created_at DESC
+");
 $stmt->execute([$professor_id]);
 $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -86,6 +91,8 @@ $dailyTip = $tips[array_rand($tips)];
           <tr class="bg-gray-100 text-left">
             <th class="p-3">Title</th>
             <th class="p-3">Created At</th>
+            <th class="p-3">Publish Time</th>
+            <th class="p-3">Deadline</th>
             <th class="p-3">Status</th>
             <th class="p-3">Actions</th>
           </tr>
@@ -95,7 +102,29 @@ $dailyTip = $tips[array_rand($tips)];
             <?php foreach ($quizzes as $quiz): ?>
               <tr class="border-t hover:bg-gray-50">
                 <td class="p-3"><?= htmlspecialchars($quiz['title']) ?></td>
-                <td class="p-3"><?= htmlspecialchars($quiz['created_at']) ?></td>
+                <td class="p-3">
+                  <?= $quiz['created_at'] 
+                        ? date("F j, Y - g:i A", strtotime($quiz['created_at'])) 
+                        : '<span class="text-gray-500">N/A</span>' ?>
+                </td>
+                <td class="p-3">
+                  <?= $quiz['publish_time'] 
+                        ? date("F j, Y - g:i A", strtotime($quiz['publish_time'])) 
+                        : '<span class="text-gray-500">Not set</span>' ?>
+                </td>
+                <td class="p-3">
+                  <?php if ($quiz['deadline_time']): ?>
+                    <?php if (strtotime($quiz['deadline_time']) < time()): ?>
+                      <span class="text-red-600 font-semibold">
+                        <?= date("F j, Y - g:i A", strtotime($quiz['deadline_time'])) ?> (Expired)
+                      </span>
+                    <?php else: ?>
+                      <?= date("F j, Y - g:i A", strtotime($quiz['deadline_time'])) ?>
+                    <?php endif; ?>
+                  <?php else: ?>
+                    <span class="text-gray-500">No deadline</span>
+                  <?php endif; ?>
+                </td>
                 <td class="p-3">
                   <span class="px-2 py-1 rounded-lg text-sm 
                     <?= $quiz['status'] === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' ?>">
@@ -112,7 +141,6 @@ $dailyTip = $tips[array_rand($tips)];
                      class="px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200">
                        Delete
                   </a>
-                  </a>
                   <a href="add_questions.php?quiz_id=<?= $quiz['id'] ?>" 
                      class="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200">
                      Questions
@@ -122,7 +150,7 @@ $dailyTip = $tips[array_rand($tips)];
             <?php endforeach; ?>
           <?php else: ?>
             <tr>
-              <td colspan="4" class="text-center text-gray-500 py-4">No quizzes created yet.</td>
+              <td colspan="6" class="text-center text-gray-500 py-4">No quizzes created yet.</td>
             </tr>
           <?php endif; ?>
         </tbody>

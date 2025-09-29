@@ -22,6 +22,15 @@ if (!$quiz) {
 
 $message = "";
 
+// ✅ Handle Time Update
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_time'])) {
+    $time_limit = intval($_POST['time_limit']);
+    $stmt = $conn->prepare("UPDATE quizzes SET time_limit = ? WHERE id = ? AND professor_id = ?");
+    $stmt->execute([$time_limit, $quiz_id, $professor_id]);
+    $quiz['time_limit'] = $time_limit; // refresh in page
+    $message = "⏰ Time limit updated successfully!";
+}
+
 // ✅ Handle Add Question
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_question'])) {
     $question_text = trim($_POST['question_text']);
@@ -48,10 +57,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_question'])) {
 // ✅ Handle Delete Question
 if (isset($_POST['delete_question'])) {
     $qid = intval($_POST['question_id']);
-    // Delete answers first
     $stmt = $conn->prepare("DELETE FROM answers WHERE question_id = ?");
     $stmt->execute([$qid]);
-    // Then delete question
     $stmt = $conn->prepare("DELETE FROM questions WHERE id = ? AND quiz_id = ?");
     $stmt->execute([$qid, $quiz_id]);
     $message = "🗑 Question deleted successfully.";
@@ -65,15 +72,12 @@ if (isset($_POST['edit_question'])) {
     $correct = $_POST['correct'];
 
     if ($question_text !== "" && !empty($answers)) {
-        // Update question
         $stmt = $conn->prepare("UPDATE questions SET question_text = ? WHERE id = ? AND quiz_id = ?");
         $stmt->execute([$question_text, $qid, $quiz_id]);
 
-        // Delete old answers
         $stmt = $conn->prepare("DELETE FROM answers WHERE question_id = ?");
         $stmt->execute([$qid]);
 
-        // Insert new answers
         foreach ($answers as $i => $answer_text) {
             if (trim($answer_text) !== "") {
                 $stmt = $conn->prepare("INSERT INTO answers (question_id, answer_text, is_correct) VALUES (?, ?, ?)");
@@ -105,6 +109,14 @@ $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <?php if ($message): ?>
       <div class="mb-4 p-3 rounded bg-green-50 text-green-700"><?= htmlspecialchars($message) ?></div>
     <?php endif; ?>
+
+    <!-- Time Limit Form -->
+    <form method="POST" class="flex items-center gap-3 mb-8">
+      <input type="hidden" name="update_time" value="1">
+      <label class="font-medium">Time Limit (minutes):</label>
+      <input type="number" name="time_limit" value="<?= htmlspecialchars($quiz['time_limit'] ?? 0) ?>" class="p-2 border rounded w-24" min="0">
+      <button type="submit" class="px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700">Update</button>
+    </form>
 
     <!-- Add Question Form -->
     <form method="POST" class="space-y-4 mb-8">
@@ -139,10 +151,8 @@ $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <form method="POST" class="space-y-3">
               <input type="hidden" name="question_id" value="<?= $q['id'] ?>">
 
-              <!-- Editable Question -->
               <textarea name="question_text" class="w-full p-2 border rounded"><?= htmlspecialchars($q['question_text']) ?></textarea>
 
-              <!-- Editable Answers -->
               <div>
                 <?php
                   $stmt = $conn->prepare("SELECT * FROM answers WHERE question_id = ?");
@@ -156,7 +166,6 @@ $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <?php endforeach; ?>
               </div>
 
-              <!-- Action buttons -->
               <div class="flex justify-between">
                 <button type="submit" name="delete_question" value="1" class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600" onclick="return confirm('Are you sure you want to delete this question?')">Delete</button>
                 <button type="submit" name="edit_question" value="1" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">Save Changes</button>
