@@ -8,160 +8,184 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'professor') {
     exit();
 }
 
-$professor_id = $_SESSION['user_id'];
-$professor_name = $_SESSION['firstname'] . " " . $_SESSION['lastname'];
+$professorId = $_SESSION['user_id'];
 
-// === Fetch Quizzes for this professor ===
-$stmt = $conn->prepare("
-    SELECT id, title, created_at, publish_time, deadline_time, status 
-    FROM quizzes 
-    WHERE professor_id = ? 
-    ORDER BY created_at DESC
-");
-$stmt->execute([$professor_id]);
-$quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Get professor info
+$stmt = $conn->prepare("SELECT firstname, lastname, email, profile_pic, gender FROM users WHERE id = ?");
+$stmt->execute([$professorId]);
+$prof = $stmt->fetch(PDO::FETCH_ASSOC);
+$profName = $prof ? $prof['firstname'] . " " . $prof['lastname'] : "Professor";
 
-// === Fetch Stats ===
-// Total students
-$studentsCount = $conn->query("SELECT COUNT(*) FROM users WHERE role = 'student'")->fetchColumn();
+// Default avatar
+if (!empty($prof['gender'])) {
+    if (strtolower($prof['gender']) === "male") {
+        $defaultAvatar = "../assets/img/avatar_male.png";
+    } elseif (strtolower($prof['gender']) === "female") {
+        $defaultAvatar = "../assets/img/avatar_female.png";
+    } else {
+        $defaultAvatar = "../assets/img/avatar_neutral.png";
+    }
+} else {
+    $defaultAvatar = "../assets/img/avatar_neutral.png";
+}
 
-// Total quiz attempts for this professor's quizzes
-$stmt = $conn->prepare("
-    SELECT COUNT(*) 
-    FROM quiz_attempts qa
-    JOIN quizzes q ON qa.quiz_id = q.id
-    WHERE q.professor_id = ?
-");
-$stmt->execute([$professor_id]);
-$attemptsCount = $stmt->fetchColumn();
+$profilePic = !empty($prof['profile_pic']) ? "../" . $prof['profile_pic'] : $defaultAvatar;
 
-// Daily tip
-$tips = [
-    "Encourage students to ask questions during lectures.",
-    "Provide feedback that is specific, constructive, and timely.",
-    "Balance theory with practical applications.",
-    "Use active learning techniques to increase engagement.",
-    "Stay updated with new teaching tools and methods."
-];
-$dailyTip = $tips[array_rand($tips)];
+// Dashboard counts
+$totalModules = $conn->query("SELECT COUNT(*) FROM modules")->fetchColumn();
+$totalQuizzes = $conn->query("SELECT COUNT(*) FROM quizzes")->fetchColumn();
+$totalStudents = $conn->query("SELECT COUNT(*) FROM users WHERE role='student'")->fetchColumn();
+
+// Get lists
+$modules = $conn->query("SELECT id, title, created_at FROM modules ORDER BY id DESC LIMIT 5")->fetchAll(PDO::FETCH_ASSOC);
+$quizzes = $conn->query("SELECT id, title, publish_time, deadline_time FROM quizzes ORDER BY id DESC LIMIT 5")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Professor Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html { scroll-behavior: smooth; }
+    .transition-all * { transition: all 0.2s ease-in-out; }
+  </style>
 </head>
-<body class="bg-gray-50 flex min-h-screen">
+<body class="transition-all min-h-screen bg-gradient-to-br from-teal-50 via-blue-50 to-indigo-100 text-gray-800">
 
-  <!-- Sidebar -->
-  <aside class="w-64 bg-white shadow-lg p-4">
-    <h2 class="text-xl font-bold mb-6">Professor Panel</h2>
-    <nav class="space-y-3">
-      <a href="dashboard_professor.php" class="block p-2 rounded-lg hover:bg-gray-100 font-medium">🏠 Dashboard</a>
-      <a href="add_quiz.php" class="block p-2 rounded-lg hover:bg-gray-100 font-medium">➕ Add Quiz</a>
-      <a href="../actions/logout_action.php" class="block p-2 rounded-lg hover:bg-gray-100 font-medium">🚪 Logout</a>
+<!-- Sidebar -->
+<aside class="fixed inset-y-0 left-0 bg-white/90 backdrop-blur-xl shadow-lg border-r border-gray-200 p-5 flex flex-col z-30 transition-all duration-300 w-64">
+    
+    <!-- Profile -->
+    <div class="flex items-center mb-10 space-x-4">
+        <img src="<?= htmlspecialchars($profilePic) ?>" alt="avatar"
+             class="w-12 h-12 rounded-full border-2 border-teal-400 shadow-md object-cover bg-gray-100" />
+        <div class="flex flex-col overflow-hidden">
+            <p class="text-xl font-bold mb-1"><?= htmlspecialchars(ucwords(strtolower($profName))) ?></p>
+            <p class="text-sm text-gray-500">Professor</p>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="flex-1 space-y-6">
+        <div>
+            <p class="text-xs uppercase text-gray-400 font-semibold mb-2">Main</p>
+            <a href="dashboard.php" class="flex items-center p-2 rounded-lg bg-teal-100 font-medium">
+                <span class="text-xl">🏠</span>
+                <span class="ml-3">Dashboard</span>
+            </a>
+            <a href="manage_modules.php" class="flex items-center p-2 rounded-lg hover:bg-teal-100 transition">
+                <span class="text-xl">📘</span>
+                <span class="ml-3">Modules</span>
+            </a>
+            <a href="manage_quizzes.php" class="flex items-center p-2 rounded-lg hover:bg-teal-100 transition">
+                <span class="text-xl">📝</span>
+                <span class="ml-3">Quizzes</span>
+            </a>
+            <a href="student_progress.php" class="flex items-center p-2 rounded-lg hover:bg-teal-100 transition">
+                <span class="text-xl">👨‍🎓</span>
+                <span class="ml-3">Student Progress</span>
+            </a>
+        </div>
     </nav>
-  </aside>
 
-  <!-- Main Content -->
-  <main class="flex-1 p-8">
-    <h1 class="text-2xl font-bold mb-4">Welcome, <?= htmlspecialchars($professor_name) ?> 👨‍🏫</h1>
+    <!-- Logout -->
+    <div class="mt-auto">
+        <a href="../actions/logout_action.php"
+           class="flex items-center p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition">
+            <span class="text-xl">🚪</span>
+            <span class="ml-3 font-medium">Logout</span>
+        </a>
+    </div>
+</aside>
 
-    <!-- Stats -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-      <div class="bg-white p-6 rounded-xl shadow">
-        <h2 class="text-lg font-semibold">📊 Students Enrolled</h2>
-        <p class="text-2xl font-bold text-blue-600"><?= $studentsCount ?></p>
-      </div>
-      <div class="bg-white p-6 rounded-xl shadow">
-        <h2 class="text-lg font-semibold">📝 Quiz Attempts</h2>
-        <p class="text-2xl font-bold text-green-600"><?= $attemptsCount ?></p>
-      </div>
+<!-- Main content -->
+<div class="md:ml-64 p-6 space-y-10 transition-all">
+
+    <h1 class="text-3xl font-bold text-gray-800">
+      Welcome, <?= htmlspecialchars(ucwords(strtolower($profName))) ?> 👋
+    </h1>
+
+    <!-- Overview Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div class="bg-white/80 p-6 rounded-2xl shadow-lg border border-gray-200">
+            <h2 class="text-sm text-gray-500">📘 Total Modules</h2>
+            <p class="text-3xl font-bold text-teal-600"><?= $totalModules ?></p>
+        </div>
+        <div class="bg-white/80 p-6 rounded-2xl shadow-lg border border-gray-200">
+            <h2 class="text-sm text-gray-500">📝 Total Quizzes</h2>
+            <p class="text-3xl font-bold text-blue-600"><?= $totalQuizzes ?></p>
+        </div>
+        <div class="bg-white/80 p-6 rounded-2xl shadow-lg border border-gray-200">
+            <h2 class="text-sm text-gray-500">👨‍🎓 Total Students</h2>
+            <p class="text-3xl font-bold text-indigo-600"><?= $totalStudents ?></p>
+        </div>
+    </div>
+
+    <!-- Modules -->
+    <div class="bg-white/80 p-6 rounded-2xl shadow-lg border border-gray-200">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold">📘 Recent Modules</h2>
+            <a href="manage_modules.php" class="text-teal-600 hover:underline font-medium">Go to Modules →</a>
+        </div>
+        <?php if (empty($modules)): ?>
+            <p class="text-gray-500">No modules created yet.</p>
+        <?php else: ?>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-gray-700">
+                    <thead>
+                        <tr class="border-b border-gray-200">
+                            <th class="p-2">Title</th>
+                            <th class="p-2">Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($modules as $m): ?>
+                        <tr class="border-b border-gray-200 hover:bg-gray-50">
+                            <td class="p-2"><?= htmlspecialchars($m['title']) ?></td>
+                            <td class="p-2"><?= date("F j, Y", strtotime($m['created_at'])) ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
     </div>
 
     <!-- Quizzes -->
-    <div class="bg-white p-6 rounded-xl shadow mb-8">
-      <div class="flex justify-between items-center mb-4">
-        <h2 class="text-lg font-semibold">Your Quizzes</h2>
-        <a href="add_quiz.php" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">+ Add Quiz</a>
-      </div>
-      <table class="w-full border border-gray-200 rounded-lg">
-        <thead>
-          <tr class="bg-gray-100 text-left">
-            <th class="p-3">Title</th>
-            <th class="p-3">Created At</th>
-            <th class="p-3">Publish Time</th>
-            <th class="p-3">Deadline</th>
-            <th class="p-3">Status</th>
-            <th class="p-3">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <?php if (!empty($quizzes)): ?>
-            <?php foreach ($quizzes as $quiz): ?>
-              <tr class="border-t hover:bg-gray-50">
-                <td class="p-3"><?= htmlspecialchars($quiz['title']) ?></td>
-                <td class="p-3">
-                  <?= $quiz['created_at'] 
-                        ? date("F j, Y - g:i A", strtotime($quiz['created_at'])) 
-                        : '<span class="text-gray-500">N/A</span>' ?>
-                </td>
-                <td class="p-3">
-                  <?= $quiz['publish_time'] 
-                        ? date("F j, Y - g:i A", strtotime($quiz['publish_time'])) 
-                        : '<span class="text-gray-500">Not set</span>' ?>
-                </td>
-                <td class="p-3">
-                  <?php if ($quiz['deadline_time']): ?>
-                    <?php if (strtotime($quiz['deadline_time']) < time()): ?>
-                      <span class="text-red-600 font-semibold">
-                        <?= date("F j, Y - g:i A", strtotime($quiz['deadline_time'])) ?> (Expired)
-                      </span>
-                    <?php else: ?>
-                      <?= date("F j, Y - g:i A", strtotime($quiz['deadline_time'])) ?>
-                    <?php endif; ?>
-                  <?php else: ?>
-                    <span class="text-gray-500">No deadline</span>
-                  <?php endif; ?>
-                </td>
-                <td class="p-3">
-                  <span class="px-2 py-1 rounded-lg text-sm 
-                    <?= $quiz['status'] === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' ?>">
-                    <?= ucfirst($quiz['status']) ?>
-                  </span>
-                </td>
-                <td class="p-3 space-x-2">
-                  <a href="edit_quiz.php?id=<?= $quiz['id'] ?>" 
-                     class="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200">
-                     Edit
-                  </a>
-                  <a href="../actions/delete_quiz.php?id=<?= $quiz['id'] ?>" 
-                    onclick="return confirm('Are you sure you want to delete this quiz?')"
-                     class="px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200">
-                       Delete
-                  </a>
-                  <a href="add_questions.php?quiz_id=<?= $quiz['id'] ?>" 
-                     class="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200">
-                     Questions
-                  </a>
-                </td>
-              </tr>
-            <?php endforeach; ?>
-          <?php else: ?>
-            <tr>
-              <td colspan="6" class="text-center text-gray-500 py-4">No quizzes created yet.</td>
-            </tr>
-          <?php endif; ?>
-        </tbody>
-      </table>
+    <div class="bg-white/80 p-6 rounded-2xl shadow-lg border border-gray-200">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold">📝 Recent Quizzes</h2>
+            <a href="manage_quizzes.php" class="text-blue-600 hover:underline font-medium">Go to Quizzes →</a>
+        </div>
+        <?php if (empty($quizzes)): ?>
+            <p class="text-gray-500">No quizzes available yet.</p>
+        <?php else: ?>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-gray-700">
+                    <thead>
+                        <tr class="border-b border-gray-200">
+                            <th class="p-2">Title</th>
+                            <th class="p-2">Publish</th>
+                            <th class="p-2">Deadline</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($quizzes as $q): ?>
+                        <tr class="border-b border-gray-200 hover:bg-gray-50">
+                            <td class="p-2"><?= htmlspecialchars($q['title']) ?></td>
+                            <td class="p-2"><?= $q['publish_time'] ? date("M j, Y g:i A", strtotime($q['publish_time'])) : '-' ?></td>
+                            <td class="p-2"><?= $q['deadline_time'] ? date("M j, Y g:i A", strtotime($q['deadline_time'])) : '-' ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
     </div>
 
-    <!-- Daily Teaching Tip -->
-    <div class="bg-blue-50 p-6 rounded-xl shadow">
-      <h2 class="text-lg font-semibold mb-2">💡 Teaching Tip of the Day</h2>
-      <p class="text-gray-700"><?= $dailyTip ?></p>
-    </div>
-  </main>
+</div>
+
 </body>
 </html>

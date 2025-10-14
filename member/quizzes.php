@@ -37,12 +37,13 @@ $stmt = $conn->prepare("
          COALESCE(qa.status, 'Pending') AS status
   FROM quizzes q
   LEFT JOIN quiz_attempts qa ON qa.quiz_id = q.id AND qa.student_id = ?
+  ORDER BY q.publish_time DESC
 ");
 $stmt->execute([$studentId]);
 $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
-<html lang="en" x-data="{ sidebarOpen: false, collapsed: false, filter: 'all', search: '' }">
+<html lang="en" x-data="{ sidebarOpen: false, collapsed: true, filter: 'all', search: '' }">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -64,9 +65,8 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
            'w-20': collapsed,
            '-translate-x-full md:translate-x-0': !sidebarOpen && window.innerWidth < 768
          }"
-         x-show="sidebarOpen || window.innerWidth >= 768"
-         x-transition>
-    
+         x-show="sidebarOpen || window.innerWidth >= 768">
+
     <!-- Profile -->
     <div class="flex items-center mb-10 transition-all"
          :class="collapsed ? 'justify-center' : 'space-x-4'">
@@ -75,7 +75,7 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
       <div x-show="!collapsed" class="flex flex-col overflow-hidden">
         <p class="text-xl font-bold mb-1"><?= htmlspecialchars(ucwords(strtolower($studentName))) ?></p>
         <p class="text-sm text-gray-500">Nursing Student</p>
-        <a href="profile_edit.php" class="text-xs mt-1 text-teal-600 hover:underline">Edit Profile Picture</a>
+        <a href="profile_edit.php" class="text-xs mt-1 text-teal-600 hover:underline">Edit Profile</a>
       </div>
     </div>
 
@@ -92,14 +92,15 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
           <span x-show="!collapsed" class="ml-3 font-medium text-gray-700">My Progress</span>
         </a>
       </div>
+
       <div>
         <p class="text-xs uppercase text-gray-400 font-semibold mb-2" x-show="!collapsed">Learning</p>
-        <a href="quizzes.php" class="flex items-center p-2 rounded-lg bg-teal-100 transition">
+        <a href="quizzes.php" class="flex items-center p-2 rounded-lg bg-teal-100 text-teal-700 font-semibold transition">
           <span class="text-xl">📝</span>
-          <span x-show="!collapsed" class="ml-3 font-medium text-teal-700 font-semibold">Quizzes</span>
+          <span x-show="!collapsed" class="ml-3">Quizzes</span>
         </a>
         <a href="resources.php" class="flex items-center p-2 rounded-lg hover:bg-teal-100 transition">
-          <span class="text-xl">📂</span>
+          <span class="text-xl">📚</span>
           <span x-show="!collapsed" class="ml-3 font-medium text-gray-700">Resources</span>
         </a>
       </div>
@@ -129,7 +130,7 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
   <!-- Content -->
   <div class="relative z-10 transition-all"
        :class="{ 'md:ml-64': !collapsed && window.innerWidth >= 768, 'md:ml-20': collapsed && window.innerWidth >= 768 }">
-    
+
     <!-- Mobile header -->
     <header class="flex items-center justify-between p-4 bg-white/60 backdrop-blur-xl border-b border-gray-200 shadow-md md:hidden sticky top-0 z-20">
       <button @click="sidebarOpen = true" class="text-gray-700 focus:outline-none">☰</button>
@@ -137,11 +138,11 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
     </header>
 
     <!-- Main -->
-    <main class="p-6">
+    <main class="p-6 space-y-10">
       <h1 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-6">📝 Quizzes</h1>
 
       <!-- Filters -->
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div class="flex space-x-2">
           <button @click="filter='all'" :class="filter==='all' ? 'bg-teal-600 text-white' : 'bg-gray-100'"
                   class="px-3 py-1 rounded-lg text-sm font-medium">All</button>
@@ -156,60 +157,57 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
                class="w-full sm:w-64 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-400" />
       </div>
 
-      <!-- Quiz List -->
-      <div class="grid gap-4" x-init="
-        let container = $el;
-        let arr = Array.from(container.querySelectorAll('[data-quiz]'));
-        arr.sort((a, b) => {
-          if (a.dataset.status === 'completed' && b.dataset.status !== 'completed') return 1;
-          if (b.dataset.status === 'completed' && a.dataset.status !== 'completed') return -1;
-          return 0;
-        });
-        arr.forEach(el => container.appendChild(el));
-      ">
-        <?php foreach ($quizzes as $quiz): 
-          $status = strtolower($quiz['status']);
-        ?>
-          <div data-quiz data-status="<?= $status ?>"
-               class="bg-white/80 backdrop-blur-xl p-4 rounded-lg shadow border flex flex-col gap-3"
-               x-show="(filter==='all' || filter=== '<?= $status ?>') && ('<?= strtolower(htmlspecialchars($quiz['title'])) ?>'.includes(search.toLowerCase()))">
-            
-            <!-- Info -->
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 class="text-lg font-semibold text-gray-800"><?= htmlspecialchars($quiz['title']) ?></h2>
-                <p class="text-sm text-gray-600">📅 <?= htmlspecialchars($quiz['publish_time']) ?></p>
-                <p class="text-sm text-red-600">⏰ <?= htmlspecialchars($quiz['deadline_time']) ?></p>
-              </div>
-              <span class="mt-2 sm:mt-0 px-3 py-1 rounded-full text-xs font-medium
-                <?= $status === 'completed' ? 'bg-green-100 text-green-700' :
-                   ($status === 'failed' ? 'bg-red-100 text-red-700' :
-                   'bg-yellow-100 text-yellow-700') ?>">
-                <?= htmlspecialchars(ucfirst($quiz['status'])) ?>
-              </span>
+      <!-- Quiz Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <?php if (empty($quizzes)): ?>
+          <p class="text-gray-500 col-span-full text-center">No quizzes available yet.</p>
+        <?php else: ?>
+          <?php foreach ($quizzes as $quiz): 
+            $status = strtolower($quiz['status']);
+            $statusClass = match ($status) {
+              'completed' => 'bg-green-100 text-green-700',
+              'failed' => 'bg-red-100 text-red-700',
+              'pending' => 'bg-yellow-100 text-yellow-700',
+              default => 'bg-gray-100 text-gray-700'
+            };
+          ?>
+          <div class="bg-white/90 backdrop-blur-xl rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all flex flex-col"
+               x-show="(filter==='all' || filter==='<?= $status ?>') && ('<?= strtolower(htmlspecialchars($quiz['title'])) ?>'.includes(search.toLowerCase()))">
+            <div class="h-44 bg-gradient-to-br from-teal-200 to-blue-200 flex items-center justify-center text-5xl">
+              📝
             </div>
+            <div class="flex flex-col flex-grow justify-between p-5">
+              <div>
+                <h3 class="text-lg font-semibold text-gray-800 mb-2"><?= htmlspecialchars($quiz['title']) ?></h3>
+                <p class="text-sm text-gray-600 mb-2">📅 <?= htmlspecialchars($quiz['publish_time']) ?></p>
+                <p class="text-sm text-red-600 mb-4">⏰ <?= htmlspecialchars($quiz['deadline_time']) ?></p>
+              </div>
 
-            <!-- Action Buttons -->
-            <div>
-              <?php if ($status === 'pending'): ?>
-                <a href="take_quiz.php?id=<?= $quiz['id'] ?>"
-                   class="inline-block px-4 py-2 rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition text-sm font-medium">
-                  Start Quiz
-                </a>
-              <?php elseif ($status === 'failed'): ?>
-                <a href="take_quiz.php?id=<?= $quiz['id'] ?>"
-                   class="inline-block px-4 py-2 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition text-sm font-medium">
-                  Retry Quiz
-                </a>
-              <?php elseif ($status === 'completed' && $quiz['attempt_id']): ?>
-                <a href="quiz_result.php?attempt_id=<?= $quiz['attempt_id'] ?>"
-                   class="inline-block px-4 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 transition text-sm font-medium">
-                  View Results
-                </a>
-              <?php endif; ?>
+              <div class="flex items-center justify-between mt-3">
+                <span class="px-3 py-1 rounded-full text-sm font-medium <?= $statusClass ?>">
+                  <?= htmlspecialchars(ucfirst($quiz['status'])) ?>
+                </span>
+                <?php if ($status === 'pending'): ?>
+                  <a href="take_quiz.php?id=<?= $quiz['id'] ?>"
+                     class="bg-gradient-to-r from-teal-600 to-blue-600 text-white px-4 py-2 rounded-lg shadow hover:from-teal-700 hover:to-blue-700 transition text-sm font-medium">
+                    Start Quiz
+                  </a>
+                <?php elseif ($status === 'failed'): ?>
+                  <a href="take_quiz.php?id=<?= $quiz['id'] ?>"
+                     class="bg-gradient-to-r from-orange-500 to-red-500 text-white px-4 py-2 rounded-lg shadow hover:from-orange-600 hover:to-red-600 transition text-sm font-medium">
+                    Retry Quiz
+                  </a>
+                <?php elseif ($status === 'completed' && $quiz['attempt_id']): ?>
+                  <a href="quiz_result.php?attempt_id=<?= $quiz['attempt_id'] ?>"
+                     class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg shadow hover:bg-gray-300 transition text-sm font-medium">
+                    View Results
+                  </a>
+                <?php endif; ?>
+              </div>
             </div>
           </div>
-        <?php endforeach; ?>
+          <?php endforeach; ?>
+        <?php endif; ?>
       </div>
     </main>
   </div>
