@@ -2,6 +2,7 @@
 session_start();
 require_once '../config/db_conn.php';
 
+// ✅ Only students
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
     header("Location: ../public/index.php");
     exit();
@@ -52,32 +53,47 @@ $stmt->execute([$attemptId, $attempt['quiz_id']]);
 $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title><?= htmlspecialchars($quiz['title']) ?> - Results</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-50 p-8">
-  <div class="max-w-3xl mx-auto bg-white shadow-lg rounded-xl p-6">
-    <h1 class="text-2xl font-bold mb-4">Results: <?= htmlspecialchars($quiz['title']) ?></h1>
-    <p class="mb-4">Score: <?= $attempt['score'] ?? 0 ?> / <?= count($results) ?></p>
+<body class="bg-gradient-to-br from-teal-50 via-blue-50 to-indigo-100 p-8">
+  <div class="max-w-4xl mx-auto bg-white/90 backdrop-blur-xl shadow-xl rounded-2xl p-8 border border-gray-200">
+    <!-- Quiz Header -->
+    <h1 class="text-3xl font-bold mb-2 text-gray-800"><?= htmlspecialchars($quiz['title']) ?> - Results</h1>
+    <p class="mb-6 text-gray-600">Score: 
+      <span class="font-semibold text-blue-700">
+        <?= $attempt['score'] ?? 0 ?> / <?= count($results) ?>
+      </span>
+    </p>
 
-    <?php foreach ($results as $index => $r): ?>
-      <div class="mb-4 p-4 border rounded-lg <?= $r['is_correct'] ? 'bg-green-50' : 'bg-red-50' ?>">
-        <p class="font-semibold"><?= ($index+1) ?>. <?= htmlspecialchars($r['question_text']) ?></p>
-        <p>Your Answer: 
-          <span class="font-medium">
-            <?= $r['chosen_answer'] ? htmlspecialchars($r['chosen_answer']) : '<em>No Answer</em>' ?>
-          </span>
-        </p>
-        <p>Correct Answer: <span class="font-medium"><?= htmlspecialchars($r['correct_answer']) ?></span></p>
-      </div>
-    <?php endforeach; ?>
+    <!-- Questions -->
+    <div class="space-y-4">
+      <?php foreach ($results as $index => $r): ?>
+        <div class="p-5 border rounded-xl shadow-sm <?= $r['is_correct'] ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200' ?>">
+          <p class="font-semibold text-gray-800 mb-2"><?= ($index+1) ?>. <?= htmlspecialchars($r['question_text']) ?></p>
+          
+          <p class="mb-1">Your Answer: 
+            <span class="font-medium <?= $r['is_correct'] ? 'text-green-700' : 'text-red-700' ?>">
+              <?= $r['chosen_answer'] ? htmlspecialchars($r['chosen_answer']) : '<em class="text-gray-500">No Answer</em>' ?>
+            </span>
+          </p>
+          
+          <p>Correct Answer: 
+            <span class="font-medium text-green-700">
+              <?= htmlspecialchars($r['correct_answer']) ?>
+            </span>
+          </p>
+        </div>
+      <?php endforeach; ?>
+    </div>
 
-    <!-- Back to Dashboard Button -->
-    <div class="mt-6 text-center">
+    <!-- Back Button -->
+    <div class="mt-8 text-center">
       <a href="../member/dashboard.php" 
-         class="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg shadow hover:bg-blue-700 transition">
+         class="inline-block bg-blue-600 text-white px-6 py-3 rounded-xl shadow hover:bg-blue-700 transition font-medium">
         ⬅ Back to Dashboard
       </a>
     </div>

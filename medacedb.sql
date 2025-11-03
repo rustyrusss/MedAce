@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Sep 18, 2025 at 11:51 AM
+-- Generation Time: Oct 14, 2025 at 11:46 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -80,10 +80,44 @@ INSERT INTO `lessons` (`id`, `title`, `description`, `content`, `professor_id`, 
 
 CREATE TABLE `modules` (
   `id` int(11) NOT NULL,
+  `professor_id` int(11) NOT NULL,
   `title` varchar(255) DEFAULT NULL,
+  `description` text DEFAULT NULL,
   `content` text DEFAULT NULL,
-  `order_number` int(11) DEFAULT NULL
+  `order_number` int(11) DEFAULT NULL,
+  `created_at` datetime DEFAULT current_timestamp(),
+  `status` enum('active','inactive') DEFAULT 'active'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `modules`
+--
+
+INSERT INTO `modules` (`id`, `professor_id`, `title`, `description`, `content`, `order_number`, `created_at`, `status`) VALUES
+(1, 11, 'MedAce', 'Try', 'uploads/modules/1759665851_MedAce A Smart Web-Based Review and Progress Tracker for Allied Health Licensure Exams (1).pptx', NULL, '2025-10-05 20:04:11', 'active'),
+(2, 11, 'Think Green', 'Think Green', 'uploads/modules/1760256144_Think Green · SlidesMania.pptx', NULL, '2025-10-12 16:02:24', 'active');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `module_progress`
+--
+
+CREATE TABLE `module_progress` (
+  `id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `module_id` int(11) NOT NULL,
+  `status` enum('started','completed') DEFAULT 'started',
+  `started_at` datetime DEFAULT current_timestamp(),
+  `completed_at` datetime DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `module_progress`
+--
+
+INSERT INTO `module_progress` (`id`, `user_id`, `module_id`, `status`, `started_at`, `completed_at`) VALUES
+(1, 10, 2, 'started', '2025-10-12 16:40:15', NULL);
 
 -- --------------------------------------------------------
 
@@ -107,16 +141,17 @@ CREATE TABLE `questions` (
   `quiz_id` int(11) NOT NULL,
   `question_text` text NOT NULL,
   `options` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`options`)),
-  `correct_answer` varchar(255) DEFAULT NULL
+  `correct_answer` varchar(255) DEFAULT NULL,
+  `time_limit` int(11) DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `questions`
 --
 
-INSERT INTO `questions` (`id`, `quiz_id`, `question_text`, `options`, `correct_answer`) VALUES
-(1, 8, 'Sino ang pumatay kay Magellan?', NULL, NULL),
-(2, 8, 'Sino ang Pambansang Bayani ng Pilipinas?', NULL, NULL);
+INSERT INTO `questions` (`id`, `quiz_id`, `question_text`, `options`, `correct_answer`, `time_limit`) VALUES
+(1, 8, 'Sino ang pumatay kay Magellan?', NULL, NULL, 0),
+(2, 8, 'Sino ang Pambansang Bayani ng Pilipinas?', NULL, NULL, 0);
 
 -- --------------------------------------------------------
 
@@ -131,19 +166,24 @@ CREATE TABLE `quizzes` (
   `created_by` int(11) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `status` enum('active','inactive') DEFAULT 'active',
+  `publish_time` datetime DEFAULT NULL,
+  `deadline_time` datetime DEFAULT NULL,
   `professor_id` int(11) NOT NULL,
   `module_id` int(11) DEFAULT NULL,
   `lesson_id` int(11) NOT NULL,
-  `content` longtext NOT NULL
+  `content` longtext NOT NULL,
+  `time_limit` int(11) DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `quizzes`
 --
 
-INSERT INTO `quizzes` (`id`, `title`, `description`, `created_by`, `created_at`, `status`, `professor_id`, `module_id`, `lesson_id`, `content`) VALUES
-(6, 'TEST', 'TEST', NULL, '2025-09-15 12:12:57', 'active', 11, NULL, 9, '{\"instructions\":\"TEST LANG PO\"}'),
-(8, 'TRY LANG PO ATE', 'TRYYYY', NULL, '2025-09-15 12:20:59', 'active', 11, NULL, 8, '{\"instructions\":\"TRYYYYY\"}');
+INSERT INTO `quizzes` (`id`, `title`, `description`, `created_by`, `created_at`, `status`, `publish_time`, `deadline_time`, `professor_id`, `module_id`, `lesson_id`, `content`, `time_limit`) VALUES
+(6, 'TEST', 'TEST', NULL, '2025-09-15 12:12:57', 'active', NULL, NULL, 11, NULL, 9, '{\"instructions\":\"TEST LANG PO\"}', 0),
+(8, 'TRY LANG PO ATE', 'TRYYYY', NULL, '2025-09-15 12:20:59', 'active', NULL, NULL, 11, NULL, 8, '{\"instructions\":\"TRYYYYY\"}', 10),
+(9, 'QUIZ NO. 2', 'INTRODUCTION TO HUMAN ANATOMY', NULL, '2025-09-18 10:19:24', 'inactive', NULL, NULL, 11, NULL, 7, '{\"instructions\":\"Multiple Choice\"}', 2),
+(10, 'Test ulit', 'Test ulit', NULL, '2025-09-18 10:29:29', 'active', '2025-09-18 18:28:00', '2025-09-19 17:28:00', 11, NULL, 8, '{\"instructions\":\"Testing ulit\"}', 0);
 
 -- --------------------------------------------------------
 
@@ -165,7 +205,7 @@ CREATE TABLE `quiz_attempts` (
 --
 
 INSERT INTO `quiz_attempts` (`id`, `quiz_id`, `student_id`, `status`, `score`, `attempted_at`) VALUES
-(17, 8, 10, 'Completed', 2, '2025-09-17 14:25:08');
+(22, 8, 10, 'Completed', 2, '2025-09-29 13:36:35');
 
 -- --------------------------------------------------------
 
@@ -187,8 +227,8 @@ CREATE TABLE `student_answers` (
 --
 
 INSERT INTO `student_answers` (`id`, `attempt_id`, `question_id`, `answer_id`, `created_at`, `answered_at`) VALUES
-(10, 17, 1, 1, '2025-09-17 14:25:08', '2025-09-17 14:25:08'),
-(11, 17, 2, 6, '2025-09-17 14:25:08', '2025-09-17 14:25:08');
+(20, 22, 1, 1, '2025-09-29 13:36:35', '2025-09-29 13:36:35'),
+(21, 22, 2, 6, '2025-09-29 13:36:35', '2025-09-29 13:36:35');
 
 -- --------------------------------------------------------
 
@@ -203,8 +243,17 @@ CREATE TABLE `student_progress` (
   `step_type` enum('lesson','quiz') NOT NULL,
   `step_id` int(11) NOT NULL,
   `status` enum('Pending','Current','Completed','Failed') DEFAULT 'Pending',
+  `started_at` datetime DEFAULT NULL,
+  `completed_at` datetime DEFAULT NULL,
   `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `student_progress`
+--
+
+INSERT INTO `student_progress` (`id`, `student_id`, `module_id`, `step_type`, `step_id`, `status`, `started_at`, `completed_at`, `updated_at`) VALUES
+(6, 10, 2, 'lesson', 0, '', '2025-10-12 16:11:56', NULL, '2025-10-12 16:11:56');
 
 -- --------------------------------------------------------
 
@@ -218,37 +267,39 @@ CREATE TABLE `users` (
   `lastName` varchar(50) NOT NULL,
   `username` varchar(50) NOT NULL,
   `email` varchar(100) NOT NULL,
+  `gender` enum('Male','Female') NOT NULL,
   `password` varchar(255) NOT NULL,
   `role` enum('student','professor','dean') NOT NULL DEFAULT 'student',
   `section` varchar(50) DEFAULT NULL,
   `year` varchar(50) DEFAULT NULL,
-  `studentID` varchar(50) NOT NULL,
+  `student_id` varchar(50) NOT NULL,
   `status` enum('pending','approved','rejected') DEFAULT 'approved',
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `profile_pic` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `users`
 --
 
-INSERT INTO `users` (`id`, `firstName`, `lastName`, `username`, `email`, `password`, `role`, `section`, `year`, `studentID`, `status`, `created_at`) VALUES
-(1, 'russel', 'santos', '', 'Russ@gmail.com', '1', 'dean', 'na', 'na', 'na', 'approved', '2025-09-12 18:41:36'),
-(2, '', '', '', '', '', '', '', '', '', 'approved', '2025-09-12 18:41:36'),
-(3, 'Russel', 'Santos', 'RusSantos', 'rus@gmail.com', '$2y$10$72B3kcB5fjfofceG1cBWzORZBFx5K4tfpgjpzX0h9Hz', '', '', '', '', 'approved', '2025-09-12 18:41:36'),
-(4, 'Russel', 'Santos', 'RusSantos023', 'RusSantos023@gmail.com', '$2y$10$14Q.AZypV./eSpJojyXlQO92Sf9UT27K0W5D2455AFE', 'dean', '', '', '', 'approved', '2025-09-12 18:41:36'),
-(5, 'Mariah', 'Dela Cruz', 'mariah123', 'mariahdelacruz2003@gmail.com', '$2y$10$.G4dHlhVKTZ9KHgDEhi5TOxZA8QUzi5JBSDoskKFdvO', '', '1A', '1', '', 'approved', '2025-09-12 18:41:36'),
-(6, 'Allain', 'Arcayera', 'Allain11', 'Allain@gmail.com', '$2y$10$TQdxQkZti8xGzvMIGqg5Murhdty8AgcsflSXh7EeRNY', 'student', '2A', '2', '', 'approved', '2025-09-12 18:41:36'),
-(7, 'Maverick ', 'Austria', 'Maverick', 'Mavs@gmail.com', '$2y$10$mVpbBWhjyMWmJMFgqDP5Z.Dyjlix0S9xreVofzuz73B', 'student', '1C', '1', '', 'approved', '2025-09-12 18:41:36'),
-(8, 'Russel', 'San', 'RusSan', 'RusSan@gmail.com', '$2y$10$oUwBOK6zAwW5KLGo.ctbCOhnUI8rn009JrxhYoVg3KswrHqyK1RVS', 'student', '1B', '1', '', 'approved', '2025-09-12 18:41:36'),
-(9, 'Dean', 'Ambrose', 'DeanAmbrose', 'DeanAmbrose@gmail.com', '$2y$10$9ESbmXBUKXAeql7LW5GP1.ERSMm170BrGdecFF9/CneIeiSQnnIXG', 'dean', '1A', '1', '', 'approved', '2025-09-12 18:41:36'),
-(10, 'russel', 'santos', 'Russel', 'Russel@gmail.com', '$2y$10$MCnWjRopQARSJ2BvozN5S.C7iC3vOoBq6FiQLSNEWhrEV/jah8piC', 'student', '3B', '3', '', 'approved', '2025-09-12 18:41:36'),
-(11, 'Prof', 'lang', 'prof', 'prof@gmail.com', '$2y$10$dLiecC3EB4VGZVjgsu4kKefsZL0iyBbJSk9XrDwLPkKx6CmyYHR8O', 'professor', '3D', '3', '', 'approved', '2025-09-12 18:41:36'),
-(12, 'Proff', 'profy', 'profy', 'Profy@gmail.com', '$2y$10$5uX/JetPE3MlxU8tGlnKWOffISbVE0gl0.s.qQMdNVvPnTWwQrk6W', 'professor', NULL, NULL, '', 'approved', '2025-09-12 18:41:36'),
-(13, '', '', 'Dean', '', '123456', 'dean', NULL, NULL, '', 'approved', '2025-09-12 18:41:36'),
-(14, 'Dean', 'Dean', 'dean1', 'dean@gmail.com', '$2y$10$/WQUetNkYay0vy1fug8PculcJSCwoT6gEhEimNr6HAINWEVjUZ3wG', 'dean', '3D', '3', '', 'approved', '2025-09-12 18:41:36'),
-(15, 'John', 'Cena', 'John', 'John@gmail.com', '$2y$10$Q.7GemI/uZG9/wh0gqGacOVSWBsxiUmeDlH3TAJK9VwpbmYjTrY.6', 'professor', NULL, NULL, '', 'approved', '2025-09-12 18:41:36'),
-(16, 'Prof', 'Rey', 'Rey', 'ReyMysterio@gmail.com', '$2y$10$MriO2TabyDUTXUz7TieoN.FZFgU89Fdpln3vyLnNIzLZRZ9Z2ZVyW', 'professor', NULL, NULL, '', 'pending', '2025-09-12 18:46:53'),
-(17, 'Mavs', 'Austria', 'mavs', 'Mavs1@gmail.com', '$2y$10$UIgwN7D5goIzOblv96t.4eEFHX9w8fOfxLJIlLgUsC1Xi7MloNTfK', 'student', '3A', '3', '', 'approved', '2025-09-17 13:41:52');
+INSERT INTO `users` (`id`, `firstName`, `lastName`, `username`, `email`, `gender`, `password`, `role`, `section`, `year`, `student_id`, `status`, `created_at`, `profile_pic`) VALUES
+(1, 'russel', 'santos', '', 'Russ@gmail.com', 'Male', '1', 'dean', 'na', 'na', 'na', 'approved', '2025-09-12 18:41:36', NULL),
+(2, '', '', '', '', 'Male', '', '', '', '', '', 'approved', '2025-09-12 18:41:36', NULL),
+(3, 'Russel', 'Santos', 'RusSantos', 'rus@gmail.com', 'Male', '$2y$10$72B3kcB5fjfofceG1cBWzORZBFx5K4tfpgjpzX0h9Hz', '', '', '', '', 'approved', '2025-09-12 18:41:36', NULL),
+(4, 'Russel', 'Santos', 'RusSantos023', 'RusSantos023@gmail.com', 'Male', '$2y$10$14Q.AZypV./eSpJojyXlQO92Sf9UT27K0W5D2455AFE', 'dean', '', '', '', 'approved', '2025-09-12 18:41:36', NULL),
+(5, 'Mariah', 'Dela Cruz', 'mariah123', 'mariahdelacruz2003@gmail.com', 'Male', '$2y$10$.G4dHlhVKTZ9KHgDEhi5TOxZA8QUzi5JBSDoskKFdvO', '', '1A', '1', '', 'approved', '2025-09-12 18:41:36', NULL),
+(6, 'Allain', 'Arcayera', 'Allain11', 'Allain@gmail.com', 'Male', '$2y$10$TQdxQkZti8xGzvMIGqg5Murhdty8AgcsflSXh7EeRNY', 'student', '2A', '2', '', 'approved', '2025-09-12 18:41:36', NULL),
+(7, 'Maverick ', 'Austria', 'Maverick', 'Mavs@gmail.com', 'Male', '$2y$10$mVpbBWhjyMWmJMFgqDP5Z.Dyjlix0S9xreVofzuz73B', 'student', '1C', '1', '', 'approved', '2025-09-12 18:41:36', NULL),
+(8, 'Russel', 'San', 'RusSan', 'RusSan@gmail.com', 'Male', '$2y$10$oUwBOK6zAwW5KLGo.ctbCOhnUI8rn009JrxhYoVg3KswrHqyK1RVS', 'student', '1B', '1', '', 'approved', '2025-09-12 18:41:36', NULL),
+(9, 'Dean', 'Ambrose', 'DeanAmbrose', 'DeanAmbrose@gmail.com', 'Male', '$2y$10$9ESbmXBUKXAeql7LW5GP1.ERSMm170BrGdecFF9/CneIeiSQnnIXG', 'dean', '1A', '1', '', 'approved', '2025-09-12 18:41:36', NULL),
+(10, 'russel', 'santos', 'Russel', 'Russel@gmail.com', 'Male', '$2y$10$MCnWjRopQARSJ2BvozN5S.C7iC3vOoBq6FiQLSNEWhrEV/jah8piC', 'student', '3B', '3', '', 'approved', '2025-09-12 18:41:36', 'uploads/profile_pics/profile_10_1759149624.jpg'),
+(11, 'Prof', 'lang', 'prof', 'prof@gmail.com', 'Male', '$2y$10$dLiecC3EB4VGZVjgsu4kKefsZL0iyBbJSk9XrDwLPkKx6CmyYHR8O', 'professor', '3D', '3', '', 'approved', '2025-09-12 18:41:36', NULL),
+(12, 'Proff', 'profy', 'profy', 'Profy@gmail.com', 'Male', '$2y$10$5uX/JetPE3MlxU8tGlnKWOffISbVE0gl0.s.qQMdNVvPnTWwQrk6W', 'professor', NULL, NULL, '', 'approved', '2025-09-12 18:41:36', NULL),
+(13, '', '', 'Dean', '', 'Male', '123456', 'dean', NULL, NULL, '', 'approved', '2025-09-12 18:41:36', NULL),
+(14, 'Dean', 'Dean', 'dean1', 'dean@gmail.com', 'Male', '$2y$10$/WQUetNkYay0vy1fug8PculcJSCwoT6gEhEimNr6HAINWEVjUZ3wG', 'dean', '3D', '3', '', 'approved', '2025-09-12 18:41:36', NULL),
+(15, 'John', 'Cena', 'John', 'John@gmail.com', 'Male', '$2y$10$Q.7GemI/uZG9/wh0gqGacOVSWBsxiUmeDlH3TAJK9VwpbmYjTrY.6', 'professor', NULL, NULL, '', 'approved', '2025-09-12 18:41:36', NULL),
+(16, 'Prof', 'Rey', 'Rey', 'ReyMysterio@gmail.com', 'Male', '$2y$10$MriO2TabyDUTXUz7TieoN.FZFgU89Fdpln3vyLnNIzLZRZ9Z2ZVyW', 'professor', NULL, NULL, '', 'pending', '2025-09-12 18:46:53', NULL),
+(17, 'Mavs', 'Austria', 'mavs', 'Mavs1@gmail.com', 'Male', '$2y$10$UIgwN7D5goIzOblv96t.4eEFHX9w8fOfxLJIlLgUsC1Xi7MloNTfK', 'student', '3A', '3', '', 'approved', '2025-09-17 13:41:52', 'uploads/profile_pics/profile_17_1759146667.jpg');
 
 --
 -- Indexes for dumped tables
@@ -273,6 +324,14 @@ ALTER TABLE `lessons`
 --
 ALTER TABLE `modules`
   ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `module_progress`
+--
+ALTER TABLE `module_progress`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_user_module` (`user_id`,`module_id`),
+  ADD KEY `module_id` (`module_id`);
 
 --
 -- Indexes for table `nursing_tips`
@@ -347,7 +406,13 @@ ALTER TABLE `lessons`
 -- AUTO_INCREMENT for table `modules`
 --
 ALTER TABLE `modules`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+
+--
+-- AUTO_INCREMENT for table `module_progress`
+--
+ALTER TABLE `module_progress`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
 
 --
 -- AUTO_INCREMENT for table `nursing_tips`
@@ -365,25 +430,25 @@ ALTER TABLE `questions`
 -- AUTO_INCREMENT for table `quizzes`
 --
 ALTER TABLE `quizzes`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT for table `quiz_attempts`
 --
 ALTER TABLE `quiz_attempts`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
 
 --
 -- AUTO_INCREMENT for table `student_answers`
 --
 ALTER TABLE `student_answers`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
 
 --
 -- AUTO_INCREMENT for table `student_progress`
 --
 ALTER TABLE `student_progress`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `users`
@@ -406,6 +471,13 @@ ALTER TABLE `answers`
 --
 ALTER TABLE `lessons`
   ADD CONSTRAINT `lessons_ibfk_1` FOREIGN KEY (`professor_id`) REFERENCES `users` (`id`);
+
+--
+-- Constraints for table `module_progress`
+--
+ALTER TABLE `module_progress`
+  ADD CONSTRAINT `module_progress_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `module_progress_ibfk_2` FOREIGN KEY (`module_id`) REFERENCES `modules` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `questions`

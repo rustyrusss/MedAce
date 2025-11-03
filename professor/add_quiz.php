@@ -82,6 +82,22 @@ if (isset($_SESSION['message'])) {
         </select>
       </div>
 
+      <!-- Publish Time -->
+      <div>
+        <label for="publish_time" class="block font-medium text-gray-700 mb-1">Publish Time</label>
+        <input type="datetime-local" id="publish_time" name="publish_time"
+               class="w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        <p class="text-sm text-gray-500">Leave empty to publish immediately.</p>
+      </div>
+
+      <!-- Deadline Time -->
+      <div>
+        <label for="deadline_time" class="block font-medium text-gray-700 mb-1">Deadline Time</label>
+        <input type="datetime-local" id="deadline_time" name="deadline_time"
+               class="w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        <p class="text-sm text-gray-500">Leave empty for no deadline.</p>
+      </div>
+
       <!-- Actions -->
       <div class="flex justify-between pt-4">
         <a href="professor.php" class="px-4 py-2 bg-gray-300 rounded-xl hover:bg-gray-400 transition">⬅ Back</a>
