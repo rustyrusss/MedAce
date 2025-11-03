@@ -1,8 +1,9 @@
 <?php
 session_start();
 require_once '../config/db_conn.php';
+require_once '../includes/avatar_helper.php';
 
-// Redirect if not professor
+// ✅ Access control
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'professor') {
     header("Location: ../public/index.php");
     exit();
@@ -10,33 +11,20 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'professor') {
 
 $professorId = $_SESSION['user_id'];
 
-// Get professor info
+// ✅ Fetch professor info
 $stmt = $conn->prepare("SELECT firstname, lastname, email, profile_pic, gender FROM users WHERE id = ?");
 $stmt->execute([$professorId]);
 $prof = $stmt->fetch(PDO::FETCH_ASSOC);
 $profName = $prof ? $prof['firstname'] . " " . $prof['lastname'] : "Professor";
+$profilePic = getProfilePicture($prof, "../");
 
-// Default avatar
-if (!empty($prof['gender'])) {
-    if (strtolower($prof['gender']) === "male") {
-        $defaultAvatar = "../assets/img/avatar_male.png";
-    } elseif (strtolower($prof['gender']) === "female") {
-        $defaultAvatar = "../assets/img/avatar_female.png";
-    } else {
-        $defaultAvatar = "../assets/img/avatar_neutral.png";
-    }
-} else {
-    $defaultAvatar = "../assets/img/avatar_neutral.png";
-}
-$profilePic = !empty($prof['profile_pic']) ? "../" . $prof['profile_pic'] : $defaultAvatar;
-
-// Fetch modules for dropdown
+// ✅ Fetch modules for dropdown
 $stmt = $conn->prepare("SELECT id, title FROM modules WHERE professor_id = :professor_id ORDER BY created_at DESC");
 $stmt->bindParam(':professor_id', $professorId);
 $stmt->execute();
 $modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch quizzes
+// ✅ Fetch quizzes
 $stmt = $conn->prepare("
     SELECT q.id, q.title, q.description, q.status, q.created_at, m.title AS module_title
     FROM quizzes q
@@ -48,214 +36,256 @@ $stmt->bindParam(':professor_id', $professorId);
 $stmt->execute();
 $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
-
 <!DOCTYPE html>
-<html lang="en" x-data="{ sidebarOpen: false, collapsed: false, search: '', filter: 'all' }">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Manage Quizzes</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/alpinejs" defer></script>
   <style>
-    html { scroll-behavior: smooth; }
-    .transition-all * { transition: all 0.2s ease-in-out; }
+    body { background-color: #cce7ea; }
+    .sidebar { transition: width 220ms ease; }
+    .sidebar-expanded { width: 16rem; }
+    .sidebar-collapsed { width: 5rem; }
+    .modal-enter { opacity: 0; transform: scale(0.95); }
+    .modal-enter-active { opacity: 1; transform: scale(1); transition: all 0.25s ease-out; }
+    .modal-exit { opacity: 1; transform: scale(1); }
+    .modal-exit-active { opacity: 0; transform: scale(0.95); transition: all 0.2s ease-in; }
   </style>
 </head>
+<body class="text-gray-800 font-sans">
+<div class="flex min-h-screen">
 
-<body class="transition-all min-h-screen bg-gradient-to-br from-teal-50 via-blue-50 to-indigo-100 text-gray-800">
+  <!-- ✅ Sidebar -->
+  <aside id="sidebar" class="sidebar sidebar-collapsed bg-white border-r border-gray-200 flex flex-col shadow-sm z-30">
+    <div class="flex items-center justify-between px-3 py-3 border-b">
+      <div class="flex items-center gap-2">
+        <img src="<?= htmlspecialchars($profilePic) ?>" alt="avatar" class="w-8 h-8 rounded-full object-cover border" />
+        <span class="sidebar-label hidden text-sm font-semibold text-sky-700">
+          <?= htmlspecialchars(ucwords(strtolower($profName))) ?>
+        </span>
+      </div>
+      <button id="sidebarToggle" aria-label="Toggle sidebar" class="p-1 rounded-md text-gray-600 hover:bg-gray-100">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+    </div>
 
-<!-- Mobile Header -->
-<div class="md:hidden flex items-center justify-between bg-white shadow px-4 py-3">
-  <h1 class="text-lg font-semibold text-gray-700">Manage Quizzes</h1>
-  <button @click="sidebarOpen = !sidebarOpen" class="text-gray-700 text-2xl">☰</button>
+    <nav class="flex-1 mt-3 px-1 space-y-1">
+      <a href="dashboard.php" class="group flex items-center gap-3 px-2 py-2 rounded-lg text-gray-700 hover:bg-sky-50">
+        <div class="w-8 flex items-center justify-center text-xl">🏠</div>
+        <span class="sidebar-label hidden font-medium">Dashboard</span>
+      </a>
+
+      <a href="manage_modules.php" class="group flex items-center gap-3 px-2 py-2 rounded-lg text-gray-700 hover:bg-sky-50">
+        <div class="w-8 flex items-center justify-center text-xl">📘</div>
+        <span class="sidebar-label hidden font-medium">Modules</span>
+      </a>
+
+      <a href="manage_quizzes.php" class="group flex items-center gap-3 px-2 py-2 rounded-lg bg-sky-100 text-sky-800 font-semibold">
+        <div class="w-8 flex items-center justify-center text-xl">📝</div>
+        <span class="sidebar-label hidden font-medium">Quizzes</span>
+      </a>
+
+      <a href="student_progress.php" class="group flex items-center gap-3 px-2 py-2 rounded-lg text-gray-700 hover:bg-sky-50">
+        <div class="w-8 flex items-center justify-center text-xl">👨‍🎓</div>
+        <span class="sidebar-label hidden font-medium">Student Progress</span>
+      </a>
+    </nav>
+
+    <div class="px-2 py-4 border-t">
+      <a href="../actions/logout_action.php" class="group flex items-center gap-3 px-2 py-2 rounded-lg text-red-600 hover:bg-red-50">
+        <div class="w-8 flex items-center justify-center text-xl">🚪</div>
+        <span class="sidebar-label hidden font-medium">Logout</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- ✅ Main Content -->
+  <main class="flex-1 p-6 md:p-10">
+    <div class="bg-white p-6 rounded-xl shadow-md border border-gray-200 mb-6">
+      <h1 class="text-2xl font-bold text-gray-800">🧠 Manage Quizzes</h1>
+    </div>
+
+    <!-- Search + Filter -->
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <input type="text" placeholder="🔍 Search quiz title..." class="w-full md:w-1/2 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-sky-400 outline-none">
+      <div class="flex items-center space-x-2">
+        <label class="text-gray-600 font-medium">Filter:</label>
+        <select class="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-sky-400 outline-none">
+          <option value="all">All</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Quizzes Table -->
+    <div class="bg-white p-6 rounded-2xl shadow-lg border border-gray-200 overflow-x-auto">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-semibold text-gray-800">Your Quizzes</h2>
+        <button onclick="toggleModal()" class="px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 shadow-md transition">
+          + Add Quiz
+        </button>
+      </div>
+
+      <?php if (count($quizzes) > 0): ?>
+      <table class="w-full text-sm text-gray-700 border-collapse">
+        <thead class="bg-sky-100 text-sky-800 text-left">
+          <tr>
+            <th class="py-3 px-4 font-semibold">#</th>
+            <th class="py-3 px-4 font-semibold">Title</th>
+            <th class="py-3 px-4 font-semibold">Description</th>
+            <th class="py-3 px-4 font-semibold">Module</th>
+            <th class="py-3 px-4 font-semibold">Status</th>
+            <th class="py-3 px-4 font-semibold">Created</th>
+            <th class="py-3 px-4 font-semibold text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <?php foreach ($quizzes as $index => $quiz): ?>
+          <tr class="hover:bg-sky-50 transition-all duration-150">
+            <td class="py-3 px-4"><?= $index + 1 ?></td>
+            <td class="py-3 px-4 font-medium text-gray-800"><?= htmlspecialchars($quiz['title']) ?></td>
+            <td class="py-3 px-4 text-gray-600"><?= htmlspecialchars($quiz['description']) ?></td>
+            <td class="py-3 px-4 text-gray-700"><?= htmlspecialchars($quiz['module_title'] ?? '—') ?></td>
+            <td class="py-3 px-4">
+              <?php
+                $status = strtolower($quiz['status']);
+                $badge = match($status) {
+                  'active' => 'bg-green-100 text-green-700',
+                  'inactive' => 'bg-gray-200 text-gray-700',
+                  default => 'bg-blue-100 text-blue-700'
+                };
+              ?>
+              <span class="px-3 py-1 rounded-full text-xs font-semibold <?= $badge ?>">
+                <?= ucfirst($quiz['status']) ?>
+              </span>
+            </td>
+            <td class="py-3 px-4 text-gray-500"><?= date('M d, Y', strtotime($quiz['created_at'])) ?></td>
+            <td class="py-3 px-4 text-center">
+              <div class="flex items-center justify-center space-x-2">
+                <a href="manage_questions.php?quiz_id=<?= $quiz['id'] ?>" class="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition">Questions</a>
+                <a href="edit_quiz.php?id=<?= $quiz['id'] ?>" class="px-3 py-1 text-sm bg-sky-100 text-sky-700 rounded-md hover:bg-sky-200 transition">Edit</a>
+                <a href="../actions/delete_quiz.php?id=<?= $quiz['id'] ?>" onclick="return confirm('Delete this quiz?');" class="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition">Delete</a>
+              </div>
+            </td>
+          </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+      <?php else: ?>
+        <div class="text-center py-10 text-gray-500">
+          <span class="text-5xl mb-3 block">📭</span>
+          <p class="text-lg font-medium">No quizzes added yet.</p>
+          <p class="text-sm text-gray-400 mt-1">Click “+ Add Quiz” to create your first one.</p>
+        </div>
+      <?php endif; ?>
+    </div>
+  </main>
 </div>
 
-<!-- Sidebar -->
-<aside class="fixed inset-y-0 left-0 bg-white/90 backdrop-blur-xl shadow-lg border-r border-gray-200 p-5 flex flex-col z-30 transition-all duration-300"
-       :class="{
-         'w-64': !collapsed,
-         'w-20': collapsed,
-         '-translate-x-full': !sidebarOpen && window.innerWidth < 768
-       }">
+<!-- ✅ Modal -->
+<div id="addQuizModal" class="fixed inset-0 bg-black bg-opacity-40 hidden items-center justify-center z-50 backdrop-blur-sm">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-8 transform scale-95 opacity-0 transition-all duration-300 ease-out overflow-y-auto max-h-[90vh]" id="modalContent">
+    <button onclick="toggleModal()" class="absolute top-3 right-3 text-gray-500 hover:text-gray-700 text-xl font-semibold">×</button>
+    <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">➕ Add New Quiz</h2>
+    <form action="../actions/add_quiz_action.php" method="POST" class="space-y-5">
 
-  <!-- Collapse Button -->
-  <button @click="collapsed = !collapsed" class="hidden md:flex absolute top-4 right-[-12px] bg-teal-600 text-white rounded-full w-6 h-6 items-center justify-center shadow-md hover:bg-teal-700 transition">
-    <span x-show="!collapsed">«</span>
-    <span x-show="collapsed">»</span>
-  </button>
-
-  <!-- Profile -->
-  <div class="flex items-center mb-10 mt-6 transition-all" :class="collapsed ? 'justify-center' : 'space-x-4'">
-    <img src="<?= htmlspecialchars($profilePic) ?>" alt="avatar"
-         class="w-12 h-12 rounded-full border-2 border-teal-400 shadow-md object-cover bg-gray-100" />
-    <div x-show="!collapsed" class="flex flex-col overflow-hidden">
-      <p class="text-xl font-bold mb-1"><?= htmlspecialchars(ucwords(strtolower($profName))) ?></p>
-      <p class="text-sm text-gray-500">Professor</p>
-    </div>
-  </div>
-
-  <!-- Navigation -->
-  <nav class="flex-1 space-y-4">
-    <a href="dashboard.php" class="flex items-center p-2 rounded-lg hover:bg-teal-100 transition">
-      <span class="text-xl">🏠</span>
-      <span x-show="!collapsed" class="ml-3 font-medium">Dashboard</span>
-    </a>
-    <a href="manage_modules.php" class="flex items-center p-2 rounded-lg hover:bg-teal-100 transition">
-      <span class="text-xl">📘</span>
-      <span x-show="!collapsed" class="ml-3 font-medium">Modules</span>
-    </a>
-    <a href="manage_quizzes.php" class="flex items-center p-2 rounded-lg bg-teal-100 transition">
-      <span class="text-xl">📝</span>
-      <span x-show="!collapsed" class="ml-3 font-medium">Quizzes</span>
-    </a>
-    <a href="student_progress.php" class="flex items-center p-2 rounded-lg hover:bg-teal-100 transition">
-      <span class="text-xl">👨‍🎓</span>
-      <span x-show="!collapsed" class="ml-3 font-medium">Student Progress</span>
-    </a>
-  </nav>
-
-  <!-- Logout -->
-  <div class="mt-auto">
-    <a href="../actions/logout_action.php"
-       class="flex items-center p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition">
-      <span class="text-xl">🚪</span>
-      <span x-show="!collapsed" class="ml-3 font-medium">Logout</span>
-    </a>
-  </div>
-</aside>
-
-<!-- Main Content -->
-<div class="transition-all duration-300 md:ml-64 p-6 space-y-10" :class="collapsed ? 'md:ml-20' : 'md:ml-64'">
-  <div class="flex justify-between items-center">
-    <h1 class="text-3xl font-bold text-gray-800 hidden md:block">📝 Manage Quizzes</h1>
-    <button type="button" class="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 shadow-md" onclick="toggleModal()">+ Add Quiz</button>
-  </div>
-
-  <!-- Search + Filter -->
-  <div class="flex flex-col md:flex-row md:items-center md:justify-between bg-white/80 p-4 rounded-xl shadow-sm border border-gray-200 mb-4 gap-4">
-    <div class="flex items-center space-x-2 w-full md:w-1/2">
-      <input type="text" placeholder="🔍 Search quiz title..."
-             x-model="search"
-             class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-teal-400 outline-none">
-    </div>
-    <div class="flex items-center space-x-2">
-      <label class="text-gray-600 font-medium">Filter:</label>
-      <select x-model="filter"
-              class="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-teal-400 outline-none">
-        <option value="all">All</option>
-        <option value="published">Published</option>
-        <option value="draft">Draft</option>
-        <option value="archived">Archived</option>
-      </select>
-    </div>
-  </div>
-
-  <!-- Quizzes Table -->
-  <div class="bg-white/90 backdrop-blur-md p-6 rounded-2xl shadow-xl border border-gray-200 overflow-x-auto">
-    <div class="flex items-center justify-between mb-4">
-      <h2 class="text-xl font-semibold text-gray-800">🧠 Your Quizzes</h2>
-      <p class="text-sm text-gray-500"><?= count($quizzes) ?> total</p>
-    </div>
-
-    <?php if (count($quizzes) > 0): ?>
-    <table class="w-full min-w-[700px] text-sm text-gray-700">
-      <thead class="bg-gradient-to-r from-teal-600 to-teal-500 text-white text-left">
-        <tr>
-          <th class="py-3 px-4 font-semibold">#</th>
-          <th class="py-3 px-4 font-semibold">Title</th>
-          <th class="py-3 px-4 font-semibold">Description</th>
-          <th class="py-3 px-4 font-semibold">Module</th>
-          <th class="py-3 px-4 font-semibold">Status</th>
-          <th class="py-3 px-4 font-semibold">Created</th>
-          <th class="py-3 px-4 font-semibold text-center">Actions</th>
-        </tr>
-      </thead>
-      <tbody class="bg-white divide-y divide-gray-100">
-        <?php foreach ($quizzes as $index => $quiz): ?>
-        <tr class="hover:bg-teal-50 transition-all"
-            x-show="(filter === 'all' || filter === '<?= strtolower($quiz['status']) ?>') &&
-                     (search === '' || '<?= strtolower($quiz['title']) ?>'.includes(search.toLowerCase()))">
-          <td class="py-3 px-4 text-gray-600"><?= $index + 1 ?></td>
-          <td class="py-3 px-4 font-medium text-gray-800"><?= htmlspecialchars($quiz['title']) ?></td>
-          <td class="py-3 px-4 text-gray-600 truncate max-w-xs"><?= htmlspecialchars($quiz['description']) ?></td>
-          <td class="py-3 px-4 text-gray-700"><?= htmlspecialchars($quiz['module_title'] ?? '—') ?></td>
-          <td class="py-3 px-4">
-            <?php
-              $status = strtolower($quiz['status']);
-              $statusColor = match($status) {
-                'published' => 'bg-green-100 text-green-700',
-                'draft' => 'bg-yellow-100 text-yellow-700',
-                'archived' => 'bg-gray-200 text-gray-700',
-                default => 'bg-blue-100 text-blue-700'
-              };
-            ?>
-            <span class="px-3 py-1 rounded-full text-xs font-semibold <?= $statusColor ?>">
-              <?= ucfirst($quiz['status']) ?>
-            </span>
-          </td>
-          <td class="py-3 px-4 text-gray-500"><?= date('M d, Y', strtotime($quiz['created_at'])) ?></td>
-          <td class="py-3 px-4 text-center">
-            <div class="flex items-center justify-center space-x-3">
-              <a href="manage_questions.php?quiz_id=<?= $quiz['id'] ?>" class="text-blue-600 hover:text-blue-800 font-semibold transition">Questions</a>
-              <span class="text-gray-300">|</span>
-              <a href="edit_quiz.php?id=<?= $quiz['id'] ?>" class="text-teal-600 hover:text-teal-800 font-semibold transition">Edit</a>
-              <span class="text-gray-300">|</span>
-              <a href="../actions/delete_quiz.php?id=<?= $quiz['id'] ?>"
-                 onclick="return confirm('Are you sure you want to delete this quiz?');"
-                 class="text-red-500 hover:text-red-700 font-semibold transition">Delete</a>
-            </div>
-          </td>
-        </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
-    <?php else: ?>
-    <div class="flex flex-col items-center justify-center py-10 text-gray-500">
-      <span class="text-5xl mb-3">📭</span>
-      <p class="text-lg font-medium">No quizzes added yet.</p>
-      <p class="text-sm text-gray-400 mt-1">Click “+ Add Quiz” to create your first one.</p>
-    </div>
-    <?php endif; ?>
-  </div>
-</div>
-
-<!-- Add Quiz Modal -->
-<div id="addQuizModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-  <div class="bg-white p-6 rounded-lg shadow-lg max-w-lg w-full mx-4">
-    <h2 class="text-2xl font-semibold mb-4">Add Quiz</h2>
-    <form action="../actions/add_quiz_action.php" method="POST">
-      <div class="mb-4">
-        <label class="block text-gray-700">Title</label>
-        <input type="text" name="title" required class="w-full border border-gray-300 rounded-lg p-2">
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Quiz Title <span class="text-red-500">*</span></label>
+        <input type="text" name="title" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-sky-400 outline-none">
       </div>
-      <div class="mb-4">
-        <label class="block text-gray-700">Description</label>
-        <textarea name="description" rows="4" class="w-full border border-gray-300 rounded-lg p-2"></textarea>
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Description</label>
+        <textarea name="description" rows="3" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-sky-400 outline-none"></textarea>
       </div>
-      <div class="mb-4">
-        <label class="block text-gray-700">Module</label>
-        <select name="module_id" class="w-full border border-gray-300 rounded-lg p-2">
-          <option value="">Select Module</option>
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Select Module <span class="text-red-500">*</span></label>
+        <select name="module_id" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-sky-400 outline-none">
+          <option value="" disabled selected>— Choose a module —</option>
           <?php foreach ($modules as $module): ?>
             <option value="<?= $module['id'] ?>"><?= htmlspecialchars($module['title']) ?></option>
           <?php endforeach; ?>
         </select>
       </div>
-      <div class="flex justify-between">
-        <button type="button" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg" onclick="toggleModal()">Cancel</button>
-        <button type="submit" class="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700">Save Quiz</button>
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Instructions / Content</label>
+        <textarea name="content" rows="3" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-sky-400 outline-none"></textarea>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Status</label>
+        <select name="status" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-sky-400 outline-none">
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Publish Time</label>
+        <input type="datetime-local" name="publish_time" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-sky-400 outline-none">
+        <p class="text-sm text-gray-500">Leave empty to publish immediately.</p>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Deadline Time</label>
+        <input type="datetime-local" name="deadline_time" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-sky-400 outline-none">
+        <p class="text-sm text-gray-500">Leave empty for no deadline.</p>
+      </div>
+
+      <div class="flex justify-end gap-3 pt-4">
+        <button type="button" onclick="toggleModal()" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition">Cancel</button>
+        <button type="submit" class="px-5 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition">Save Quiz</button>
       </div>
     </form>
   </div>
 </div>
 
 <script>
+document.addEventListener("DOMContentLoaded", () => {
+  const sidebar = document.getElementById("sidebar");
+  const toggle = document.getElementById("sidebarToggle");
+  const labels = document.querySelectorAll(".sidebar-label");
+  let expanded = false;
+
+  function collapse() {
+    sidebar.classList.remove("sidebar-expanded");
+    sidebar.classList.add("sidebar-collapsed");
+    labels.forEach(l => l.classList.add("hidden"));
+  }
+  function expand() {
+    sidebar.classList.remove("sidebar-collapsed");
+    sidebar.classList.add("sidebar-expanded");
+    labels.forEach(l => l.classList.remove("hidden"));
+  }
+
+  collapse();
+  toggle.addEventListener("click", () => {
+    expanded = !expanded;
+    expanded ? expand() : collapse();
+  });
+});
+
 function toggleModal() {
-  const modal = document.getElementById('addQuizModal');
-  modal.classList.toggle('hidden');
+  const modal = document.getElementById("addQuizModal");
+  const content = document.getElementById("modalContent");
+  if (modal.classList.contains("hidden")) {
+    modal.classList.remove("hidden");
+    modal.classList.add("flex");
+    setTimeout(() => content.classList.remove("scale-95", "opacity-0"), 10);
+  } else {
+    content.classList.add("scale-95", "opacity-0");
+    setTimeout(() => {
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }, 200);
+  }
 }
 </script>
-
 </body>
 </html>
