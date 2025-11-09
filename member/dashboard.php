@@ -57,7 +57,7 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
     html { scroll-behavior: smooth; }
   </style>
 </head>
-<body class="relative min-h-screen bg-gradient-to-br from-teal-50 via-blue-50 to-indigo-100">
+<body class="relative min-h-screen bg-[#D1EBEC]">
 
   <!-- Overlay for small screens -->
   <div class="fixed inset-0 bg-black bg-opacity-40 z-20 md:hidden"
@@ -106,7 +106,7 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
           <span x-show="!collapsed" class="ml-3 font-medium text-gray-700">Quizzes</span>
         </a>
         <a href="resources.php" class="flex items-center p-2 rounded-lg hover:bg-teal-100 transition">
-          <span class="text-xl">📂</span>
+          <span class="text-xl">📚</span>
           <span x-show="!collapsed" class="ml-3 font-medium text-gray-700">Resources</span>
         </a>
       </div>
