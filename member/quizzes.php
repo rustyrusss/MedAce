@@ -51,7 +51,7 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/alpinejs" defer></script>
 </head>
-<body class="relative min-h-screen bg-gradient-to-br from-teal-50 via-blue-50 to-indigo-100">
+<body class="relative min-h-screen bg-[#D1EBEC]">
 
   <!-- Overlay -->
   <div class="fixed inset-0 bg-black bg-opacity-40 z-20 md:hidden"

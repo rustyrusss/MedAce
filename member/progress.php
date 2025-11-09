@@ -63,7 +63,8 @@ $progressPercent = round(($completedSteps / $totalSteps) * 100);
     [x-cloak] { display: none; }
   </style>
 </head>
-<body class="bg-gradient-to-br from-teal-50 via-blue-50 to-indigo-100 min-h-screen relative">
+<body class="relative min-h-screen bg-[#D1EBEC]">
+
 
   <!-- Overlay for mobile -->
   <div class="fixed inset-0 bg-black bg-opacity-40 z-20 md:hidden"
@@ -107,7 +108,7 @@ $progressPercent = round(($completedSteps / $totalSteps) * 100);
           <span x-show="!collapsed" class="ml-3 font-medium">Quizzes</span>
         </a>
         <a href="resources.php" class="flex items-center p-2 rounded-lg hover:bg-teal-100">
-          <span class="text-xl">📂</span>
+          <span class="text-xl">📚</span>
           <span x-show="!collapsed" class="ml-3 font-medium">Resources</span>
         </a>
       </div>
