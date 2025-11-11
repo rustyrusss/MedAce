@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Oct 14, 2025 at 11:46 AM
+-- Generation Time: Nov 11, 2025 at 04:59 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -117,7 +117,8 @@ CREATE TABLE `module_progress` (
 --
 
 INSERT INTO `module_progress` (`id`, `user_id`, `module_id`, `status`, `started_at`, `completed_at`) VALUES
-(1, 10, 2, 'started', '2025-10-12 16:40:15', NULL);
+(1, 10, 2, 'started', '2025-11-11 22:17:03', NULL),
+(21, 10, 1, 'started', '2025-10-14 19:38:08', NULL);
 
 -- --------------------------------------------------------
 
@@ -197,15 +198,18 @@ CREATE TABLE `quiz_attempts` (
   `student_id` int(11) DEFAULT NULL,
   `status` enum('Pending','Completed','Failed') DEFAULT 'Pending',
   `score` int(11) DEFAULT NULL,
-  `attempted_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `attempted_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `attempt_number` int(11) DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `quiz_attempts`
 --
 
-INSERT INTO `quiz_attempts` (`id`, `quiz_id`, `student_id`, `status`, `score`, `attempted_at`) VALUES
-(22, 8, 10, 'Completed', 2, '2025-09-29 13:36:35');
+INSERT INTO `quiz_attempts` (`id`, `quiz_id`, `student_id`, `status`, `score`, `attempted_at`, `attempt_number`) VALUES
+(46, 8, 10, 'Completed', 1, '2025-11-11 15:10:48', 1),
+(47, 8, 10, 'Completed', 1, '2025-11-11 15:18:13', 1),
+(48, 8, 10, 'Completed', 1, '2025-11-11 15:57:30', 1);
 
 -- --------------------------------------------------------
 
@@ -227,8 +231,12 @@ CREATE TABLE `student_answers` (
 --
 
 INSERT INTO `student_answers` (`id`, `attempt_id`, `question_id`, `answer_id`, `created_at`, `answered_at`) VALUES
-(20, 22, 1, 1, '2025-09-29 13:36:35', '2025-09-29 13:36:35'),
-(21, 22, 2, 6, '2025-09-29 13:36:35', '2025-09-29 13:36:35');
+(54, 46, 1, 1, '2025-11-11 15:10:48', '2025-11-11 15:10:48'),
+(55, 46, 2, 5, '2025-11-11 15:10:48', '2025-11-11 15:10:48'),
+(56, 47, 1, 1, '2025-11-11 15:18:13', '2025-11-11 15:18:13'),
+(57, 47, 2, 5, '2025-11-11 15:18:13', '2025-11-11 15:18:13'),
+(58, 48, 1, 1, '2025-11-11 15:57:30', '2025-11-11 15:57:30'),
+(59, 48, 2, 5, '2025-11-11 15:57:30', '2025-11-11 15:57:30');
 
 -- --------------------------------------------------------
 
@@ -412,7 +420,7 @@ ALTER TABLE `modules`
 -- AUTO_INCREMENT for table `module_progress`
 --
 ALTER TABLE `module_progress`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=82;
 
 --
 -- AUTO_INCREMENT for table `nursing_tips`
@@ -436,13 +444,13 @@ ALTER TABLE `quizzes`
 -- AUTO_INCREMENT for table `quiz_attempts`
 --
 ALTER TABLE `quiz_attempts`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=49;
 
 --
 -- AUTO_INCREMENT for table `student_answers`
 --
 ALTER TABLE `student_answers`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=60;
 
 --
 -- AUTO_INCREMENT for table `student_progress`
