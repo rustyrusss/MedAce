@@ -30,20 +30,28 @@ if (!empty($student['gender'])) {
 }
 $profilePic = !empty($student['profile_pic']) ? "../" . $student['profile_pic'] : $defaultAvatar;
 
-// ✅ Get quizzes WITH attempt_id
+// ✅ Get latest attempt per quiz (using attempted_at)
 $stmt = $conn->prepare("
   SELECT q.id, q.title, q.publish_time, q.deadline_time,
-         qa.id AS attempt_id,
-         COALESCE(qa.status, 'Pending') AS status
+         qa.id AS attempt_id, COALESCE(qa.status, 'Pending') AS status
   FROM quizzes q
-  LEFT JOIN quiz_attempts qa ON qa.quiz_id = q.id AND qa.student_id = ?
+  LEFT JOIN (
+      SELECT qa1.*
+      FROM quiz_attempts qa1
+      INNER JOIN (
+          SELECT quiz_id, MAX(attempted_at) AS latest_attempt
+          FROM quiz_attempts
+          WHERE student_id = ?
+          GROUP BY quiz_id
+      ) latest ON qa1.quiz_id = latest.quiz_id AND qa1.attempted_at = latest.latest_attempt
+  ) qa ON q.id = qa.quiz_id
   ORDER BY q.publish_time DESC
 ");
 $stmt->execute([$studentId]);
 $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
-<html lang="en" x-data="{ sidebarOpen: false, collapsed: true, filter: 'all', search: '' }">
+<html lang="en" x-data="{ sidebarOpen: false, collapsed: true, filter: 'all', search: '', openModal: null }">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -51,7 +59,7 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/alpinejs" defer></script>
 </head>
-<body class="relative min-h-screen bg-gradient-to-br from-teal-50 via-blue-50 to-indigo-100">
+<body class="relative min-h-screen bg-[#D1EBEC]">
 
   <!-- Overlay -->
   <div class="fixed inset-0 bg-black bg-opacity-40 z-20 md:hidden"
@@ -187,22 +195,75 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <span class="px-3 py-1 rounded-full text-sm font-medium <?= $statusClass ?>">
                   <?= htmlspecialchars(ucfirst($quiz['status'])) ?>
                 </span>
-                <?php if ($status === 'pending'): ?>
-                  <a href="take_quiz.php?id=<?= $quiz['id'] ?>"
-                     class="bg-gradient-to-r from-teal-600 to-blue-600 text-white px-4 py-2 rounded-lg shadow hover:from-teal-700 hover:to-blue-700 transition text-sm font-medium">
-                    Start Quiz
-                  </a>
-                <?php elseif ($status === 'failed'): ?>
-                  <a href="take_quiz.php?id=<?= $quiz['id'] ?>"
-                     class="bg-gradient-to-r from-orange-500 to-red-500 text-white px-4 py-2 rounded-lg shadow hover:from-orange-600 hover:to-red-600 transition text-sm font-medium">
-                    Retry Quiz
-                  </a>
-                <?php elseif ($status === 'completed' && $quiz['attempt_id']): ?>
-                  <a href="quiz_result.php?attempt_id=<?= $quiz['attempt_id'] ?>"
-                     class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg shadow hover:bg-gray-300 transition text-sm font-medium">
-                    View Results
-                  </a>
+                <div class="flex gap-2">
+                  <?php if ($status === 'pending'): ?>
+                    <a href="take_quiz.php?id=<?= $quiz['id'] ?>"
+                       class="bg-gradient-to-r from-teal-600 to-blue-600 text-white px-4 py-2 rounded-lg shadow hover:from-teal-700 hover:to-blue-700 transition text-sm font-medium">
+                      Start
+                    </a>
+                  <?php elseif ($status === 'failed'): ?>
+                    <a href="take_quiz.php?id=<?= $quiz['id'] ?>"
+                       class="bg-gradient-to-r from-orange-500 to-red-500 text-white px-4 py-2 rounded-lg shadow hover:from-orange-600 hover:to-red-600 transition text-sm font-medium">
+                      Retry
+                    </a>
+                  <?php elseif ($status === 'completed' && $quiz['attempt_id']): ?>
+                    <a href="quiz_result.php?attempt_id=<?= $quiz['attempt_id'] ?>"
+                       class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg shadow hover:bg-gray-300 transition text-sm font-medium">
+                      View
+                    </a>
+                  <?php endif; ?>
+                  <button @click="openModal = 'quiz<?= $quiz['id'] ?>'"
+                          class="bg-teal-50 text-teal-600 px-3 py-2 rounded-lg hover:bg-teal-100 transition text-sm font-medium">
+                    History
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ✅ Attempt History Modal -->
+          <div x-show="openModal === 'quiz<?= $quiz['id'] ?>'"
+               class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50"
+               x-transition>
+            <div class="bg-white rounded-xl p-6 w-96 shadow-xl">
+              <h2 class="text-lg font-semibold mb-4 text-gray-800">Attempt History - <?= htmlspecialchars($quiz['title']) ?></h2>
+              <div class="max-h-60 overflow-y-auto">
+                <?php
+                $historyStmt = $conn->prepare("
+                  SELECT id, attempt_number, attempted_at, score, status
+                  FROM quiz_attempts
+                  WHERE student_id = ? AND quiz_id = ?
+                  ORDER BY attempted_at DESC
+                ");
+                $historyStmt->execute([$studentId, $quiz['id']]);
+                $attempts = $historyStmt->fetchAll(PDO::FETCH_ASSOC);
+                ?>
+                <?php if (empty($attempts)): ?>
+                  <p class="text-gray-500 text-center py-4">No attempts yet.</p>
+                <?php else: ?>
+                  <ul class="space-y-2">
+                    <?php foreach ($attempts as $attempt): ?>
+                      <li class="p-3 border rounded-lg flex justify-between items-center">
+                        <div>
+                          <p class="text-sm font-medium">Attempt #<?= $attempt['attempt_number'] ?></p>
+                          <p class="text-xs text-gray-500"><?= $attempt['attempted_at'] ?></p>
+                          <p class="text-xs text-gray-600">Score: <?= htmlspecialchars($attempt['score']) ?></p>
+                        </div>
+                        <span class="text-sm font-semibold 
+                          <?= strtolower($attempt['status']) === 'completed' ? 'text-green-600' : 
+                             (strtolower($attempt['status']) === 'failed' ? 'text-red-600' : 'text-yellow-600') ?>">
+                          <?= ucfirst($attempt['status']) ?>
+                        </span>
+                      </li>
+                    <?php endforeach; ?>
+                  </ul>
                 <?php endif; ?>
+              </div>
+              <div class="mt-4 flex justify-end">
+                <button @click="openModal = null"
+                        class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition text-sm font-medium">
+                  Close
+                </button>
               </div>
             </div>
           </div>

@@ -1,28 +1,43 @@
 <?php
-require_once __DIR__ . '/../config/db_conn.php';  // or adjust path as needed
+require_once __DIR__ . '/../config/db_conn.php';
 
 function getStudentJourney($conn, $studentId) {
     // 1. Fetch modules + student progress
     $stmt = $conn->prepare("
         SELECT m.id, m.title, m.description, COALESCE(sp.status, 'pending') AS status
         FROM modules m
-        LEFT JOIN student_progress sp ON sp.module_id = m.id AND sp.student_id = ?
+        LEFT JOIN student_progress sp 
+            ON sp.module_id = m.id AND sp.student_id = ?
         ORDER BY m.order_number ASC
     ");
     $stmt->execute([$studentId]);
     $modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 2. Fetch quizzes + attempts
+    // 2. Fetch quizzes + latest attempt using attempted_at
     $stmt = $conn->prepare("
-        SELECT q.id, q.title, q.description, COALESCE(qa.status, 'pending') AS status
+        SELECT q.id, q.title, q.description, 
+               COALESCE(latest.status, 'pending') AS status
         FROM quizzes q
-        LEFT JOIN quiz_attempts qa ON qa.quiz_id = q.id AND qa.student_id = ?
+        LEFT JOIN (
+            SELECT qa.*
+            FROM quiz_attempts qa
+            INNER JOIN (
+                SELECT quiz_id, MAX(attempted_at) AS latest_attempt
+                FROM quiz_attempts
+                WHERE student_id = ?
+                GROUP BY quiz_id
+            ) last_attempt
+            ON qa.quiz_id = last_attempt.quiz_id 
+               AND qa.attempted_at = last_attempt.latest_attempt
+            WHERE qa.student_id = ?
+        ) latest
+        ON q.id = latest.quiz_id
         ORDER BY q.publish_time ASC
     ");
-    $stmt->execute([$studentId]);
+    $stmt->execute([$studentId, $studentId]);
     $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // 3. Compute stats
+    // 3. Merge modules and quizzes for steps
     $steps = array_merge(
         array_map(fn($m) => [
             'type' => 'module',
@@ -40,6 +55,7 @@ function getStudentJourney($conn, $studentId) {
         ], $quizzes)
     );
 
+    // 4. Stats
     $total = count($steps);
     $completed = count(array_filter($steps, fn($s) => $s['status'] === 'completed'));
     $current = count(array_filter($steps, fn($s) => $s['status'] === 'current'));

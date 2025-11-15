@@ -54,6 +54,9 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
   <title>Learning Resources</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/alpinejs" defer></script>
+  <style>
+    [x-cloak] { display: none !important; }
+  </style>
 </head>
 <body class="relative min-h-screen bg-[#D1EBEC]">
 
@@ -183,26 +186,32 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
           <?php foreach ($modules as $module): ?>
             <?php
               $coverImage = "../assets/img/module/module_default.jpg";
-              $status = strtolower($module['status']);
-              $statusClass = match ($status) {
+              $status = ucwords(strtolower($module['status'])); // Normalize status
+              $statusClass = match (strtolower($module['status'])) {
                 'completed' => 'bg-green-100 text-green-700',
                 'in progress' => 'bg-blue-100 text-blue-700',
                 'pending' => 'bg-yellow-100 text-yellow-700',
                 default => 'bg-gray-100 text-gray-700'
               };
+              $moduleTitle = htmlspecialchars($module['title']);
+              $moduleTitleLower = strtolower($module['title']);
             ?>
-            <div class="bg-white/90 backdrop-blur-xl rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all flex flex-col"
-                 x-show="(activeFilter === 'All' || activeFilter === '<?= ucfirst($status) ?>') && 
-                          (searchQuery === '' || '<?= strtolower($module['title']) ?>'.includes(searchQuery.toLowerCase()))">
+            <div 
+              class="bg-white/90 backdrop-blur-xl rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all flex flex-col"
+              data-status="<?= htmlspecialchars($status) ?>"
+              data-title="<?= htmlspecialchars($moduleTitleLower) ?>"
+              x-show="(activeFilter === 'All' || activeFilter === '<?= htmlspecialchars($status) ?>') && 
+                       (searchQuery === '' || '<?= htmlspecialchars($moduleTitleLower) ?>'.includes(searchQuery.toLowerCase()))"
+              x-cloak>
               <div class="h-44 overflow-hidden relative group">
-                <img src="<?= $coverImage ?>" alt="<?= htmlspecialchars($module['title']) ?>"
+                <img src="<?= $coverImage ?>" alt="<?= $moduleTitle ?>"
                      class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500 ease-out">
                 <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
               </div>
 
               <div class="flex flex-col flex-grow justify-between p-5">
                 <div>
-                  <h3 class="text-lg font-semibold text-gray-800 mb-2"><?= htmlspecialchars($module['title']) ?></h3>
+                  <h3 class="text-lg font-semibold text-gray-800 mb-2"><?= $moduleTitle ?></h3>
                   <p class="text-sm text-gray-600 mb-4 line-clamp-3">
                     <?= htmlspecialchars($module['description'] ?: "No description available.") ?>
                   </p>
@@ -210,7 +219,7 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
 
                 <div class="flex items-center justify-between mt-3">
                   <span class="px-3 py-1 rounded-full text-sm font-medium <?= $statusClass ?>">
-                    <?= htmlspecialchars(ucwords($module['status'])) ?>
+                    <?= htmlspecialchars($status) ?>
                   </span>
                   <a href="view_module.php?id=<?= $module['id'] ?>"
                      class="bg-gradient-to-r from-teal-600 to-blue-600 text-white px-4 py-2 rounded-lg shadow hover:from-teal-700 hover:to-blue-700 transition text-sm font-medium">
