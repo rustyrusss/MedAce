@@ -1,9 +1,13 @@
 <?php
-session_start();
-require_once '../config/db_conn.php';
-require_once '../includes/journey_fetch.php';
+// ✅ Start session only if not active
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-// Redirect if not student
+require_once __DIR__ . '/../config/db_conn.php';
+require_once __DIR__ . '/../includes/journey_fetch.php';
+
+// ✅ Redirect if not student
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
     header("Location: ../public/index.php");
     exit();
@@ -11,45 +15,46 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
 
 $studentId = $_SESSION['user_id'];
 
-// Fetch user info
+// ✅ Fetch user info safely
 $stmt = $conn->prepare("SELECT firstname, lastname, email, profile_pic, gender FROM users WHERE id = ?");
 $stmt->execute([$studentId]);
 $student = $stmt->fetch(PDO::FETCH_ASSOC);
+
 $studentName = $student ? $student['firstname'] . " " . $student['lastname'] : "Student";
 
-// Default avatar logic
+// ✅ Default avatar logic
+$defaultAvatar = "../assets/img/avatar_neutral.png";
 if (!empty($student['gender'])) {
     $g = strtolower($student['gender']);
     if ($g === "male") {
         $defaultAvatar = "../assets/img/avatar_male.png";
     } elseif ($g === "female") {
         $defaultAvatar = "../assets/img/avatar_female.png";
-    } else {
-        $defaultAvatar = "../assets/img/avatar_neutral.png";
     }
-} else {
-    $defaultAvatar = "../assets/img/avatar_neutral.png";
 }
-
 $profilePic = !empty($student['profile_pic']) ? "../" . $student['profile_pic'] : $defaultAvatar;
 
-// Fetch journey data
+// ✅ Fetch journey data
 $journeyData = getStudentJourney($conn, $studentId);
 $steps = $journeyData['steps'] ?? [];
-$stats = $journeyData['stats'] ?? ['completed'=>0, 'total'=>1, 'current'=>0, 'pending'=>0, 'progress'=>0];
-
-// Also fetch quizzes separately if dashboard wants distinct quiz section
+$stats = $journeyData['stats'] ?? [
+    'completed' => 0,
+    'total' => 1,
+    'current' => 0,
+    'pending' => 0,
+    'progress' => 0
+];
 $quizzes = $journeyData['quizzes'] ?? [];
 
-// Fetch a daily tip
-$dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMIT 1")->fetchColumn();
-
+// ✅ Fetch daily tip safely
+$dailyTipStmt = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMIT 1");
+$dailyTip = $dailyTipStmt ? $dailyTipStmt->fetchColumn() : null;
 ?>
 <!DOCTYPE html>
 <html lang="en" x-data="{ sidebarOpen: false, collapsed: true }">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Student Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/alpinejs" defer></script>
@@ -57,12 +62,11 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
     html { scroll-behavior: smooth; }
   </style>
 </head>
-<body class="relative min-h-screen bg-gradient-to-br from-teal-50 via-blue-50 to-indigo-100">
 
+<body class="relative min-h-screen bg-[#D1EBEC]">
   <!-- Overlay for small screens -->
   <div class="fixed inset-0 bg-black bg-opacity-40 z-20 md:hidden"
-       x-show="sidebarOpen"
-       x-transition.opacity
+       x-show="sidebarOpen" x-transition.opacity
        @click="sidebarOpen = false"></div>
 
   <!-- Sidebar -->
@@ -74,7 +78,8 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
          }"
          x-show="sidebarOpen || window.innerWidth >= 768"
          x-transition>
-    <!-- Profile in sidebar -->
+    
+    <!-- Profile -->
     <div class="flex items-center mb-10 transition-all"
          :class="collapsed ? 'justify-center' : 'space-x-4'">
       <img src="<?= htmlspecialchars($profilePic) ?>" alt="avatar"
@@ -106,13 +111,13 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
           <span x-show="!collapsed" class="ml-3 font-medium text-gray-700">Quizzes</span>
         </a>
         <a href="resources.php" class="flex items-center p-2 rounded-lg hover:bg-teal-100 transition">
-          <span class="text-xl">📂</span>
+          <span class="text-xl">📚</span>
           <span x-show="!collapsed" class="ml-3 font-medium text-gray-700">Resources</span>
         </a>
       </div>
     </nav>
 
-    <!-- Collapse / Expand button -->
+    <!-- Collapse button -->
     <button class="mt-5 flex items-center justify-center p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition hidden md:flex"
             @click="collapsed = !collapsed">
       <svg xmlns="http://www.w3.org/2000/svg"
@@ -133,17 +138,17 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
     </div>
   </aside>
 
-  <!-- Main content area -->
+  <!-- Main Content -->
   <div class="relative z-10 transition-all"
        :class="{
          'md:ml-64': !collapsed && window.innerWidth >= 768,
          'md:ml-20': collapsed && window.innerWidth >= 768
        }">
+    
+    <!-- Mobile Header -->
     <header class="flex items-center justify-between p-4 bg-white/60 backdrop-blur-xl border-b border-gray-200 shadow-md md:hidden sticky top-0 z-20">
       <button @click="sidebarOpen = true" class="text-gray-700 focus:outline-none">
-        <svg xmlns="http://www.w3.org/2000/svg"
-             class="h-7 w-7" fill="none" viewBox="0 0 24 24"
-             stroke="currentColor">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M4 6h16M4 12h16M4 18h16" />
         </svg>
@@ -156,7 +161,7 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
         Welcome, <?= htmlspecialchars(ucwords(strtolower($studentName))) ?> 👋
       </h1>
 
-      <!-- Progress Tracker block -->
+      <!-- ✅ Progress Tracker -->
       <div class="bg-white/80 backdrop-blur-xl p-6 rounded-2xl shadow-lg border border-gray-200">
         <div class="flex items-center justify-between mb-6">
           <h2 class="text-lg font-semibold text-gray-800">📊 Progress Tracker</h2>
@@ -167,6 +172,7 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
         <div class="w-full bg-gray-200 h-2 rounded-full overflow-hidden mb-8">
           <div class="h-full bg-teal-600" style="width: <?= $stats['progress'] ?>%"></div>
         </div>
+
         <div class="flex flex-col sm:flex-row sm:space-x-4 gap-6">
           <?php foreach ($steps as $index => $step): ?>
             <?php
@@ -194,7 +200,7 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
         </div>
       </div>
 
-      <!-- Quizzes Section -->
+      <!-- ✅ Quizzes Section -->
       <div class="bg-white/80 backdrop-blur-xl p-6 rounded-2xl shadow-lg border border-gray-200">
         <h2 class="text-lg font-semibold mb-4 text-gray-800">📝 Quizzes</h2>
         <?php if (empty($quizzes)): ?>
@@ -202,24 +208,13 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
         <?php else: ?>
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             <?php foreach ($quizzes as $quiz): ?>
-              <?php
-                $st = strtolower($quiz['status']);
-              ?>
+              <?php $st = strtolower($quiz['status']); ?>
               <div class="flex flex-col justify-between p-5 bg-white rounded-xl shadow hover:shadow-lg transition border border-gray-100">
-                <h4 class="font-semibold text-gray-800 mb-2 text-lg"><?= htmlspecialchars($quiz['title']) ?></h4>
+                <h4 class="font-semibold text-gray-800 mb-2 text-lg">
+                  <?= htmlspecialchars($quiz['title'] ?? 'Untitled Quiz') ?>
+                </h4>
 
-                <?php if (!empty($quiz['publish_time'])): ?>
-                  <p class="text-sm text-gray-600 mb-1">
-                    📅 Available: <?= date("F j, Y - g:i A", strtotime($quiz['publish_time'])) ?>
-                  </p>
-                <?php endif; ?>
-                <?php if (!empty($quiz['deadline_time'])): ?>
-                  <p class="text-sm text-red-600 font-medium mb-3">
-                    ⏰ Deadline: <?= date("F j, Y - g:i A", strtotime($quiz['deadline_time'])) ?>
-                  </p>
-                <?php endif; ?>
-
-                <span class="inline-block self-start px-3 py-1 rounded-full text-sm font-medium
+                <span class="inline-block self-start px-3 py-1 rounded-full text-sm font-medium mb-3
                   <?= $st === 'completed'
                         ? 'bg-green-100 text-green-700'
                         : ($st === 'pending'
@@ -228,23 +223,17 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
                   <?= ucfirst($st) ?>
                 </span>
 
-                <div class="mt-4">
-                  <a href="../member/take_quiz.php?id=<?= $quiz['id'] ?>"
-                     class="block w-full text-center bg-gradient-to-r from-teal-600 to-blue-600 text-white px-4 py-2 rounded-lg shadow hover:from-teal-700 hover:to-blue-700 transition">
-                    <?php
-                      if ($st === 'completed') echo "Retake Quiz";
-                      elseif ($st === 'failed') echo "Retry Quiz";
-                      else echo "Start Quiz";
-                    ?>
-                  </a>
-                </div>
+                <a href="../member/take_quiz.php?id=<?= $quiz['id'] ?>"
+                   class="block w-full text-center bg-gradient-to-r from-teal-600 to-blue-600 text-white px-4 py-2 rounded-lg shadow hover:from-teal-700 hover:to-blue-700 transition">
+                  <?= ($st === 'completed') ? "Retake Quiz" : (($st === 'failed') ? "Retry Quiz" : "Start Quiz") ?>
+                </a>
               </div>
             <?php endforeach; ?>
           </div>
         <?php endif; ?>
       </div>
 
-      <!-- Daily Nursing Tip -->
+      <!-- ✅ Daily Tip -->
       <div class="bg-white/80 backdrop-blur-xl p-6 rounded-2xl shadow-lg border border-gray-200 text-center max-w-xl mx-auto">
         <h3 class="text-lg font-semibold mb-3 text-teal-700">🌟 Daily Nursing Tip</h3>
         <p class="text-gray-700 text-lg italic">"<?= htmlspecialchars($dailyTip ?: 'Stay hydrated and keep learning!') ?>"</p>

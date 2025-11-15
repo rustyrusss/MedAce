@@ -12,9 +12,17 @@ if (!isset($_SESSION['user_id'])) {
 $studentId = $_SESSION['user_id'];
 $journeyData = getStudentJourney($conn, $studentId);
 
-// Separate modules & quizzes
+// Avoid duplicate quizzes by only keeping the latest attempt
 $modules = $journeyData['modules'] ?? [];
-$quizzes = $journeyData['quizzes'] ?? [];
+$quizzes = [];
+if (!empty($journeyData['quizzes'])) {
+    $temp = [];
+    foreach ($journeyData['quizzes'] as $quiz) {
+        $temp[$quiz['id']] = $quiz; // overwrite duplicates, keep latest
+    }
+    $quizzes = array_values($temp);
+}
+
 $stats = $journeyData['stats'] ?? ['completed' => 0, 'total' => 0, 'progress' => 0];
 
 // Student info
@@ -39,21 +47,21 @@ $profilePic = !empty($student['profile_pic']) ? "../" . $student['profile_pic'] 
 $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMIT 1")->fetchColumn();
 
 // Stats for progress chart
-$completedSteps = count(array_filter($journeyData['modules'], fn($s) => strtolower($s['status']) === 'completed')) +
-                  count(array_filter($journeyData['quizzes'], fn($s) => strtolower($s['status']) === 'completed'));
-$currentSteps = count(array_filter($journeyData['modules'], fn($s) => strtolower($s['status']) === 'current')) +
-                count(array_filter($journeyData['quizzes'], fn($s) => strtolower($s['status']) === 'current'));
-$pendingSteps = count(array_filter($journeyData['modules'], fn($s) => strtolower($s['status']) === 'pending')) +
-                count(array_filter($journeyData['quizzes'], fn($s) => strtolower($s['status']) === 'pending'));
-$totalSteps = max(count($journeyData['modules']) + count($journeyData['quizzes']), 1);
+$completedSteps = count(array_filter($modules, fn($s) => strtolower($s['status']) === 'completed')) +
+                  count(array_filter($quizzes, fn($s) => strtolower($s['status']) === 'completed'));
+$currentSteps = count(array_filter($modules, fn($s) => strtolower($s['status']) === 'current')) +
+                count(array_filter($quizzes, fn($s) => strtolower($s['status']) === 'current'));
+$pendingSteps = count(array_filter($modules, fn($s) => strtolower($s['status']) === 'pending')) +
+                count(array_filter($quizzes, fn($s) => strtolower($s['status']) === 'pending'));
+$totalSteps = max(count($modules) + count($quizzes), 1);
 $progressPercent = round(($completedSteps / $totalSteps) * 100);
 ?>
 
 <!DOCTYPE html>
 <html lang="en" x-data="{ sidebarOpen: false, collapsed: true, filter: 'all' }">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Progress Tracker | MedAce</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/alpinejs" defer></script>
@@ -63,9 +71,9 @@ $progressPercent = round(($completedSteps / $totalSteps) * 100);
     [x-cloak] { display: none; }
   </style>
 </head>
-<body class="bg-gradient-to-br from-teal-50 via-blue-50 to-indigo-100 min-h-screen relative">
+<body class="relative min-h-screen bg-[#D1EBEC]">
 
-  <!-- Overlay for mobile -->
+  <!-- Mobile overlay -->
   <div class="fixed inset-0 bg-black bg-opacity-40 z-20 md:hidden"
        x-show="sidebarOpen" x-transition.opacity
        @click="sidebarOpen = false"></div>
@@ -107,13 +115,13 @@ $progressPercent = round(($completedSteps / $totalSteps) * 100);
           <span x-show="!collapsed" class="ml-3 font-medium">Quizzes</span>
         </a>
         <a href="resources.php" class="flex items-center p-2 rounded-lg hover:bg-teal-100">
-          <span class="text-xl">📂</span>
+          <span class="text-xl">📚</span>
           <span x-show="!collapsed" class="ml-3 font-medium">Resources</span>
         </a>
       </div>
     </nav>
 
-    <!-- Collapse -->
+    <!-- Collapse button -->
     <button class="mt-5 flex items-center justify-center p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition hidden md:flex"
             @click="collapsed = !collapsed">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-700 transform transition-transform"
@@ -131,7 +139,7 @@ $progressPercent = round(($completedSteps / $totalSteps) * 100);
     </div>
   </aside>
 
-  <!-- Main Content -->
+  <!-- Main content -->
   <div class="transition-all" :class="{ 'md:ml-64': !collapsed, 'md:ml-20': collapsed }">
     <main class="p-6 sm:p-10 space-y-10">
       <h1 class="text-2xl font-bold text-gray-800">Progress Overview 👩‍⚕️</h1>
@@ -151,7 +159,7 @@ $progressPercent = round(($completedSteps / $totalSteps) * 100);
         </div>
       </div>
 
-      <!-- Filter Buttons -->
+      <!-- Filter buttons -->
       <div class="flex flex-wrap gap-2 justify-center lg:justify-start">
         <button @click="filter = 'all'" :class="filter==='all' ? 'bg-teal-600 text-white' : 'bg-gray-200 text-gray-700'" class="px-4 py-1.5 rounded-full font-medium transition">All</button>
         <button @click="filter = 'completed'" :class="filter==='completed' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'" class="px-4 py-1.5 rounded-full font-medium transition">Completed</button>
@@ -159,58 +167,56 @@ $progressPercent = round(($completedSteps / $totalSteps) * 100);
         <button @click="filter = 'pending'" :class="filter==='pending' ? 'bg-yellow-600 text-white' : 'bg-gray-200 text-gray-700'" class="px-4 py-1.5 rounded-full font-medium transition">Pending</button>
       </div>
 
-      <!-- Activity Tracker -->
+      <!-- Modules & Quizzes (Activity tracker) -->
       <div class="grid md:grid-cols-2 gap-6">
         <!-- Modules -->
         <div class="bg-white p-6 rounded-2xl shadow-sm">
-            <h3 class="text-lg font-semibold text-blue-600 mb-4">📘 Modules</h3>
-            <?php if (!empty($journeyData['modules'])): ?>
-                <ul class="space-y-3">
-                    <?php foreach ($journeyData['modules'] as $module): ?>
-                        <li 
-                          x-show="filter === 'all' || filter === '<?= strtolower($module['status']) ?>'" x-cloak
-                          class="border rounded-xl p-4 hover:bg-blue-50 transition flex justify-between items-center">
-                            <div>
-                                <h4 class="font-medium text-gray-800"><?= htmlspecialchars($module['title']) ?></h4>
-                                <p class="text-sm text-gray-500"><?= htmlspecialchars($module['description'] ?? '') ?></p>
-                            </div>
-                            <span class="text-xs px-3 py-1 rounded-full 
-                                <?= strtolower($module['status']) === 'completed' ? 'bg-green-100 text-green-700' : 
-                                    (strtolower($module['status']) === 'current' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600') ?>">
-                                <?= htmlspecialchars($module['status']) ?>
-                            </span>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            <?php else: ?>
-                <p class="text-gray-500">No modules found.</p>
-            <?php endif; ?>
+          <h3 class="text-lg font-semibold text-blue-600 mb-4">📘 Modules</h3>
+          <?php if (!empty($modules)): ?>
+            <ul class="space-y-3">
+              <?php foreach ($modules as $module): ?>
+                <li x-show="filter === 'all' || filter === '<?= strtolower($module['status']) ?>'" x-cloak
+                    class="border rounded-xl p-4 hover:bg-blue-50 transition flex justify-between items-center">
+                  <div>
+                    <h4 class="font-medium text-gray-800"><?= htmlspecialchars($module['title']) ?></h4>
+                    <p class="text-sm text-gray-500"><?= htmlspecialchars($module['description'] ?? '') ?></p>
+                  </div>
+                  <span class="text-xs px-3 py-1 rounded-full 
+                        <?= strtolower($module['status']) === 'completed' ? 'bg-green-100 text-green-700' : 
+                            (strtolower($module['status']) === 'current' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600') ?>">
+                    <?= htmlspecialchars($module['status']) ?>
+                  </span>
+                </li>
+              <?php endforeach; ?>
+            </ul>
+          <?php else: ?>
+            <p class="text-gray-500">No modules found.</p>
+          <?php endif; ?>
         </div>
 
         <!-- Quizzes -->
         <div class="bg-white p-6 rounded-2xl shadow-sm">
-            <h3 class="text-lg font-semibold text-pink-600 mb-4">🧩 Quizzes</h3>
-            <?php if (!empty($journeyData['quizzes'])): ?>
-                <ul class="space-y-3">
-                    <?php foreach ($journeyData['quizzes'] as $quiz): ?>
-                        <li 
-                          x-show="filter === 'all' || filter === '<?= strtolower($quiz['status']) ?>'" x-cloak
-                          class="border rounded-xl p-4 hover:bg-pink-50 transition flex justify-between items-center">
-                            <div>
-                                <h4 class="font-medium text-gray-800"><?= htmlspecialchars($quiz['title']) ?></h4>
-                                <p class="text-sm text-gray-500"><?= htmlspecialchars($quiz['description'] ?? '') ?></p>
-                            </div>
-                            <span class="text-xs px-3 py-1 rounded-full 
-                                <?= strtolower($quiz['status']) === 'completed' ? 'bg-green-100 text-green-700' : 
-                                    (strtolower($quiz['status']) === 'current' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600') ?>">
-                                <?= htmlspecialchars($quiz['status']) ?>
-                            </span>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            <?php else: ?>
-                <p class="text-gray-500">No quizzes found.</p>
-            <?php endif; ?>
+          <h3 class="text-lg font-semibold text-pink-600 mb-4">🧩 Quizzes</h3>
+          <?php if (!empty($quizzes)): ?>
+            <ul class="space-y-3">
+              <?php foreach ($quizzes as $quiz): ?>
+                <li x-show="filter === 'all' || filter === '<?= strtolower($quiz['status']) ?>'" x-cloak
+                    class="border rounded-xl p-4 hover:bg-pink-50 transition flex justify-between items-center">
+                  <div>
+                    <h4 class="font-medium text-gray-800"><?= htmlspecialchars($quiz['title']) ?></h4>
+                    <p class="text-sm text-gray-500"><?= htmlspecialchars($quiz['description'] ?? '') ?></p>
+                  </div>
+                  <span class="text-xs px-3 py-1 rounded-full 
+                        <?= strtolower($quiz['status']) === 'completed' ? 'bg-green-100 text-green-700' : 
+                            (strtolower($quiz['status']) === 'current' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600') ?>">
+                    <?= htmlspecialchars($quiz['status']) ?>
+                  </span>
+                </li>
+              <?php endforeach; ?>
+            </ul>
+          <?php else: ?>
+            <p class="text-gray-500">No quizzes found.</p>
+          <?php endif; ?>
         </div>
       </div>
 
@@ -236,11 +242,10 @@ $progressPercent = round(($completedSteps / $totalSteps) * 100);
       },
       options: {
         cutout: '70%',
-        plugins: {
-          legend: { display: true, position: 'bottom' }
-        }
+        plugins: { legend: { display: true, position: 'bottom' } }
       }
     });
   </script>
+
 </body>
 </html>
