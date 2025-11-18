@@ -171,6 +171,20 @@ body.warning-active {
   pointer-events: auto;
   user-select: auto;
 }
+
+/* Fixed Sidebar */
+.fixed-sidebar {
+  position: fixed;
+  right: 0;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+/* Main content with padding for fixed sidebar */
+.main-with-sidebar {
+  margin-right: 320px; /* Width of sidebar (w-80 = 20rem = 320px) */
+}
 </style>
 </head>
 <body class="flex min-h-screen warning-active">
@@ -225,9 +239,10 @@ body.warning-active {
 </div>
 
 <!-- Quiz Content (Initially Blurred) -->
-<div id="quizContent" class="quiz-content flex min-h-screen w-full">
-  <!-- Sidebar (Right) -->
-  <aside class="w-80 p-8 bg-white shadow-xl sticky top-0 h-screen flex flex-col justify-between">
+<div id="quizContent" class="quiz-content w-full">
+  
+  <!-- Fixed Sidebar (Right) -->
+  <aside class="fixed-sidebar w-80 p-8 bg-white shadow-xl flex flex-col justify-between">
     <div class="space-y-6">
       <!-- Quiz Title & Description -->
       <div>
@@ -279,8 +294,8 @@ body.warning-active {
     </button>
   </aside>
 
-  <!-- Main Content (Questions) -->
-  <main class="flex-1 px-10 py-12 overflow-y-auto">
+  <!-- Main Content (Questions) with margin for fixed sidebar -->
+  <main class="main-with-sidebar px-10 py-12 overflow-y-auto">
     <div class="max-w-3xl mx-auto space-y-8">
       <form id="quizForm" action="../actions/attempt_quiz.php" method="POST" class="space-y-8">
         <input type="hidden" name="quiz_id" value="<?= $quizId ?>">
@@ -401,9 +416,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Prevent keyboard shortcuts that exit fullscreen
   document.addEventListener("keydown", (e) => {
-    if (!quizStarted) return; // Only block after quiz starts
+    if (!quizStarted) return;
     
-    // Fullscreen controls
     if (e.key === "F11") {
       e.preventDefault();
       alert("⚠️ You cannot exit fullscreen during the quiz!");
@@ -417,7 +431,6 @@ document.addEventListener("DOMContentLoaded", () => {
       alert("⚠️ Tab switching is not allowed during the quiz!");
     }
 
-    // Copy/Paste/Select All prevention
     if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
       e.preventDefault();
       alert("⚠️ Copying is disabled during the quiz.");
@@ -493,7 +506,6 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // ========== SECURITY MEASURES ==========
-  // Prevent right-click
   document.addEventListener("contextmenu", (e) => {
     if (quizStarted) {
       e.preventDefault();
@@ -501,7 +513,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Prevent copying
   document.addEventListener("copy", (e) => {
     if (quizStarted) {
       e.preventDefault();
@@ -509,7 +520,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Prevent cutting
   document.addEventListener("cut", (e) => {
     if (quizStarted) {
       e.preventDefault();
@@ -517,7 +527,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Prevent pasting
   document.addEventListener("paste", (e) => {
     if (quizStarted) {
       e.preventDefault();
@@ -525,7 +534,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Prevent text selection with mouse drag
   document.addEventListener("selectstart", (e) => {
     if (quizStarted && e.target.tagName !== 'INPUT') {
       e.preventDefault();
