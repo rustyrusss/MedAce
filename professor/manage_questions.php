@@ -19,6 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['question_text']) && !
         $question_type = trim($_POST['question_type']);
         $options_json = $_POST['options_json'] ?? '[]';
         $correct_answer_value = $_POST['correct_answer_value'] ?? '';
+        $question_points = isset($_POST['question_points']) ? intval($_POST['question_points']) : 1;
         
         if (empty($quiz_id) || empty($question_text) || empty($question_type)) {
             throw new Exception("Please fill in all required fields.");
@@ -41,9 +42,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['question_text']) && !
         
         $conn->beginTransaction();
         
+        // Modified INSERT to include points
         $stmt = $conn->prepare("
-            INSERT INTO questions (quiz_id, question_text, question_type, options, correct_answer, time_limit) 
-            VALUES (?, ?, ?, ?, ?, 0)
+            INSERT INTO questions (quiz_id, question_text, question_type, options, correct_answer, time_limit, points) 
+            VALUES (?, ?, ?, ?, ?, 0, ?)
         ");
         
         $stmt->execute([
@@ -51,7 +53,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['question_text']) && !
             $question_text,
             $question_type,
             $options_db,
-            $correct_answer_value
+            $correct_answer_value,
+            $question_points
         ]);
         
         $question_id = $conn->lastInsertId();
@@ -100,6 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['question_id']) && iss
         $question_type = trim($_POST['question_type']);
         $options_json = $_POST['options_json'] ?? '[]';
         $correct_answer_value = $_POST['correct_answer_value'] ?? '';
+        $question_points = isset($_POST['question_points_edit']) ? intval($_POST['question_points_edit']) : 1;
         
         // Verify ownership
         $stmt = $conn->prepare("
@@ -117,10 +121,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['question_id']) && iss
         
         $conn->beginTransaction();
         
-        // Update question
+        // Update question with points
         $stmt = $conn->prepare("
             UPDATE questions 
-            SET question_text = ?, question_type = ?, options = ?, correct_answer = ? 
+            SET question_text = ?, question_type = ?, options = ?, correct_answer = ?, points = ? 
             WHERE id = ?
         ");
         $stmt->execute([
@@ -128,6 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['question_id']) && iss
             $question_type,
             $options_db,
             $correct_answer_value,
+            $question_points,
             $question_id
         ]);
         
@@ -338,10 +343,28 @@ $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             </div>
                         </div>
 
-                        <div id="text_answer_area" class="space-y-2 hidden">
-                            <label class="block text-sm font-medium mb-1">Expected Answer (optional)</label>
-                            <input id="expected_answer" name="expected_answer" type="text" class="w-full p-2 border rounded" placeholder="Optional: enter expected answer for reference (not required)">
-                            <p class="text-sm text-gray-500">Enter the expected answer (useful as a grading note). Not required for saving.</p>
+                        <div id="text_answer_area" class="space-y-3 hidden">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Expected Answer (optional)</label>
+                                <input id="expected_answer" name="expected_answer" type="text" class="w-full p-2 border rounded" placeholder="Optional: enter expected answer for reference (not required)">
+                                <p class="text-sm text-gray-500">Enter the expected answer (useful as a grading note). Not required for saving.</p>
+                            </div>
+                            
+                            <div class="bg-sky-50 p-4 rounded-lg border border-sky-200">
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                    🎯 Points for this Question
+                                </label>
+                                <input type="number" 
+                                       id="question_points" 
+                                       name="question_points" 
+                                       min="1" 
+                                       max="100" 
+                                       value="10" 
+                                       class="w-full px-3 py-2 border-2 border-sky-300 rounded-lg focus:ring-2 focus:ring-sky-400 outline-none font-semibold text-lg">
+                                <p class="text-xs text-gray-600 mt-2">
+                                    💡 Set the point value for this question (1-100 points)
+                                </p>
+                            </div>
                         </div>
 
                         <div id="text_note" class="p-3 bg-blue-50 border border-blue-100 rounded text-sm text-blue-800 hidden">
@@ -392,6 +415,7 @@ $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             $stmt = $conn->prepare("SELECT * FROM answers WHERE question_id = ? ORDER BY id ASC");
                             $stmt->execute([$q['id']]);
                             $answers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                            $points = isset($q['points']) ? intval($q['points']) : 1;
                         ?>
                         
                         <div x-show="currentQuestionIndex === <?= $index ?>" x-cloak
@@ -408,9 +432,16 @@ $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                             <?= $index + 1 ?>
                                         </div>
                                         <div class="flex-1">
-                                            <span class="inline-block text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-700 font-medium mb-3">
-                                                <?= ucfirst(str_replace('_', ' ', htmlspecialchars($q['question_type']))) ?>
-                                            </span>
+                                            <div class="flex items-center gap-3 mb-3">
+                                                <span class="inline-block text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-700 font-medium">
+                                                    <?= ucfirst(str_replace('_', ' ', htmlspecialchars($q['question_type']))) ?>
+                                                </span>
+                                                <?php if (in_array($q['question_type'], ['short_answer', 'essay'])): ?>
+                                                    <span class="inline-block text-xs px-3 py-1 rounded-full bg-amber-100 text-amber-700 font-bold">
+                                                        🎯 <?= $points ?> point<?= $points != 1 ? 's' : '' ?>
+                                                    </span>
+                                                <?php endif; ?>
+                                            </div>
                                             <p class="text-xl font-semibold text-gray-900 leading-relaxed">
                                                 <?= htmlspecialchars($q['question_text']) ?>
                                             </p>
@@ -472,7 +503,6 @@ $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                        <input type="hidden" name="quiz_id" value="<?= $quiz_id ?>">
                                        <input type="hidden" name="options_json" id="edit_options_json_<?= $q['id'] ?>">
                                        <input type="hidden" name="action" value="edit">
-                                       <!-- note: question_type is disabled for editing but we still send it -->
                                        <input type="hidden" name="question_type" value="<?= htmlspecialchars($q['question_type']) ?>">
 
                                        <div class="flex items-center gap-3 mb-6">
@@ -506,7 +536,6 @@ $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                <p class="text-xs text-gray-500 mt-1">Question type cannot be changed after creation</p>
                                            </div>
 
-                                           <!-- Rest of the form (options, etc.) remains unchanged -->
                                            <?php if (!empty($answers)): ?>
                                            <div>
                                                <label class="block text-sm font-semibold text-gray-700 mb-3">Answer Options</label>
@@ -532,14 +561,27 @@ $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                </div>
                                            </div>
                                            <?php else: ?>
-                                           <!-- For text-based questions, show a note and optional expected answer input -->
-                                           <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                           <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
                                                <p class="text-sm text-blue-800">
                                                    <span class="font-semibold">📝 Text-based question</span> — Students will provide their own answer. No options needed.
                                                </p>
-                                               <div class="mt-3">
+                                               <div>
                                                    <label class="block text-sm font-medium mb-1">Expected Answer (optional)</label>
                                                    <input type="text" name="expected_answer_edit_<?= $q['id'] ?>" class="w-full p-2 border rounded" placeholder="Optional expected answer (for teacher reference)">
+                                               </div>
+                                               <div class="bg-sky-50 p-4 rounded-lg border border-sky-200">
+                                                   <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                                       🎯 Points for this Question
+                                                   </label>
+                                                   <input type="number" 
+                                                          name="question_points_edit" 
+                                                          min="1" 
+                                                          max="100" 
+                                                          value="<?= $points ?>" 
+                                                          class="w-full px-3 py-2 border-2 border-sky-300 rounded-lg focus:ring-2 focus:ring-sky-400 outline-none font-semibold text-lg">
+                                                   <p class="text-xs text-gray-600 mt-2">
+                                                       💡 Set the point value for this question (1-100 points)
+                                                   </p>
                                                </div>
                                            </div>
                                            <?php endif; ?>
@@ -665,7 +707,7 @@ function onTypeChange() {
             </div>
         `;
     } else {
-        // short_answer, essay, paragraph -> show text area note and optional expected answer input
+        // short_answer, essay -> show text area note and points input
         optionsArea.classList.add('hidden');
         textNote.classList.remove('hidden');
         textAnswerArea.classList.remove('hidden');
@@ -733,7 +775,7 @@ function prepareOptions() {
         }
         correctAnswerInput.value = correctAnswer;
     } else {
-        // text-based questions: no options, optionally send teacher-provided expected answer
+        // text-based questions: no options
         document.getElementById('options_json').value = '[]';
         let correctAnswerInput = document.getElementById('correct_answer_value');
         const expected = document.getElementById('expected_answer') ? document.getElementById('expected_answer').value.trim() : '';
@@ -744,7 +786,6 @@ function prepareOptions() {
             correctAnswerInput.id = 'correct_answer_value';
             document.getElementById('questionForm').appendChild(correctAnswerInput);
         }
-        // store expected answer if provided, otherwise empty string
         correctAnswerInput.value = expected;
     }
     
@@ -752,13 +793,11 @@ function prepareOptions() {
 }
 
 function prepareEditOptions(questionId) {
-    // For edit: check if there are option inputs in the edit container
     const optionsContainer = document.querySelector('#edit_options_' + questionId);
     
     if (!optionsContainer || optionsContainer.children.length === 0) {
-        // text-based question: no options; set empty array
+        // text-based question
         document.getElementById('edit_options_json_' + questionId).value = '[]';
-        // if teacher provided an expected answer field, copy it to correct_answer_value
         const form = document.querySelector('#edit_options_' + questionId) ? document.querySelector('#edit_options_' + questionId).closest('form') : document.querySelector('form');
         let expectedInput = form ? form.querySelector('input[name="expected_answer_edit_' + questionId + '"]') : null;
         let correctAnswerInput = form ? form.querySelector('input[name="correct_answer_value"]') : null;
@@ -774,7 +813,6 @@ function prepareEditOptions(questionId) {
         return true;
     }
     
-    // For questions with options
     const options = [];
     const optionInputs = document.querySelectorAll('#edit_options_' + questionId + ' input[type="text"]');
     
@@ -797,7 +835,6 @@ function prepareEditOptions(questionId) {
     
     document.getElementById('edit_options_json_' + questionId).value = JSON.stringify(options);
     
-    // Set correct answer value in a hidden input inside the form
     const form = document.querySelector('#edit_options_' + questionId).closest('form');
     let correctAnswerInput = form.querySelector('input[name="correct_answer_value"]');
     if (!correctAnswerInput) {

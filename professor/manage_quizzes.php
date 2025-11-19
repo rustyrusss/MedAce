@@ -11,6 +11,115 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'professor') {
 
 $professorId = $_SESSION['user_id'];
 
+// ✅ Handle quiz creation
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_quiz') {
+    try {
+        $title = trim($_POST['title']);
+        $description = trim($_POST['description'] ?? '');
+        $module_id = intval($_POST['module_id']);
+        $content = trim($_POST['content'] ?? '');
+        $status = $_POST['status'] ?? 'active';
+        $time_limit = isset($_POST['time_limit']) ? intval($_POST['time_limit']) : 0;
+        $publish_time = !empty($_POST['publish_time']) ? $_POST['publish_time'] : null;
+        $deadline_time = !empty($_POST['deadline_time']) ? $_POST['deadline_time'] : null;
+        
+        if (empty($title) || empty($module_id)) {
+            throw new Exception("Title and Module are required.");
+        }
+        
+        // Verify module belongs to professor
+        $stmt = $conn->prepare("SELECT id FROM modules WHERE id = ? AND professor_id = ?");
+        $stmt->execute([$module_id, $professorId]);
+        if (!$stmt->fetch()) {
+            throw new Exception("Invalid module selected.");
+        }
+        
+        // Insert quiz
+        $stmt = $conn->prepare("
+            INSERT INTO quizzes (title, description, module_id, lesson_id, professor_id, content, status, time_limit, publish_time, deadline_time, created_at) 
+            VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, NOW())
+        ");
+        $stmt->execute([
+            $title,
+            $description,
+            $module_id,
+            $professorId,
+            $content,
+            $status,
+            $time_limit,
+            $publish_time,
+            $deadline_time
+        ]);
+        
+        $_SESSION['success'] = "Quiz created successfully! 🎉";
+        header("Location: manage_quizzes.php");
+        exit();
+        
+    } catch (Exception $e) {
+        $_SESSION['error'] = "Error creating quiz: " . $e->getMessage();
+    }
+}
+
+// ✅ Handle quiz update
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit_quiz') {
+    try {
+        $quiz_id = intval($_POST['quiz_id']);
+        $title = trim($_POST['title']);
+        $description = trim($_POST['description'] ?? '');
+        $module_id = intval($_POST['module_id']);
+        $content = trim($_POST['content'] ?? '');
+        $status = $_POST['status'] ?? 'active';
+        $time_limit = isset($_POST['time_limit']) ? intval($_POST['time_limit']) : 0;
+        $publish_time = !empty($_POST['publish_time']) ? $_POST['publish_time'] : null;
+        $deadline_time = !empty($_POST['deadline_time']) ? $_POST['deadline_time'] : null;
+        
+        if (empty($title) || empty($module_id)) {
+            throw new Exception("Title and Module are required.");
+        }
+        
+        // Verify quiz belongs to professor
+        $stmt = $conn->prepare("SELECT id FROM quizzes WHERE id = ? AND professor_id = ?");
+        $stmt->execute([$quiz_id, $professorId]);
+        if (!$stmt->fetch()) {
+            throw new Exception("Invalid quiz selected.");
+        }
+        
+        // Verify module belongs to professor
+        $stmt = $conn->prepare("SELECT id FROM modules WHERE id = ? AND professor_id = ?");
+        $stmt->execute([$module_id, $professorId]);
+        if (!$stmt->fetch()) {
+            throw new Exception("Invalid module selected.");
+        }
+        
+        // Update quiz
+        $stmt = $conn->prepare("
+            UPDATE quizzes 
+            SET title = ?, description = ?, module_id = ?, content = ?, status = ?, 
+                time_limit = ?, publish_time = ?, deadline_time = ?
+            WHERE id = ? AND professor_id = ?
+        ");
+        $stmt->execute([
+            $title,
+            $description,
+            $module_id,
+            $content,
+            $status,
+            $time_limit,
+            $publish_time,
+            $deadline_time,
+            $quiz_id,
+            $professorId
+        ]);
+        
+        $_SESSION['success'] = "Quiz updated successfully! ✅";
+        header("Location: manage_quizzes.php");
+        exit();
+        
+    } catch (Exception $e) {
+        $_SESSION['error'] = "Error updating quiz: " . $e->getMessage();
+    }
+}
+
 // ✅ Fetch professor info
 $stmt = $conn->prepare("SELECT firstname, lastname, email, profile_pic, gender FROM users WHERE id = ?");
 $stmt->execute([$professorId]);
@@ -26,7 +135,7 @@ $modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // ✅ Fetch quizzes
 $stmt = $conn->prepare("
-    SELECT q.id, q.title, q.description, q.status, q.created_at, m.title AS module_title
+    SELECT q.id, q.title, q.description, q.status, q.time_limit, q.created_at, q.module_id, q.content, q.publish_time, q.deadline_time, m.title AS module_title
     FROM quizzes q
     LEFT JOIN modules m ON q.module_id = m.id
     WHERE q.professor_id = :professor_id
@@ -108,12 +217,29 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
       <h1 class="text-2xl font-bold text-gray-800">🧠 Manage Quizzes</h1>
     </div>
 
+    <!-- Success/Error Messages -->
+    <?php if (isset($_SESSION['success'])): ?>
+      <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg mb-4 flex items-center justify-between">
+        <span><?= htmlspecialchars($_SESSION['success']) ?></span>
+        <button onclick="this.parentElement.remove()" class="text-green-700 hover:text-green-900 font-bold">✕</button>
+      </div>
+      <?php unset($_SESSION['success']); ?>
+    <?php endif; ?>
+
+    <?php if (isset($_SESSION['error'])): ?>
+      <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4 flex items-center justify-between">
+        <span><?= htmlspecialchars($_SESSION['error']) ?></span>
+        <button onclick="this.parentElement.remove()" class="text-red-700 hover:text-red-900 font-bold">✕</button>
+      </div>
+      <?php unset($_SESSION['error']); ?>
+    <?php endif; ?>
+
     <!-- Search + Filter -->
     <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-      <input type="text" placeholder="🔍 Search quiz title..." class="w-full md:w-1/2 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-sky-400 outline-none">
+      <input type="text" id="searchInput" placeholder="🔍 Search quiz title..." class="w-full md:w-1/2 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-sky-400 outline-none">
       <div class="flex items-center space-x-2">
         <label class="text-gray-600 font-medium">Filter:</label>
-        <select class="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-sky-400 outline-none">
+        <select id="statusFilter" class="border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-sky-400 outline-none">
           <option value="all">All</option>
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
@@ -125,7 +251,7 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <div class="bg-white p-6 rounded-2xl shadow-lg border border-gray-200 overflow-x-auto">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-xl font-semibold text-gray-800">Your Quizzes</h2>
-        <button onclick="toggleModal()" class="px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 shadow-md transition">
+        <button onclick="openAddModal()" class="px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 shadow-md transition">
           + Add Quiz
         </button>
       </div>
@@ -138,18 +264,30 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <th class="py-3 px-4 font-semibold">Title</th>
             <th class="py-3 px-4 font-semibold">Description</th>
             <th class="py-3 px-4 font-semibold">Module</th>
+            <th class="py-3 px-4 font-semibold">Time Limit</th>
             <th class="py-3 px-4 font-semibold">Status</th>
             <th class="py-3 px-4 font-semibold">Created</th>
             <th class="py-3 px-4 font-semibold text-center">Actions</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody class="divide-y divide-gray-100" id="quizTableBody">
           <?php foreach ($quizzes as $index => $quiz): ?>
-          <tr class="hover:bg-sky-50 transition-all duration-150">
+          <tr class="hover:bg-sky-50 transition-all duration-150 quiz-row" 
+              data-status="<?= strtolower($quiz['status']) ?>" 
+              data-title="<?= htmlspecialchars($quiz['title']) ?>">
             <td class="py-3 px-4"><?= $index + 1 ?></td>
             <td class="py-3 px-4 font-medium text-gray-800"><?= htmlspecialchars($quiz['title']) ?></td>
             <td class="py-3 px-4 text-gray-600"><?= htmlspecialchars($quiz['description']) ?></td>
             <td class="py-3 px-4 text-gray-700"><?= htmlspecialchars($quiz['module_title'] ?? '—') ?></td>
+            <td class="py-3 px-4">
+              <?php if (!empty($quiz['time_limit']) && $quiz['time_limit'] > 0): ?>
+                <span class="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs font-semibold">
+                  ⏱️ <?= $quiz['time_limit'] ?> min
+                </span>
+              <?php else: ?>
+                <span class="text-gray-400 text-xs">No limit</span>
+              <?php endif; ?>
+            </td>
             <td class="py-3 px-4">
               <?php
                 $status = strtolower($quiz['status']);
@@ -167,7 +305,7 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <td class="py-3 px-4 text-center">
               <div class="flex items-center justify-center space-x-2">
                 <a href="manage_questions.php?quiz_id=<?= $quiz['id'] ?>" class="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition">Questions</a>
-                <a href="edit_quiz.php?id=<?= $quiz['id'] ?>" class="px-3 py-1 text-sm bg-sky-100 text-sky-700 rounded-md hover:bg-sky-200 transition">Edit</a>
+                <button onclick='openEditModal(<?= json_encode($quiz) ?>)' class="px-3 py-1 text-sm bg-sky-100 text-sky-700 rounded-md hover:bg-sky-200 transition">Edit</button>
                 <a href="../actions/delete_quiz.php?id=<?= $quiz['id'] ?>" onclick="return confirm('Delete this quiz?');" class="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition">Delete</a>
               </div>
             </td>
@@ -179,19 +317,20 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <div class="text-center py-10 text-gray-500">
           <span class="text-5xl mb-3 block">📭</span>
           <p class="text-lg font-medium">No quizzes added yet.</p>
-          <p class="text-sm text-gray-400 mt-1">Click “+ Add Quiz” to create your first one.</p>
+          <p class="text-sm text-gray-400 mt-1">Click "+ Add Quiz" to create your first one.</p>
         </div>
       <?php endif; ?>
     </div>
   </main>
 </div>
 
-<!-- ✅ Modal -->
+<!-- ✅ Add Quiz Modal -->
 <div id="addQuizModal" class="fixed inset-0 bg-black bg-opacity-40 hidden items-center justify-center z-50 backdrop-blur-sm">
-  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-8 transform scale-95 opacity-0 transition-all duration-300 ease-out overflow-y-auto max-h-[90vh]" id="modalContent">
-    <button onclick="toggleModal()" class="absolute top-3 right-3 text-gray-500 hover:text-gray-700 text-xl font-semibold">×</button>
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-8 transform scale-95 opacity-0 transition-all duration-300 ease-out overflow-y-auto max-h-[90vh]" id="addModalContent">
+    <button onclick="closeAddModal()" class="absolute top-3 right-3 text-gray-500 hover:text-gray-700 text-xl font-semibold">×</button>
     <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">➕ Add New Quiz</h2>
-    <form action="../actions/add_quiz_action.php" method="POST" class="space-y-5">
+    <form method="POST" class="space-y-5">
+      <input type="hidden" name="action" value="add_quiz">
 
       <div>
         <label class="block text-sm font-semibold text-gray-700 mb-1">Quiz Title <span class="text-red-500">*</span></label>
@@ -227,26 +366,101 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
       </div>
 
       <div>
-        <label class="block text-sm font-semibold text-gray-700 mb-1">Publish Time</label>
-        <input type="datetime-local" name="publish_time" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-sky-400 outline-none">
-        <p class="text-sm text-gray-500">Leave empty to publish immediately.</p>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">⏱️ Time Limit (minutes)</label>
+        <input type="number" name="time_limit" min="0" placeholder="0 = No time limit" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-sky-400 outline-none">
+        <p class="text-sm text-gray-500 mt-1">Set quiz duration in minutes. Leave as 0 for no time limit.</p>
       </div>
 
       <div>
-        <label class="block text-sm font-semibold text-gray-700 mb-1">Deadline Time</label>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">📅 Publish Time</label>
+        <input type="datetime-local" name="publish_time" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-sky-400 outline-none">
+        <p class="text-sm text-gray-500 mt-1">Leave empty to publish immediately.</p>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">⏰ Deadline Time</label>
         <input type="datetime-local" name="deadline_time" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-sky-400 outline-none">
-        <p class="text-sm text-gray-500">Leave empty for no deadline.</p>
+        <p class="text-sm text-gray-500 mt-1">Leave empty for no deadline.</p>
       </div>
 
       <div class="flex justify-end gap-3 pt-4">
-        <button type="button" onclick="toggleModal()" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition">Cancel</button>
+        <button type="button" onclick="closeAddModal()" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition">Cancel</button>
         <button type="submit" class="px-5 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition">Save Quiz</button>
       </div>
     </form>
   </div>
 </div>
 
+<!-- ✅ Edit Quiz Modal -->
+<div id="editQuizModal" class="fixed inset-0 bg-black bg-opacity-40 hidden items-center justify-center z-50 backdrop-blur-sm">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-8 transform scale-95 opacity-0 transition-all duration-300 ease-out overflow-y-auto max-h-[90vh]" id="editModalContent">
+    <button onclick="closeEditModal()" class="absolute top-3 right-3 text-gray-500 hover:text-gray-700 text-xl font-semibold">×</button>
+    <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">✏️ Edit Quiz</h2>
+    <form method="POST" class="space-y-5" id="editQuizForm">
+      <input type="hidden" name="action" value="edit_quiz">
+      <input type="hidden" name="quiz_id" id="edit_quiz_id">
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Quiz Title <span class="text-red-500">*</span></label>
+        <input type="text" name="title" id="edit_title" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-sky-400 outline-none">
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Description</label>
+        <textarea name="description" id="edit_description" rows="3" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-sky-400 outline-none"></textarea>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Select Module <span class="text-red-500">*</span></label>
+        <select name="module_id" id="edit_module_id" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-sky-400 outline-none">
+          <option value="" disabled>— Choose a module —</option>
+          <?php foreach ($modules as $module): ?>
+            <option value="<?= $module['id'] ?>"><?= htmlspecialchars($module['title']) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Instructions / Content</label>
+        <textarea name="content" id="edit_content" rows="3" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-sky-400 outline-none"></textarea>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Status</label>
+        <select name="status" id="edit_status" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-sky-400 outline-none">
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">⏱️ Time Limit (minutes)</label>
+        <input type="number" name="time_limit" id="edit_time_limit" min="0" placeholder="0 = No time limit" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-sky-400 outline-none">
+        <p class="text-sm text-gray-500 mt-1">Set quiz duration in minutes. Leave as 0 for no time limit.</p>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">📅 Publish Time</label>
+        <input type="datetime-local" name="publish_time" id="edit_publish_time" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-sky-400 outline-none">
+        <p class="text-sm text-gray-500 mt-1">Leave empty to publish immediately.</p>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">⏰ Deadline Time</label>
+        <input type="datetime-local" name="deadline_time" id="edit_deadline_time" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-sky-400 outline-none">
+        <p class="text-sm text-gray-500 mt-1">Leave empty for no deadline.</p>
+      </div>
+
+      <div class="flex justify-end gap-3 pt-4">
+        <button type="button" onclick="closeEditModal()" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition">Cancel</button>
+        <button type="submit" class="px-5 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition">💾 Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
+// ✅ Sidebar functionality
 document.addEventListener("DOMContentLoaded", () => {
   const sidebar = document.getElementById("sidebar");
   const toggle = document.getElementById("sidebarToggle");
@@ -271,21 +485,128 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-function toggleModal() {
+// ✅ Add Quiz Modal Functions
+function openAddModal() {
   const modal = document.getElementById("addQuizModal");
-  const content = document.getElementById("modalContent");
-  if (modal.classList.contains("hidden")) {
-    modal.classList.remove("hidden");
-    modal.classList.add("flex");
-    setTimeout(() => content.classList.remove("scale-95", "opacity-0"), 10);
-  } else {
-    content.classList.add("scale-95", "opacity-0");
-    setTimeout(() => {
-      modal.classList.add("hidden");
-      modal.classList.remove("flex");
-    }, 200);
-  }
+  const content = document.getElementById("addModalContent");
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
+  setTimeout(() => {
+    content.classList.remove("scale-95", "opacity-0");
+    content.classList.add("scale-100", "opacity-100");
+  }, 10);
 }
+
+function closeAddModal() {
+  const modal = document.getElementById("addQuizModal");
+  const content = document.getElementById("addModalContent");
+  content.classList.remove("scale-100", "opacity-100");
+  content.classList.add("scale-95", "opacity-0");
+  setTimeout(() => {
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+  }, 200);
+}
+
+// ✅ Edit Quiz Modal Functions
+function openEditModal(quiz) {
+  // Populate form fields
+  document.getElementById("edit_quiz_id").value = quiz.id;
+  document.getElementById("edit_title").value = quiz.title;
+  document.getElementById("edit_description").value = quiz.description || '';
+  document.getElementById("edit_module_id").value = quiz.module_id;
+  document.getElementById("edit_content").value = quiz.content || '';
+  document.getElementById("edit_status").value = quiz.status;
+  document.getElementById("edit_time_limit").value = quiz.time_limit || 0;
+  
+  // Format datetime for input fields (PHP format to HTML5 datetime-local format)
+  if (quiz.publish_time) {
+    const publishDate = new Date(quiz.publish_time);
+    document.getElementById("edit_publish_time").value = formatDateTimeLocal(publishDate);
+  } else {
+    document.getElementById("edit_publish_time").value = '';
+  }
+  
+  if (quiz.deadline_time) {
+    const deadlineDate = new Date(quiz.deadline_time);
+    document.getElementById("edit_deadline_time").value = formatDateTimeLocal(deadlineDate);
+  } else {
+    document.getElementById("edit_deadline_time").value = '';
+  }
+  
+  // Show modal
+  const modal = document.getElementById("editQuizModal");
+  const content = document.getElementById("editModalContent");
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
+  setTimeout(() => {
+    content.classList.remove("scale-95", "opacity-0");
+    content.classList.add("scale-100", "opacity-100");
+  }, 10);
+}
+
+function closeEditModal() {
+  const modal = document.getElementById("editQuizModal");
+  const content = document.getElementById("editModalContent");
+  content.classList.remove("scale-100", "opacity-100");
+  content.classList.add("scale-95", "opacity-0");
+  setTimeout(() => {
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+  }, 200);
+}
+
+// Helper function to format date for datetime-local input
+function formatDateTimeLocal(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+// ✅ Search and Filter Functionality
+document.addEventListener('DOMContentLoaded', function() {
+  const searchInput = document.getElementById('searchInput');
+  const statusFilter = document.getElementById('statusFilter');
+  const quizRows = document.querySelectorAll('.quiz-row');
+
+  function filterQuizzes() {
+    const searchTerm = searchInput.value.toLowerCase();
+    const statusValue = statusFilter.value.toLowerCase();
+
+    quizRows.forEach(row => {
+      const title = row.getAttribute('data-title').toLowerCase();
+      const status = row.getAttribute('data-status').toLowerCase();
+
+      const matchesSearch = title.includes(searchTerm);
+      const matchesStatus = statusValue === 'all' || status === statusValue;
+
+      if (matchesSearch && matchesStatus) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  }
+
+  searchInput.addEventListener('input', filterQuizzes);
+  statusFilter.addEventListener('change', filterQuizzes);
+});
+
+// ✅ Close modals when clicking outside
+document.getElementById('addQuizModal').addEventListener('click', function(e) {
+  if (e.target === this) {
+    closeAddModal();
+  }
+});
+
+document.getElementById('editQuizModal').addEventListener('click', function(e) {
+  if (e.target === this) {
+    closeEditModal();
+  }
+});
 </script>
 </body>
 </html>
