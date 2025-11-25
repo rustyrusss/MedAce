@@ -32,13 +32,13 @@ if (!empty($student['gender'])) {
 // Profile picture
 $profilePic = !empty($student['profile_pic']) ? "../" . $student['profile_pic'] : $defaultAvatar;
 
-// Fetch all available modules
+// FIX: Fetch all available modules (only published ones)
 $stmt = $conn->prepare("
     SELECT m.id, m.title, m.description, m.content, COALESCE(sp.status, 'Pending') AS status
     FROM modules m
     LEFT JOIN student_progress sp ON sp.module_id = m.id AND sp.student_id = ?
-    WHERE m.status = 'active'
-    ORDER BY m.created_at DESC
+    WHERE m.status = 'published'
+    ORDER BY m.display_order ASC, m.created_at DESC
 ");
 $stmt->execute([$studentId]);
 $modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -253,7 +253,7 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
                            class="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all">
                     <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                 </div>
-                <div class="flex gap-2">
+                <div class="flex gap-2 flex-wrap">
                     <button @click="activeFilter = 'All'" :class="activeFilter === 'All' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'" 
                             class="px-4 py-3 rounded-lg font-medium transition-all shadow-sm whitespace-nowrap">
                         All
@@ -273,13 +273,18 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
                 </div>
             </div>
 
+            <!-- Modules Count -->
+            <div class="mb-4 text-sm text-gray-600 animate-fade-in-up">
+                Showing <strong><?= count($modules) ?></strong> published module(s)
+            </div>
+
             <!-- Modules Grid -->
             <?php if (empty($modules)): ?>
             <div class="text-center py-20 animate-fade-in-up">
                 <div class="inline-flex items-center justify-center w-20 h-20 bg-gray-100 rounded-full mb-4">
                     <i class="fas fa-book text-4xl text-gray-400"></i>
                 </div>
-                <h3 class="text-lg font-semibold text-gray-900 mb-2">No modules yet</h3>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">No published modules yet</h3>
                 <p class="text-gray-600">Check back later for new learning materials</p>
             </div>
             <?php else: ?>

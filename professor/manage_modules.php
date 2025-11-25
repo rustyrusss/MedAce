@@ -266,6 +266,116 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             letter-spacing: 0.025em;
         }
 
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 1rem 1.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            min-width: 300px;
+            max-width: 500px;
+            transform: translateX(400px);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 9999;
+            border-left: 4px solid #10b981;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        .toast.success {
+            border-left-color: #10b981;
+        }
+
+        .toast.error {
+            border-left-color: #ef4444;
+        }
+
+        .toast.info {
+            border-left-color: #3b82f6;
+        }
+
+        .toast-icon {
+            flex-shrink: 0;
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .toast.success .toast-icon {
+            background: #d1fae5;
+            color: #10b981;
+        }
+
+        .toast.error .toast-icon {
+            background: #fee2e2;
+            color: #ef4444;
+        }
+
+        .toast.info .toast-icon {
+            background: #dbeafe;
+            color: #3b82f6;
+        }
+
+        .toast-content {
+            flex: 1;
+        }
+
+        .toast-title {
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 0.25rem;
+        }
+
+        .toast-message {
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        .toast-close {
+            flex-shrink: 0;
+            color: #9ca3af;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .toast-close:hover {
+            color: #4b5563;
+        }
+
+        /* File upload indicator */
+        .file-selected {
+            background: #f0f9ff !important;
+            border-color: #0ea5e9 !important;
+        }
+
+        .file-name-display {
+            margin-top: 0.75rem;
+            padding: 0.75rem;
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 0.5rem;
+            display: none;
+        }
+
+        .file-name-display.show {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
         /* Responsive adjustments */
         @media (max-width: 1024px) {
             .sidebar-collapsed {
@@ -276,6 +386,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             .sidebar-expanded {
                 width: 18rem;
                 transform: translateX(0);
+            }
+        }
+
+        @media (max-width: 640px) {
+            .toast {
+                top: 10px;
+                right: 10px;
+                left: 10px;
+                min-width: auto;
+                transform: translateY(-100px);
+            }
+
+            .toast.show {
+                transform: translateY(0);
             }
         }
     </style>
@@ -466,17 +590,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                 </td>
                                 <td class="px-6 py-4">
                                     <?php
-                                        $status = strtolower($module['status']);
+                                        // Handle empty or null status
+                                        $statusValue = !empty($module['status']) ? $module['status'] : 'draft';
+                                        $status = strtolower(trim($statusValue));
+                                        
                                         $statusConfig = match($status) {
-                                            'published', 'active' => ['bg' => 'bg-green-100', 'text' => 'text-green-700', 'icon' => 'fa-check-circle'],
-                                            'draft' => ['bg' => 'bg-yellow-100', 'text' => 'text-yellow-700', 'icon' => 'fa-pencil'],
-                                            'archived' => ['bg' => 'bg-gray-200', 'text' => 'text-gray-700', 'icon' => 'fa-archive'],
-                                            default => ['bg' => 'bg-blue-100', 'text' => 'text-blue-700', 'icon' => 'fa-info-circle']
+                                            'published', 'active' => ['bg' => 'bg-green-100', 'text' => 'text-green-700', 'icon' => 'fa-check-circle', 'label' => 'Published'],
+                                            'draft' => ['bg' => 'bg-yellow-100', 'text' => 'text-yellow-700', 'icon' => 'fa-pencil', 'label' => 'Draft'],
+                                            'archived' => ['bg' => 'bg-gray-200', 'text' => 'text-gray-700', 'icon' => 'fa-archive', 'label' => 'Archived'],
+                                            default => ['bg' => 'bg-blue-100', 'text' => 'text-blue-700', 'icon' => 'fa-info-circle', 'label' => ucfirst($status)]
                                         };
                                     ?>
                                     <span class="badge <?= $statusConfig['bg'] ?> <?= $statusConfig['text'] ?>">
                                         <i class="fas <?= $statusConfig['icon'] ?> mr-1"></i>
-                                        <?= ucfirst($module['status']) ?>
+                                        <?= $statusConfig['label'] ?>
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 text-sm text-gray-500 hidden lg:table-cell">
@@ -527,7 +654,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             </button>
         </div>
         
-        <form action="../actions/add_module_action.php" method="POST" enctype="multipart/form-data">
+        <form action="../actions/add_module_action.php" method="POST" enctype="multipart/form-data" id="addModuleForm">
             <div class="space-y-5">
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">
@@ -566,14 +693,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         <i class="fas fa-file-upload text-primary-500 mr-1"></i>
                         Upload File (PDF or PPT)
                     </label>
-                    <div class="relative border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-primary-400 transition-colors">
-                        <input type="file" name="module_file" accept=".pdf,.ppt,.pptx" 
+                    <div id="addFileUploadArea" class="relative border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-primary-400 transition-colors">
+                        <input type="file" name="module_file" id="addModuleFile" accept=".pdf,.ppt,.pptx" 
                                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
                         <div class="text-center">
                             <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-2"></i>
                             <p class="text-sm text-gray-600">Click to upload or drag and drop</p>
                             <p class="text-xs text-gray-500 mt-1">PDF, PPT, PPTX (Max 50MB)</p>
                         </div>
+                    </div>
+                    <div id="addFileNameDisplay" class="file-name-display">
+                        <div class="flex items-center">
+                            <i class="fas fa-file-alt text-primary-600 mr-2"></i>
+                            <span id="addFileName" class="text-sm font-medium text-gray-700"></span>
+                        </div>
+                        <button type="button" onclick="clearAddFile()" class="text-red-500 hover:text-red-700">
+                            <i class="fas fa-times"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -603,7 +739,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             </button>
         </div>
         
-        <form action="../actions/edit_module_action.php" method="POST" enctype="multipart/form-data">
+        <form action="../actions/edit_module_action.php" method="POST" enctype="multipart/form-data" id="editModuleForm">
             <input type="hidden" name="module_id" id="edit_module_id">
             <div class="space-y-5">
                 <div>
@@ -644,14 +780,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="mb-2 text-sm text-gray-600" id="current_file_info">
                         Current file: <span id="current_file_name" class="font-medium"></span>
                     </div>
-                    <div class="relative border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-primary-400 transition-colors">
-                        <input type="file" name="module_file" accept=".pdf,.ppt,.pptx" 
+                    <div id="editFileUploadArea" class="relative border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-primary-400 transition-colors">
+                        <input type="file" name="module_file" id="editModuleFile" accept=".pdf,.ppt,.pptx" 
                                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
                         <div class="text-center">
                             <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-2"></i>
                             <p class="text-sm text-gray-600">Click to upload a new file</p>
                             <p class="text-xs text-gray-500 mt-1">PDF, PPT, PPTX (Max 50MB)</p>
                         </div>
+                    </div>
+                    <div id="editFileNameDisplay" class="file-name-display">
+                        <div class="flex items-center">
+                            <i class="fas fa-file-alt text-primary-600 mr-2"></i>
+                            <span id="editFileName" class="text-sm font-medium text-gray-700"></span>
+                        </div>
+                        <button type="button" onclick="clearEditFile()" class="text-red-500 hover:text-red-700">
+                            <i class="fas fa-times"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -707,6 +852,90 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     let sidebarExpanded = false;
     let reorderMode = false;
     let sortable = null;
+
+    // Toast Notification System
+    function showToast(type, title, message, duration = 5000) {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        
+        const iconMap = {
+            success: 'fa-check-circle',
+            error: 'fa-exclamation-circle',
+            info: 'fa-info-circle'
+        };
+        
+        toast.innerHTML = `
+            <div class="toast-icon">
+                <i class="fas ${iconMap[type]} text-xl"></i>
+            </div>
+            <div class="toast-content">
+                <div class="toast-title">${title}</div>
+                <div class="toast-message">${message}</div>
+            </div>
+            <div class="toast-close" onclick="this.parentElement.remove()">
+                <i class="fas fa-times"></i>
+            </div>
+        `;
+        
+        document.body.appendChild(toast);
+        
+        // Trigger animation
+        setTimeout(() => toast.classList.add('show'), 10);
+        
+        // Auto remove
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, duration);
+    }
+
+    // File Upload Handlers
+    document.getElementById('addModuleFile').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            document.getElementById('addFileName').textContent = file.name;
+            document.getElementById('addFileNameDisplay').classList.add('show');
+            document.getElementById('addFileUploadArea').classList.add('file-selected');
+            showToast('info', 'File Selected', `${file.name} ready to upload`, 3000);
+        }
+    });
+
+    document.getElementById('editModuleFile').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            document.getElementById('editFileName').textContent = file.name;
+            document.getElementById('editFileNameDisplay').classList.add('show');
+            document.getElementById('editFileUploadArea').classList.add('file-selected');
+            showToast('info', 'File Selected', `${file.name} ready to upload`, 3000);
+        }
+    });
+
+    function clearAddFile() {
+        document.getElementById('addModuleFile').value = '';
+        document.getElementById('addFileNameDisplay').classList.remove('show');
+        document.getElementById('addFileUploadArea').classList.remove('file-selected');
+    }
+
+    function clearEditFile() {
+        document.getElementById('editModuleFile').value = '';
+        document.getElementById('editFileNameDisplay').classList.remove('show');
+        document.getElementById('editFileUploadArea').classList.remove('file-selected');
+    }
+
+    // Form submission handlers with upload notifications
+    document.getElementById('addModuleForm').addEventListener('submit', function(e) {
+        const fileInput = document.getElementById('addModuleFile');
+        if (fileInput.files.length > 0) {
+            showToast('info', 'Uploading Module', 'Please wait while your file is being uploaded...', 10000);
+        }
+    });
+
+    document.getElementById('editModuleForm').addEventListener('submit', function(e) {
+        const fileInput = document.getElementById('editModuleFile');
+        if (fileInput.files.length > 0) {
+            showToast('info', 'Updating Module', 'Please wait while your file is being uploaded...', 10000);
+        }
+    });
 
     // Sidebar Toggle
     function toggleSidebar() {
@@ -794,16 +1023,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     row.querySelector('td:nth-child(2)').textContent = index + 1;
                 });
                 
-                // Show success message
-                const banner = document.getElementById('reorderBanner');
-                banner.innerHTML = `
-                    <div class="flex items-center">
-                        <i class="fas fa-check-circle mr-3 text-lg"></i>
-                        <span class="font-medium">Order saved successfully!</span>
-                    </div>
-                `;
-                banner.classList.remove('bg-blue-50', 'border-blue-200', 'text-blue-800');
-                banner.classList.add('bg-green-50', 'border-green-200', 'text-green-800');
+                showToast('success', 'Order Saved', 'Module order has been updated successfully');
                 
                 setTimeout(() => {
                     toggleReorderMode();
@@ -812,7 +1032,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
         } catch (error) {
             console.error('Error saving order:', error);
-            alert('Failed to save order. Please try again.');
+            showToast('error', 'Save Failed', 'Failed to save the new order. Please try again.');
         }
     }
 
@@ -823,22 +1043,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     function closeAddModal() {
         document.getElementById('addModuleModal').classList.remove('show');
+        clearAddFile();
     }
 
     function openEditModal(module) {
+        console.log('Opening edit modal for module:', module); // Debug
+        
         document.getElementById('edit_module_id').value = module.id;
         document.getElementById('edit_title').value = module.title;
-        document.getElementById('edit_description').value = module.description;
-        document.getElementById('edit_status').value = module.status.toLowerCase();
+        document.getElementById('edit_description').value = module.description || '';
+        
+        // Normalize status value
+        let statusValue = module.status ? module.status.toLowerCase().trim() : 'draft';
+        // Map 'active' to 'published' if it exists
+        if (statusValue === 'active') {
+            statusValue = 'published';
+        }
+        
+        console.log('Setting status to:', statusValue); // Debug
+        
+        // Set the status dropdown value
+        const statusDropdown = document.getElementById('edit_status');
+        statusDropdown.value = statusValue;
+        
+        // Verify it was set correctly
+        console.log('Status dropdown value after setting:', statusDropdown.value); // Debug
         
         const fileName = module.content ? module.content.split('/').pop() : 'No file uploaded';
         document.getElementById('current_file_name').textContent = fileName;
         
+        clearEditFile();
         document.getElementById('editModuleModal').classList.add('show');
     }
 
     function closeEditModal() {
         document.getElementById('editModuleModal').classList.remove('show');
+        clearEditFile();
     }
 
     // Delete Module
@@ -900,6 +1140,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
+        // Show success notification if file was uploaded
+        <?php if (isset($_SESSION['file_uploaded']) && $_SESSION['file_uploaded']): ?>
+        showToast('success', 'File Uploaded Successfully', 'Your module file has been uploaded and saved');
+        <?php unset($_SESSION['file_uploaded']); ?>
+        <?php endif; ?>
+
         // Handle window resize
         let resizeTimer;
         window.addEventListener('resize', function() {

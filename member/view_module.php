@@ -79,18 +79,14 @@ if (!empty($module['content'])) {
                     <div class="space-y-4" x-data="{ fullscreen: false }">
                         <div class="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-xl flex items-center justify-between shadow-lg">
                             <div class="flex items-center gap-3">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
+                                <i class="fas fa-file-powerpoint text-2xl"></i>
                                 <div>
                                     <p class="font-semibold">PowerPoint Presentation (PDF)</p>
                                     <p class="text-sm text-blue-100">' . htmlspecialchars(basename($filePath)) . '</p>
                                 </div>
                             </div>
                             <a href="' . htmlspecialchars($filePath) . '" download class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition font-medium text-sm flex items-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                </svg>
+                                <i class="fas fa-download"></i>
                                 Download
                             </a>
                         </div>
@@ -105,15 +101,11 @@ if (!empty($module['content'])) {
                         
                         <div class="flex gap-3 justify-center flex-wrap">
                             <button @click="fullscreen = true" class="bg-purple-600 text-white px-6 py-3 rounded-xl hover:bg-purple-700 transition font-semibold inline-flex items-center gap-2 shadow-lg">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                                </svg>
+                                <i class="fas fa-expand"></i>
                                 View Fullscreen
                             </button>
                             <a href="' . htmlspecialchars($pdfFileUrl) . '" target="_blank" class="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition font-semibold inline-flex items-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                </svg>
+                                <i class="fas fa-external-link-alt"></i>
                                 Open in New Tab
                             </a>
                         </div>
@@ -127,9 +119,7 @@ if (!empty($module['content'])) {
                             <div class="relative w-full h-full">
                                 <button @click="fullscreen = false" 
                                         class="absolute top-4 right-4 z-10 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition font-medium flex items-center gap-2 shadow-lg">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
+                                    <i class="fas fa-times"></i>
                                     Close
                                 </button>
                                 <iframe src="' . htmlspecialchars($pdfFileUrl) . '#toolbar=0&navpanes=0&scrollbar=1&view=FitH" 
@@ -150,9 +140,7 @@ if (!empty($module['content'])) {
                         <div class="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl p-12 text-white text-center shadow-2xl">
                             <div class="mb-8">
                                 <div class="inline-flex items-center justify-center w-24 h-24 bg-white/20 rounded-full mb-6">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                    </svg>
+                                    <i class="fas fa-file-powerpoint text-5xl"></i>
                                 </div>
                                 <h2 class="text-3xl font-bold mb-3">PowerPoint Presentation</h2>
                                 <p class="text-blue-100">' . htmlspecialchars(basename($filePath)) . '</p>
@@ -171,18 +159,14 @@ if (!empty($module['content'])) {
                 <div class="space-y-4" x-data="{ fullscreen: false }">
                     <div class="bg-gradient-to-r from-red-500 to-red-600 text-white p-4 rounded-xl flex items-center justify-between shadow-lg">
                         <div class="flex items-center gap-3">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                            </svg>
+                            <i class="fas fa-file-pdf text-2xl"></i>
                             <div>
                                 <p class="font-semibold">PDF Document</p>
                                 <p class="text-sm text-red-100">' . htmlspecialchars(basename($filePath)) . '</p>
                             </div>
                         </div>
                         <a href="' . htmlspecialchars($filePath) . '" download class="bg-white text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition font-medium text-sm flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
+                            <i class="fas fa-download"></i>
                             Download
                         </a>
                     </div>
@@ -197,15 +181,11 @@ if (!empty($module['content'])) {
                     
                     <div class="flex gap-3 justify-center flex-wrap">
                         <button @click="fullscreen = true" class="bg-purple-600 text-white px-6 py-3 rounded-xl hover:bg-purple-700 transition font-semibold inline-flex items-center gap-2 shadow-lg">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                            </svg>
+                            <i class="fas fa-expand"></i>
                             View Fullscreen
                         </button>
                         <a href="' . htmlspecialchars($filePath) . '" target="_blank" class="bg-red-600 text-white px-6 py-3 rounded-xl hover:bg-red-700 transition font-semibold inline-flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
+                            <i class="fas fa-external-link-alt"></i>
                             Open in New Tab
                         </a>
                     </div>
@@ -219,9 +199,7 @@ if (!empty($module['content'])) {
                         <div class="relative w-full h-full">
                             <button @click="fullscreen = false" 
                                     class="absolute top-4 right-4 z-10 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition font-medium flex items-center gap-2 shadow-lg">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
+                                <i class="fas fa-times"></i>
                                 Close
                             </button>
                             <iframe src="' . htmlspecialchars($filePath) . '#toolbar=0&navpanes=0&scrollbar=1&view=FitH" 
@@ -243,9 +221,7 @@ if (!empty($module['content'])) {
                 <div class="bg-gradient-to-br from-green-600 to-emerald-700 rounded-3xl p-12 text-white text-center shadow-2xl max-w-2xl mx-auto">
                     <div class="mb-8">
                         <div class="inline-flex items-center justify-center w-24 h-24 bg-white/20 rounded-full mb-6">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
+                            <i class="fas fa-file-word text-5xl"></i>
                         </div>
                         <h2 class="text-3xl font-bold mb-3">Word Document</h2>
                         <p class="text-green-100">' . htmlspecialchars(basename($filePath)) . '</p>
@@ -264,7 +240,7 @@ if (!empty($module['content'])) {
             }
         }
     } else {
-        $moduleContent = '<div class="bg-white p-8 rounded-2xl shadow-lg border-2 max-w-4xl mx-auto">' . nl2br(htmlspecialchars($module['content'])) . '</div>';
+        $moduleContent = '<div class="bg-white p-8 rounded-2xl shadow-lg border-2 max-w-4xl mx-auto prose prose-lg max-w-none">' . nl2br(htmlspecialchars($module['content'])) . '</div>';
     }
 }
 
@@ -281,69 +257,330 @@ $statusClass = match (strtolower($module['status'])) {
 };
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="scroll-smooth">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= htmlspecialchars($module['title']) ?></title>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/alpinejs" defer></script>
-<style>[x-cloak]{display:none!important}</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($module['title']) ?> - MedAce</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            300: '#7dd3fc',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f8fafc;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-fade-in-up {
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        .sidebar-transition {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .sidebar-collapsed {
+            width: 5rem;
+        }
+
+        .sidebar-collapsed .nav-text,
+        .sidebar-collapsed .profile-info {
+            opacity: 0;
+            width: 0;
+            overflow: hidden;
+        }
+
+        .sidebar-expanded {
+            width: 18rem;
+        }
+
+        .sidebar-expanded .nav-text,
+        .sidebar-expanded .profile-info {
+            opacity: 1;
+            width: auto;
+        }
+
+        [x-cloak] { display: none !important; }
+
+        @media (max-width: 1024px) {
+            .sidebar-collapsed {
+                width: 0;
+                transform: translateX(-100%);
+            }
+            
+            .sidebar-expanded {
+                width: 18rem;
+                transform: translateX(0);
+            }
+        }
+    </style>
 </head>
-<body class="bg-[#D1EBEC]" x-data="{sidebarOpen:false,collapsed:true,showCompleteModal:false}">
-<div class="fixed inset-0 bg-black bg-opacity-40 z-20 md:hidden" x-show="sidebarOpen" @click="sidebarOpen=false" x-cloak></div>
-<aside class="fixed inset-y-0 left-0 z-30 bg-white/90 shadow-lg border-r p-5 flex flex-col transition-all duration-300" :class="{'w-64':!collapsed,'w-20':collapsed,'-translate-x-full md:translate-x-0':!sidebarOpen}" x-show="sidebarOpen || window.innerWidth>=768">
-<div class="flex items-center mb-10" :class="collapsed?'justify-center':'space-x-4'">
-<img src="<?= htmlspecialchars($profilePic) ?>" class="w-12 h-12 rounded-full border-2 border-teal-400">
-<div x-show="!collapsed" x-cloak><p class="text-xl font-bold"><?= htmlspecialchars(ucwords(strtolower($studentName))) ?></p><p class="text-sm text-gray-500">Nursing Student</p></div>
+<body class="bg-gray-50 text-gray-800 antialiased" x-data="{ showCompleteModal: false }">
+
+<div class="flex min-h-screen">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 sidebar-transition sidebar-collapsed">
+        <div class="flex flex-col h-full">
+            <div class="flex items-center justify-between px-4 py-5 border-b border-gray-200">
+                <div class="flex items-center space-x-3 min-w-0">
+                    <div class="relative flex-shrink-0">
+                        <img src="<?= htmlspecialchars($profilePic) ?>" alt="Profile" class="w-12 h-12 rounded-full object-cover ring-2 ring-primary-500">
+                        <span class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full"></span>
+                    </div>
+                    <div class="profile-info sidebar-transition min-w-0">
+                        <h3 class="font-semibold text-gray-900 text-sm truncate"><?= htmlspecialchars(ucwords(strtolower($studentName))) ?></h3>
+                        <p class="text-xs text-gray-500">Student</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-4 py-3 border-b border-gray-200">
+                <button onclick="toggleSidebar()" class="w-full flex items-center justify-center p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600">
+                    <i class="fas fa-bars text-lg"></i>
+                </button>
+            </div>
+
+            <nav class="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
+                <a href="dashboard.php" class="flex items-center space-x-3 px-3 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg font-medium transition-all">
+                    <i class="fas fa-home text-gray-400 w-5 text-center flex-shrink-0"></i>
+                    <span class="nav-text sidebar-transition whitespace-nowrap">Dashboard</span>
+                </a>
+                <a href="progress.php" class="flex items-center space-x-3 px-3 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg font-medium transition-all">
+                    <i class="fas fa-chart-line text-gray-400 w-5 text-center flex-shrink-0"></i>
+                    <span class="nav-text sidebar-transition whitespace-nowrap">My Progress</span>
+                </a>
+                <a href="quizzes.php" class="flex items-center space-x-3 px-3 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg font-medium transition-all">
+                    <i class="fas fa-clipboard-list text-gray-400 w-5 text-center flex-shrink-0"></i>
+                    <span class="nav-text sidebar-transition whitespace-nowrap">Quizzes</span>
+                </a>
+                <a href="resources.php" class="flex items-center space-x-3 px-3 py-3 text-gray-700 bg-primary-50 border-l-4 border-primary-500 rounded-r-lg font-medium transition-all">
+                    <i class="fas fa-book text-primary-600 w-5 text-center flex-shrink-0"></i>
+                    <span class="nav-text sidebar-transition whitespace-nowrap">Resources</span>
+                </a>
+            </nav>
+
+            <div class="px-3 py-4 border-t border-gray-200">
+                <a href="../actions/logout_action.php" class="flex items-center space-x-3 px-3 py-3 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-all">
+                    <i class="fas fa-sign-out-alt w-5 text-center flex-shrink-0"></i>
+                    <span class="nav-text sidebar-transition whitespace-nowrap">Logout</span>
+                </a>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Sidebar Overlay (Mobile) -->
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="closeSidebar()"></div>
+
+    <!-- Main Content -->
+    <main id="main-content" class="flex-1 transition-all duration-300" style="margin-left: 5rem;">
+        <!-- Top Bar -->
+        <header class="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex items-center justify-between">
+                <button onclick="toggleSidebar()" class="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                    <i class="fas fa-bars text-gray-600 text-xl"></i>
+                </button>
+                <div class="flex items-center space-x-4">
+                    <a href="resources.php" class="inline-flex items-center text-primary-600 hover:text-primary-700 font-medium text-sm">
+                        <i class="fas fa-arrow-left mr-2"></i>
+                        Back to Resources
+                    </a>
+                </div>
+            </div>
+        </header>
+
+        <!-- Content -->
+        <div class="px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Module Header -->
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6 animate-fade-in-up">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div class="flex-1">
+                        <h1 class="text-3xl font-bold text-gray-900 mb-2"><?= htmlspecialchars($module['title']) ?></h1>
+                        <?php if($module['description']): ?>
+                            <p class="text-gray-600"><?= htmlspecialchars($module['description']) ?></p>
+                        <?php endif; ?>
+                        <p class="text-sm text-gray-500 mt-2">
+                            <i class="fas fa-calendar mr-2"></i>
+                            Created: <?= date('F j, Y', strtotime($module['created_at'])) ?>
+                        </p>
+                    </div>
+                    <div class="flex flex-col items-end gap-3">
+                        <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold <?= $statusClass ?>">
+                            <i class="fas <?= strtolower($module['status']) === 'completed' ? 'fa-check-circle' : (strtolower($module['status']) === 'in progress' ? 'fa-spinner' : 'fa-clock') ?> mr-2"></i>
+                            <?= htmlspecialchars(ucwords($module['status'])) ?>
+                        </span>
+                        <?php if(strtolower($module['status']) !== 'completed'): ?>
+                            <button @click="showCompleteModal = true" 
+                                    class="bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-semibold transition-colors shadow-sm">
+                                <i class="fas fa-check mr-2"></i>
+                                Mark Complete
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Module Content -->
+            <div class="animate-fade-in-up" style="animation-delay: 0.1s;">
+                <?= $moduleContent ?: '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center"><i class="fas fa-inbox text-5xl text-gray-300 mb-4"></i><p class="text-gray-500 text-lg">No content available for this module.</p></div>' ?>
+            </div>
+        </div>
+    </main>
 </div>
-<nav class="flex-1 space-y-6">
-<a href="dashboard.php" class="flex items-center p-2 rounded-lg hover:bg-teal-100"><span class="text-xl">🏠</span><span x-show="!collapsed" class="ml-3" x-cloak>Dashboard</span></a>
-<a href="progress.php" class="flex items-center p-2 rounded-lg hover:bg-teal-100"><span class="text-xl">📊</span><span x-show="!collapsed" class="ml-3" x-cloak>Progress</span></a>
-<a href="quizzes.php" class="flex items-center p-2 rounded-lg hover:bg-teal-100"><span class="text-xl">📝</span><span x-show="!collapsed" class="ml-3" x-cloak>Quizzes</span></a>
-<a href="resources.php" class="flex items-center p-2 rounded-lg hover:bg-teal-100"><span class="text-xl">📚</span><span x-show="!collapsed" class="ml-3" x-cloak>Resources</span></a>
-</nav>
-<button class="mt-5 p-2 rounded-lg bg-gray-100 hover:bg-gray-200 hidden md:flex justify-center" @click="collapsed=!collapsed"><svg class="h-6 w-6 transform transition-transform" :class="collapsed?'rotate-180':''" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg></button>
-<div class="mt-auto"><a href="../actions/logout_action.php" class="flex items-center p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100"><span class="text-xl">🚪</span><span x-show="!collapsed" class="ml-3" x-cloak>Logout</span></a></div>
-</aside>
-<div class="transition-all" :class="{'md:ml-64':!collapsed,'md:ml-20':collapsed}">
-<header class="flex items-center justify-between p-4 bg-white/60 border-b md:hidden sticky top-0 z-20">
-<button @click="sidebarOpen=true"><svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
-<h1 class="text-lg font-semibold">Module</h1>
-</header>
-<main class="p-6 space-y-6 max-w-7xl mx-auto">
-<a href="resources.php" class="inline-flex items-center text-teal-600 hover:text-teal-700 font-medium"><svg class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>Back to Resources</a>
-<div class="bg-white/90 rounded-2xl shadow-lg p-8 border">
-<div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-<div><h1 class="text-3xl font-bold text-gray-800 mb-2"><?= htmlspecialchars($module['title']) ?></h1><?php if($module['description']):?><p class="text-gray-600"><?= htmlspecialchars($module['description']) ?></p><?php endif;?></div>
-<span class="px-4 py-2 rounded-full text-sm font-medium <?= $statusClass ?>"><?= htmlspecialchars(ucwords($module['status'])) ?></span>
+
+<!-- Complete Modal -->
+<div x-show="showCompleteModal" 
+     x-transition
+     class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+     @click.away="showCompleteModal = false"
+     x-cloak>
+    <div class="bg-white rounded-2xl max-w-md w-full p-8 animate-fade-in-up">
+        <div class="text-center">
+            <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
+                <i class="fas fa-check text-3xl text-green-600"></i>
+            </div>
+            <h3 class="text-2xl font-bold text-gray-900 mb-2">Mark as Complete?</h3>
+            <p class="text-gray-600 mb-6">Are you sure you want to mark this module as completed?</p>
+            
+            <form action="../actions/complete_module.php" method="POST" class="space-y-3">
+                <input type="hidden" name="module_id" value="<?= $moduleId ?>">
+                <input type="hidden" name="student_id" value="<?= $studentId ?>">
+                <button type="submit" 
+                        class="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors">
+                    <i class="fas fa-check mr-2"></i>
+                    Yes, Mark Complete
+                </button>
+                <button type="button" 
+                        @click="showCompleteModal = false" 
+                        class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 px-6 py-3 rounded-lg font-semibold transition-colors">
+                    Cancel
+                </button>
+            </form>
+        </div>
+    </div>
 </div>
-<div><?= $moduleContent ?: '<p class="text-gray-500 italic text-center py-12">No content available.</p>' ?></div>
-</div>
-<div class="bg-white/90 rounded-2xl shadow-lg p-6 border flex flex-col sm:flex-row gap-4 justify-between items-center">
-<p class="text-sm text-gray-600"><strong>Created:</strong> <?= date('F j, Y', strtotime($module['created_at'])) ?></p>
-<div class="flex gap-3">
-<?php if(strtolower($module['status'])!=='completed'):?>
-<button @click="showCompleteModal=true" class="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-medium">✓ Complete</button>
-<?php else:?>
-<span class="text-green-600 font-medium">✓ Completed!</span>
-<?php endif;?>
-<a href="resources.php" class="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium">Back</a>
-</div>
-</div>
-</main>
-</div>
-<div x-show="showCompleteModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" @click.away="showCompleteModal=false" x-cloak>
-<div class="bg-white rounded-2xl max-w-md w-full p-8">
-<div class="text-center"><div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4"><svg class="h-10 w-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></div>
-<h3 class="text-2xl font-bold mb-2">Mark Complete?</h3><p class="text-gray-600 mb-6">Mark this module as completed?</p>
-<form action="../actions/complete_module.php" method="POST" class="space-y-3">
-<input type="hidden" name="module_id" value="<?= $moduleId ?>">
-<input type="hidden" name="student_id" value="<?= $studentId ?>">
-<button type="submit" class="w-full bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-medium">Yes</button>
-<button type="button" @click="showCompleteModal=false" class="w-full bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 font-medium">Cancel</button>
-</form></div>
-</div>
-</div>
+
+<script>
+    let sidebarExpanded = false;
+
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const mainContent = document.getElementById('main-content');
+        const overlay = document.getElementById('sidebar-overlay');
+        
+        sidebarExpanded = !sidebarExpanded;
+        
+        if (window.innerWidth < 1024) {
+            sidebar.classList.toggle('sidebar-expanded');
+            sidebar.classList.toggle('sidebar-collapsed');
+            overlay.classList.toggle('hidden');
+            if (sidebarExpanded) {
+                mainContent.style.marginLeft = '0';
+            }
+        } else {
+            sidebar.classList.toggle('sidebar-expanded');
+            sidebar.classList.toggle('sidebar-collapsed');
+            
+            if (sidebarExpanded) {
+                mainContent.style.marginLeft = '18rem';
+            } else {
+                mainContent.style.marginLeft = '5rem';
+            }
+        }
+    }
+
+    function closeSidebar() {
+        if (window.innerWidth < 1024 && sidebarExpanded) {
+            toggleSidebar();
+        }
+    }
+
+    // Handle window resize
+    let resizeTimer;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function() {
+            const sidebar = document.getElementById('sidebar');
+            const mainContent = document.getElementById('main-content');
+            const overlay = document.getElementById('sidebar-overlay');
+            
+            if (window.innerWidth >= 1024) {
+                overlay.classList.add('hidden');
+                if (sidebarExpanded) {
+                    mainContent.style.marginLeft = '18rem';
+                } else {
+                    mainContent.style.marginLeft = '5rem';
+                }
+            } else {
+                mainContent.style.marginLeft = '0';
+                if (!sidebarExpanded) {
+                    sidebar.classList.add('sidebar-collapsed');
+                    sidebar.classList.remove('sidebar-expanded');
+                }
+            }
+        }, 250);
+    });
+</script>
+
 </body>
 </html>
