@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Nov 25, 2025 at 03:18 PM
+-- Generation Time: Nov 25, 2025 at 06:01 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -106,7 +106,8 @@ CREATE TABLE `modules` (
   `content` text DEFAULT NULL,
   `order_number` int(11) DEFAULT NULL,
   `created_at` datetime DEFAULT current_timestamp(),
-  `status` enum('active','inactive') DEFAULT 'active',
+  `updated_at` datetime NOT NULL,
+  `status` varchar(20) NOT NULL DEFAULT 'draft',
   `display_order` int(11) DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -114,9 +115,10 @@ CREATE TABLE `modules` (
 -- Dumping data for table `modules`
 --
 
-INSERT INTO `modules` (`id`, `professor_id`, `title`, `description`, `content`, `order_number`, `created_at`, `status`, `display_order`) VALUES
-(1, 11, 'MedAce', 'Try', 'uploads/modules/1759665851_MedAce A Smart Web-Based Review and Progress Tracker for Allied Health Licensure Exams (1).pptx', NULL, '2025-10-05 20:04:11', 'active', 0),
-(2, 11, 'Think Green', 'Think Green', 'uploads/modules/1760256144_Think Green · SlidesMania.pptx', NULL, '2025-10-12 16:02:24', 'active', 1);
+INSERT INTO `modules` (`id`, `professor_id`, `title`, `description`, `content`, `order_number`, `created_at`, `updated_at`, `status`, `display_order`) VALUES
+(1, 11, 'MedAce', 'Try', 'uploads/modules/1759665851_MedAce A Smart Web-Based Review and Progress Tracker for Allied Health Licensure Exams (1).pptx', NULL, '2025-10-05 20:04:11', '0000-00-00 00:00:00', 'published', 0),
+(2, 11, 'Think Green', 'Think Green', 'uploads/modules/1760256144_Think Green · SlidesMania.pptx', NULL, '2025-10-12 16:02:24', '0000-00-00 00:00:00', 'published', 1),
+(10, 11, 'nursing', 'nursing', '../uploads/modules/module_6925dcb7310289.43839036.pdf', NULL, '2025-11-26 00:43:35', '0000-00-00 00:00:00', 'published', 2);
 
 -- --------------------------------------------------------
 
@@ -268,7 +270,8 @@ INSERT INTO `quiz_attempts` (`id`, `quiz_id`, `student_id`, `status`, `score`, `
 (92, 11, 10, 'Completed', 0, '2025-11-25 10:11:06', 6),
 (93, 12, 10, 'Completed', 5, '2025-11-25 10:12:08', 10),
 (94, 11, 10, 'Completed', 0, '2025-11-25 10:12:29', 7),
-(95, 11, 10, 'Completed', 0, '2025-11-25 10:16:34', 8);
+(95, 11, 10, 'Completed', 0, '2025-11-25 10:16:34', 8),
+(96, 10, 10, 'Completed', 0, '2025-11-25 15:16:05', 1);
 
 -- --------------------------------------------------------
 
@@ -383,8 +386,8 @@ CREATE TABLE `student_progress` (
 --
 
 INSERT INTO `student_progress` (`id`, `student_id`, `module_id`, `step_type`, `step_id`, `status`, `started_at`, `completed_at`, `updated_at`) VALUES
-(6, 10, 2, 'lesson', 0, '', '2025-10-12 16:11:56', NULL, '2025-10-12 16:11:56'),
-(7, 10, 1, 'lesson', 0, '', '2025-11-15 19:20:45', NULL, '2025-11-15 19:20:45');
+(6, 10, 2, 'lesson', 0, 'Completed', '2025-10-12 16:11:56', '2025-11-25 23:16:20', '2025-11-25 23:16:20'),
+(7, 10, 1, 'lesson', 0, 'Completed', '2025-11-15 19:20:45', '2025-11-25 23:17:12', '2025-11-25 23:17:12');
 
 -- --------------------------------------------------------
 
@@ -537,7 +540,7 @@ ALTER TABLE `lessons`
 -- AUTO_INCREMENT for table `modules`
 --
 ALTER TABLE `modules`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT for table `module_progress`
@@ -567,7 +570,7 @@ ALTER TABLE `quizzes`
 -- AUTO_INCREMENT for table `quiz_attempts`
 --
 ALTER TABLE `quiz_attempts`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=96;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=97;
 
 --
 -- AUTO_INCREMENT for table `student_answers`
@@ -579,7 +582,7 @@ ALTER TABLE `student_answers`
 -- AUTO_INCREMENT for table `student_progress`
 --
 ALTER TABLE `student_progress`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT for table `users`
