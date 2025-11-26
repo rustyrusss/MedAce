@@ -233,7 +233,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
 
         .sidebar-collapsed .nav-text,
         .sidebar-collapsed .profile-info,
-        .sidebar-collapsed .logo-text {
+        .sidebar-collapsed .logo-text,
+        .sidebar-collapsed .sidebar-setting-btn {
             opacity: 0;
             width: 0;
             overflow: hidden;
@@ -245,7 +246,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
 
         .sidebar-expanded .nav-text,
         .sidebar-expanded .profile-info,
-        .sidebar-expanded .logo-text {
+        .sidebar-expanded .logo-text,
+        .sidebar-expanded .sidebar-setting-btn {
             opacity: 1;
             width: auto;
         }
@@ -295,16 +297,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
             height: 100%;
             overflow: auto;
             background-color: rgba(0, 0, 0, 0.5);
-            animation: fadeIn 0.3s;
+            backdrop-filter: blur(4px);
         }
 
         .modal.show {
             display: flex;
             align-items: center;
             justify-content: center;
+            animation: fadeIn 0.3s;
         }
 
         .modal-content {
+            background-color: white;
+            border-radius: 1rem;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: slideUp 0.3s ease-out;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+
+        .modal-content-small {
             background-color: white;
             padding: 2rem;
             border-radius: 1rem;
@@ -316,6 +330,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
         @keyframes fadeIn {
             from { opacity: 0; }
             to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(30px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .tab-button {
+            position: relative;
+            padding: 0.75rem 1.5rem;
+            font-weight: 500;
+            color: #64748b;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab-button.active {
+            color: #0ea5e9;
+            border-bottom-color: #0ea5e9;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeInUp 0.4s ease-out;
         }
 
         /* Responsive adjustments */
@@ -346,18 +394,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
         <div class="flex flex-col h-full">
             <!-- Sidebar Header -->
             <div class="flex items-center justify-between px-4 py-5 border-b border-gray-200">
-                <div class="flex items-center space-x-3 min-w-0">
+                <div class="flex items-center space-x-3 min-w-0 flex-1">
                     <div class="relative flex-shrink-0">
-                        <img src="<?= htmlspecialchars($profilePic) ?>" alt="Profile" class="w-12 h-12 rounded-full object-cover ring-2 ring-primary-500 cursor-pointer" onclick="openProfileModal()">
+                        <img src="<?= htmlspecialchars($profilePic) ?>" alt="Profile" class="w-12 h-12 rounded-full object-cover ring-2 ring-primary-500 cursor-pointer" onclick="openUploadModal()">
                         <span class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full"></span>
-                        <div class="profile-upload-btn" onclick="openProfileModal()">
+                        <div class="profile-upload-btn" onclick="openUploadModal()">
                             <i class="fas fa-camera text-white text-xs"></i>
                         </div>
                     </div>
-                    <div class="profile-info sidebar-transition min-w-0">
+                    <div class="profile-info sidebar-transition min-w-0 flex-1">
                         <h3 class="font-semibold text-gray-900 text-sm truncate"><?= htmlspecialchars(ucwords(strtolower($profName))) ?></h3>
                         <p class="text-xs text-gray-500">Professor</p>
                     </div>
+                    <!-- Settings Icon Button -->
+                    <button onclick="openProfileSettingsModal()" class="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600 hover:text-primary-600 transition-colors sidebar-setting-btn sidebar-transition" title="Profile Settings">
+                        <i class="fas fa-cog text-lg"></i>
+                    </button>
                 </div>
             </div>
 
@@ -400,6 +452,239 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
 
     <!-- Sidebar Overlay (Mobile) -->
     <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="closeSidebar()"></div>
+
+    <!-- Profile Picture Upload Modal -->
+    <div id="uploadModal" class="modal">
+        <div class="modal-content-small">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold text-gray-900">Update Profile Picture</h2>
+                <button onclick="closeUploadModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <form method="POST" enctype="multipart/form-data" id="profileForm">
+                <div class="mb-6">
+                    <div class="flex justify-center mb-4">
+                        <div class="relative">
+                            <img id="previewImage" src="<?= htmlspecialchars($profilePic) ?>" alt="Preview" class="w-32 h-32 rounded-full object-cover ring-4 ring-primary-500">
+                        </div>
+                    </div>
+                    
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Choose New Picture</label>
+                    <input type="file" name="profile_picture" id="profilePictureInput" accept="image/*" 
+                           class="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none focus:border-primary-500"
+                           onchange="previewProfilePicture(event)">
+                    <p class="mt-2 text-xs text-gray-500">Supported formats: JPG, PNG, GIF (Max 5MB)</p>
+                </div>
+                
+                <div class="flex gap-3">
+                    <button type="submit" class="flex-1 bg-primary-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition-colors">
+                        <i class="fas fa-upload mr-2"></i>
+                        Upload Picture
+                    </button>
+                    <button type="button" onclick="closeUploadModal()" class="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Profile Settings Modal -->
+    <div id="profileSettingsModal" class="modal">
+        <div class="modal-content">
+            <!-- Modal Header -->
+            <div class="gradient-bg px-6 py-5 rounded-t-xl">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-2xl font-bold text-white flex items-center">
+                        <i class="fas fa-user-circle mr-3"></i>
+                        Profile Settings
+                    </h2>
+                    <button onclick="closeProfileSettingsModal()" class="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2 transition-colors">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex border-b border-gray-200 px-6">
+                <button class="tab-button active" onclick="switchTab(event, 'account')">
+                    <i class="fas fa-user mr-2"></i>Account Details
+                </button>
+                <button class="tab-button" onclick="switchTab(event, 'password')">
+                    <i class="fas fa-lock mr-2"></i>Change Password
+                </button>
+            </div>
+
+            <!-- Tab Contents -->
+            <div class="p-6">
+                <!-- Account Details Tab -->
+                <div id="account-tab" class="tab-content active">
+                    <div class="space-y-6">
+                        <!-- Profile Picture Section -->
+                        <div class="text-center pb-6 border-b border-gray-200">
+                            <div class="relative inline-block">
+                                <img src="<?= htmlspecialchars($profilePic) ?>" alt="Profile" class="w-32 h-32 rounded-full object-cover ring-4 ring-primary-500 mx-auto mb-4">
+                                <button type="button" onclick="openUploadModal()" class="absolute bottom-4 right-0 bg-primary-600 hover:bg-primary-700 text-white rounded-full p-3 shadow-lg transition-colors">
+                                    <i class="fas fa-camera"></i>
+                                </button>
+                            </div>
+                            <h3 class="text-xl font-semibold text-gray-900 mt-2"><?= htmlspecialchars(ucwords(strtolower($profName))) ?></h3>
+                            <p class="text-gray-600">Professor Account</p>
+                        </div>
+
+                        <!-- Account Information -->
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                    <i class="fas fa-user text-primary-500 mr-2"></i>First Name
+                                </label>
+                                <input type="text" value="<?= htmlspecialchars($prof['firstname']) ?>" readonly class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                    <i class="fas fa-user text-primary-500 mr-2"></i>Last Name
+                                </label>
+                                <input type="text" value="<?= htmlspecialchars($prof['lastname']) ?>" readonly class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                    <i class="fas fa-envelope text-primary-500 mr-2"></i>Email Address
+                                </label>
+                                <input type="email" value="<?= htmlspecialchars($prof['email']) ?>" readonly class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                    <i class="fas fa-venus-mars text-primary-500 mr-2"></i>Gender
+                                </label>
+                                <input type="text" value="<?= htmlspecialchars(ucfirst($prof['gender'] ?? 'Not specified')) ?>" readonly class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                    <i class="fas fa-id-badge text-primary-500 mr-2"></i>User ID
+                                </label>
+                                <input type="text" value="<?= htmlspecialchars($professorId) ?>" readonly class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                    <i class="fas fa-user-tie text-primary-500 mr-2"></i>Role
+                                </label>
+                                <input type="text" value="Professor" readonly class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed">
+                            </div>
+                        </div>
+
+                        <div class="bg-blue-50 border-l-4 border-primary-500 p-4 rounded-r-lg">
+                            <div class="flex">
+                                <i class="fas fa-info-circle text-primary-500 mt-0.5 mr-3"></i>
+                                <div>
+                                    <p class="text-sm font-semibold text-primary-900 mb-1">Account Information</p>
+                                    <p class="text-sm text-primary-700">To update your account details, please contact your administrator.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Change Password Tab -->
+                <div id="password-tab" class="tab-content">
+                    <form id="changePasswordForm" class="space-y-6">
+                        <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-lg mb-6">
+                            <div class="flex">
+                                <i class="fas fa-shield-alt text-yellow-500 mt-0.5 mr-3"></i>
+                                <div>
+                                    <p class="text-sm font-semibold text-yellow-900 mb-1">Password Security</p>
+                                    <p class="text-sm text-yellow-700">Choose a strong password with at least 8 characters, including uppercase, lowercase, numbers, and symbols.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                <i class="fas fa-lock text-primary-500 mr-2"></i>Current Password
+                            </label>
+                            <div class="relative">
+                                <input type="password" id="currentPassword" name="currentPassword" required 
+                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                                       placeholder="Enter your current password">
+                                <button type="button" onclick="togglePasswordVisibility('currentPassword')" 
+                                        class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                <i class="fas fa-key text-primary-500 mr-2"></i>New Password
+                            </label>
+                            <div class="relative">
+                                <input type="password" id="newPassword" name="newPassword" required 
+                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                                       placeholder="Enter your new password">
+                                <button type="button" onclick="togglePasswordVisibility('newPassword')" 
+                                        class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            <div id="passwordStrength" class="mt-2 hidden">
+                                <div class="flex items-center space-x-2">
+                                    <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                        <div id="strengthBar" class="h-full transition-all duration-300"></div>
+                                    </div>
+                                    <span id="strengthText" class="text-sm font-medium"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                <i class="fas fa-check-circle text-primary-500 mr-2"></i>Confirm New Password
+                            </label>
+                            <div class="relative">
+                                <input type="password" id="confirmPassword" name="confirmPassword" required 
+                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                                       placeholder="Confirm your new password">
+                                <button type="button" onclick="togglePasswordVisibility('confirmPassword')" 
+                                        class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            <p id="passwordMatch" class="mt-2 text-sm hidden"></p>
+                        </div>
+
+                        <div id="passwordError" class="hidden bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg">
+                            <div class="flex">
+                                <i class="fas fa-exclamation-circle text-red-500 mt-0.5 mr-3"></i>
+                                <p class="text-sm text-red-700" id="passwordErrorText"></p>
+                            </div>
+                        </div>
+
+                        <div id="passwordSuccess" class="hidden bg-green-50 border-l-4 border-green-500 p-4 rounded-r-lg">
+                            <div class="flex">
+                                <i class="fas fa-check-circle text-green-500 mt-0.5 mr-3"></i>
+                                <p class="text-sm text-green-700">Password changed successfully!</p>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-3 pt-4">
+                            <button type="submit" class="flex-1 bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors shadow-sm">
+                                <i class="fas fa-save mr-2"></i>Update Password
+                            </button>
+                            <button type="button" onclick="resetPasswordForm()" class="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors">
+                                <i class="fas fa-undo mr-2"></i>Reset
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Main Content -->
     <main id="main-content" class="flex-1 transition-all duration-300" style="margin-left: 5rem;">
@@ -598,44 +883,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
     </main>
 </div>
 
-<!-- Profile Picture Modal -->
-<div id="profileModal" class="modal">
-    <div class="modal-content">
-        <div class="flex items-center justify-between mb-6">
-            <h2 class="text-2xl font-bold text-gray-900">Update Profile Picture</h2>
-            <button onclick="closeProfileModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
-                <i class="fas fa-times text-xl"></i>
-            </button>
-        </div>
-        
-        <form method="POST" enctype="multipart/form-data" id="profileForm">
-            <div class="mb-6">
-                <div class="flex justify-center mb-4">
-                    <div class="relative">
-                        <img id="previewImage" src="<?= htmlspecialchars($profilePic) ?>" alt="Preview" class="w-32 h-32 rounded-full object-cover ring-4 ring-primary-500">
-                    </div>
-                </div>
-                
-                <label class="block text-sm font-medium text-gray-700 mb-2">Choose New Picture</label>
-                <input type="file" name="profile_picture" id="profilePictureInput" accept="image/*" 
-                       class="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none focus:border-primary-500"
-                       onchange="previewProfilePicture(event)">
-                <p class="mt-2 text-xs text-gray-500">Supported formats: JPG, PNG, GIF (Max 5MB)</p>
-            </div>
-            
-            <div class="flex gap-3">
-                <button type="submit" class="flex-1 bg-primary-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition-colors">
-                    <i class="fas fa-upload mr-2"></i>
-                    Upload Picture
-                </button>
-                <button type="button" onclick="closeProfileModal()" class="flex-1 bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
-                    Cancel
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
 <script>
     let sidebarExpanded = false;
 
@@ -648,7 +895,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
         sidebarExpanded = !sidebarExpanded;
         
         if (window.innerWidth < 1024) {
-            // Mobile behavior
             sidebar.classList.toggle('sidebar-expanded');
             sidebar.classList.toggle('sidebar-collapsed');
             overlay.classList.toggle('hidden');
@@ -656,7 +902,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
                 mainContent.style.marginLeft = '0';
             }
         } else {
-            // Desktop behavior
             sidebar.classList.toggle('sidebar-expanded');
             sidebar.classList.toggle('sidebar-collapsed');
             
@@ -674,13 +919,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
         }
     }
 
-    // Profile Modal Functions
-    function openProfileModal() {
-        document.getElementById('profileModal').classList.add('show');
+    // Upload Modal Functions
+    function openUploadModal() {
+        document.getElementById('uploadModal').classList.add('show');
+        document.body.style.overflow = 'hidden';
     }
 
-    function closeProfileModal() {
-        document.getElementById('profileModal').classList.remove('show');
+    function closeUploadModal() {
+        document.getElementById('uploadModal').classList.remove('show');
+        document.body.style.overflow = 'auto';
     }
 
     function previewProfilePicture(event) {
@@ -692,6 +939,177 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
             }
             reader.readAsDataURL(file);
         }
+    }
+
+    // Profile Settings Modal Functions
+    function openProfileSettingsModal() {
+        document.getElementById('profileSettingsModal').classList.add('show');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeProfileSettingsModal() {
+        document.getElementById('profileSettingsModal').classList.remove('show');
+        document.body.style.overflow = 'auto';
+        resetPasswordForm();
+    }
+
+    function switchTab(event, tabName) {
+        // Remove active class from all tabs
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+
+        // Add active class to selected tab
+        event.target.classList.add('active');
+        document.getElementById(tabName + '-tab').classList.add('active');
+    }
+
+    function togglePasswordVisibility(fieldId) {
+        const field = document.getElementById(fieldId);
+        const icon = event.currentTarget.querySelector('i');
+        
+        if (field.type === 'password') {
+            field.type = 'text';
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        } else {
+            field.type = 'password';
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        }
+    }
+
+    // Password strength checker
+    document.getElementById('newPassword')?.addEventListener('input', function() {
+        const password = this.value;
+        const strengthContainer = document.getElementById('passwordStrength');
+        const strengthBar = document.getElementById('strengthBar');
+        const strengthText = document.getElementById('strengthText');
+        
+        if (password.length === 0) {
+            strengthContainer.classList.add('hidden');
+            return;
+        }
+        
+        strengthContainer.classList.remove('hidden');
+        
+        let strength = 0;
+        if (password.length >= 8) strength++;
+        if (password.match(/[a-z]+/)) strength++;
+        if (password.match(/[A-Z]+/)) strength++;
+        if (password.match(/[0-9]+/)) strength++;
+        if (password.match(/[$@#&!]+/)) strength++;
+        
+        const strengthLevels = [
+            { width: '20%', color: 'bg-red-500', text: 'Very Weak', textColor: 'text-red-600' },
+            { width: '40%', color: 'bg-orange-500', text: 'Weak', textColor: 'text-orange-600' },
+            { width: '60%', color: 'bg-yellow-500', text: 'Fair', textColor: 'text-yellow-600' },
+            { width: '80%', color: 'bg-blue-500', text: 'Good', textColor: 'text-blue-600' },
+            { width: '100%', color: 'bg-green-500', text: 'Strong', textColor: 'text-green-600' }
+        ];
+        
+        const level = strengthLevels[strength - 1] || strengthLevels[0];
+        strengthBar.style.width = level.width;
+        strengthBar.className = 'h-full transition-all duration-300 ' + level.color;
+        strengthText.textContent = level.text;
+        strengthText.className = 'text-sm font-medium ' + level.textColor;
+    });
+
+    // Password match checker
+    document.getElementById('confirmPassword')?.addEventListener('input', function() {
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmPassword = this.value;
+        const matchIndicator = document.getElementById('passwordMatch');
+        
+        if (confirmPassword.length === 0) {
+            matchIndicator.classList.add('hidden');
+            return;
+        }
+        
+        matchIndicator.classList.remove('hidden');
+        
+        if (newPassword === confirmPassword) {
+            matchIndicator.textContent = '✓ Passwords match';
+            matchIndicator.className = 'mt-2 text-sm text-green-600 font-medium';
+        } else {
+            matchIndicator.textContent = '✗ Passwords do not match';
+            matchIndicator.className = 'mt-2 text-sm text-red-600 font-medium';
+        }
+    });
+
+    // Change password form submission
+    document.getElementById('changePasswordForm')?.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const currentPassword = document.getElementById('currentPassword').value;
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        
+        const errorDiv = document.getElementById('passwordError');
+        const errorText = document.getElementById('passwordErrorText');
+        const successDiv = document.getElementById('passwordSuccess');
+        
+        // Hide previous messages
+        errorDiv.classList.add('hidden');
+        successDiv.classList.add('hidden');
+        
+        // Validation
+        if (newPassword !== confirmPassword) {
+            errorText.textContent = 'New passwords do not match!';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+        
+        if (newPassword.length < 8) {
+            errorText.textContent = 'Password must be at least 8 characters long!';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+        
+        if (newPassword === currentPassword) {
+            errorText.textContent = 'New password must be different from current password!';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+        
+        // Send to server
+        try {
+            const formData = new FormData();
+            formData.append('currentPassword', currentPassword);
+            formData.append('newPassword', newPassword);
+            
+            const response = await fetch('../actions/change_password_action.php', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                successDiv.classList.remove('hidden');
+                setTimeout(() => {
+                    resetPasswordForm();
+                    successDiv.classList.add('hidden');
+                }, 3000);
+            } else {
+                errorText.textContent = result.message || 'Failed to change password. Please try again.';
+                errorDiv.classList.remove('hidden');
+            }
+        } catch (error) {
+            errorText.textContent = 'An error occurred. Please try again.';
+            errorDiv.classList.remove('hidden');
+        }
+    });
+
+    function resetPasswordForm() {
+        document.getElementById('changePasswordForm')?.reset();
+        document.getElementById('passwordStrength').classList.add('hidden');
+        document.getElementById('passwordMatch').classList.add('hidden');
+        document.getElementById('passwordError').classList.add('hidden');
+        document.getElementById('passwordSuccess').classList.add('hidden');
     }
 
     // Display current date
@@ -760,14 +1178,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
         // Close modal on escape key
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
-                closeProfileModal();
+                closeUploadModal();
+                closeProfileSettingsModal();
             }
         });
 
-        // Close modal when clicking outside
-        document.getElementById('profileModal').addEventListener('click', function(e) {
+        // Close modals when clicking outside
+        document.getElementById('uploadModal')?.addEventListener('click', function(e) {
             if (e.target === this) {
-                closeProfileModal();
+                closeUploadModal();
+            }
+        });
+
+        document.getElementById('profileSettingsModal')?.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeProfileSettingsModal();
             }
         });
     });
