@@ -29,12 +29,13 @@ if (!empty($student['gender'])) {
 
 $profilePic = !empty($student['profile_pic']) ? "../" . $student['profile_pic'] : $defaultAvatar;
 
+// FIXED: Changed from 'active' to 'published' to match your database
 $stmt = $conn->prepare("
     SELECT m.id, m.title, m.description, m.content, m.created_at,
            COALESCE(sp.status, 'Pending') AS status
     FROM modules m
     LEFT JOIN student_progress sp ON sp.module_id = m.id AND sp.student_id = ?
-    WHERE m.id = ? AND m.status = 'active'
+    WHERE m.id = ? AND m.status = 'published'
 ");
 $stmt->execute([$studentId, $moduleId]);
 $module = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -62,120 +63,42 @@ $moduleContent = '';
 $pdfFileUrl = '';
 
 if (!empty($module['content'])) {
-    if (strpos($module['content'], 'uploads/') !== false || 
-        preg_match('/\.(html|htm|txt|pdf|pptx|ppt|docx|doc)$/i', $module['content'])) {
-        
+    // FIXED: Don't add ../ if the path already starts with ../
+    if (strpos($module['content'], '../') === 0) {
+        $filePath = $module['content'];
+    } else {
         $filePath = "../" . $module['content'];
+    }
+    
+    if (file_exists($filePath)) {
+        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
         
-        if (file_exists($filePath)) {
-            $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        if (in_array($extension, ['pptx', 'ppt'])) {
+            $pdfPath = convertPPTXtoPDF($filePath);
             
-            if (in_array($extension, ['pptx', 'ppt'])) {
-                $pdfPath = convertPPTXtoPDF($filePath);
-                
-                if ($pdfPath && file_exists($pdfPath)) {
-                    $pdfFileUrl = $pdfPath;
-                    $moduleContent = '
-                    <div class="space-y-4" x-data="{ fullscreen: false }">
-                        <div class="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-xl flex items-center justify-between shadow-lg">
-                            <div class="flex items-center gap-3">
-                                <i class="fas fa-file-powerpoint text-2xl"></i>
-                                <div>
-                                    <p class="font-semibold">PowerPoint Presentation (PDF)</p>
-                                    <p class="text-sm text-blue-100">' . htmlspecialchars(basename($filePath)) . '</p>
-                                </div>
-                            </div>
-                            <a href="' . htmlspecialchars($filePath) . '" download class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition font-medium text-sm flex items-center gap-2">
-                                <i class="fas fa-download"></i>
-                                Download
-                            </a>
-                        </div>
-                        
-                        <div class="bg-white rounded-2xl overflow-hidden shadow-2xl border-2 border-gray-200" style="height:750px;">
-                            <iframe src="' . htmlspecialchars($pdfFileUrl) . '#toolbar=1&navpanes=1&scrollbar=1" 
-                                    class="w-full h-full border-0"
-                                    type="application/pdf"
-                                    title="PowerPoint Presentation">
-                            </iframe>
-                        </div>
-                        
-                        <div class="flex gap-3 justify-center flex-wrap">
-                            <button @click="fullscreen = true" class="bg-purple-600 text-white px-6 py-3 rounded-xl hover:bg-purple-700 transition font-semibold inline-flex items-center gap-2 shadow-lg">
-                                <i class="fas fa-expand"></i>
-                                View Fullscreen
-                            </button>
-                            <a href="' . htmlspecialchars($pdfFileUrl) . '" target="_blank" class="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition font-semibold inline-flex items-center gap-2">
-                                <i class="fas fa-external-link-alt"></i>
-                                Open in New Tab
-                            </a>
-                        </div>
-                        
-                        <!-- Fullscreen Modal -->
-                        <div x-show="fullscreen" 
-                             class="fixed inset-0 z-[100] bg-black" 
-                             x-transition
-                             @keydown.escape.window="fullscreen = false"
-                             x-cloak>
-                            <div class="relative w-full h-full">
-                                <button @click="fullscreen = false" 
-                                        class="absolute top-4 right-4 z-10 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition font-medium flex items-center gap-2 shadow-lg">
-                                    <i class="fas fa-times"></i>
-                                    Close
-                                </button>
-                                <iframe src="' . htmlspecialchars($pdfFileUrl) . '#toolbar=0&navpanes=0&scrollbar=1&view=FitH" 
-                                        class="w-full h-full border-0"
-                                        type="application/pdf">
-                                </iframe>
-                            </div>
-                        </div>
-                    </div>';
-                } else {
-                    $moduleContent = '
-                    <div class="max-w-2xl mx-auto">
-                        <div class="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-8 text-center mb-6">
-                            <div class="text-5xl mb-4">⚠️</div>
-                            <h3 class="text-xl font-bold text-yellow-800 mb-2">PDF Conversion Unavailable</h3>
-                            <p class="text-yellow-700 mb-4">LibreOffice is not installed. Please download the presentation.</p>
-                        </div>
-                        <div class="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl p-12 text-white text-center shadow-2xl">
-                            <div class="mb-8">
-                                <div class="inline-flex items-center justify-center w-24 h-24 bg-white/20 rounded-full mb-6">
-                                    <i class="fas fa-file-powerpoint text-5xl"></i>
-                                </div>
-                                <h2 class="text-3xl font-bold mb-3">PowerPoint Presentation</h2>
-                                <p class="text-blue-100">' . htmlspecialchars(basename($filePath)) . '</p>
-                            </div>
-                            <div class="space-y-4 max-w-md mx-auto">
-                                <a href="' . htmlspecialchars($filePath) . '" target="_blank" class="block bg-white text-blue-700 px-8 py-4 rounded-2xl shadow-xl hover:bg-blue-50 font-bold text-lg">📺 View</a>
-                                <a href="' . htmlspecialchars($filePath) . '" download class="block bg-blue-800 text-white px-8 py-4 rounded-2xl hover:bg-blue-900 font-bold text-lg">⬇️ Download</a>
-                            </div>
-                        </div>
-                    </div>';
-                }
-                
-            } elseif ($extension === 'pdf') {
-                $pdfFileUrl = $filePath;
+            if ($pdfPath && file_exists($pdfPath)) {
+                $pdfFileUrl = $pdfPath;
                 $moduleContent = '
                 <div class="space-y-4" x-data="{ fullscreen: false }">
-                    <div class="bg-gradient-to-r from-red-500 to-red-600 text-white p-4 rounded-xl flex items-center justify-between shadow-lg">
+                    <div class="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-xl flex items-center justify-between shadow-lg">
                         <div class="flex items-center gap-3">
-                            <i class="fas fa-file-pdf text-2xl"></i>
+                            <i class="fas fa-file-powerpoint text-2xl"></i>
                             <div>
-                                <p class="font-semibold">PDF Document</p>
-                                <p class="text-sm text-red-100">' . htmlspecialchars(basename($filePath)) . '</p>
+                                <p class="font-semibold">PowerPoint Presentation (PDF)</p>
+                                <p class="text-sm text-blue-100">' . htmlspecialchars(basename($filePath)) . '</p>
                             </div>
                         </div>
-                        <a href="' . htmlspecialchars($filePath) . '" download class="bg-white text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition font-medium text-sm flex items-center gap-2">
+                        <a href="' . htmlspecialchars($filePath) . '" download class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition font-medium text-sm flex items-center gap-2">
                             <i class="fas fa-download"></i>
                             Download
                         </a>
                     </div>
                     
                     <div class="bg-white rounded-2xl overflow-hidden shadow-2xl border-2 border-gray-200" style="height:750px;">
-                        <iframe src="' . htmlspecialchars($filePath) . '#toolbar=1&navpanes=1&scrollbar=1" 
-                                class="w-full h-full border-0" 
+                        <iframe src="' . htmlspecialchars($pdfFileUrl) . '#toolbar=1&navpanes=1&scrollbar=1" 
+                                class="w-full h-full border-0"
                                 type="application/pdf"
-                                title="PDF Document">
+                                title="PowerPoint Presentation">
                         </iframe>
                     </div>
                     
@@ -184,7 +107,7 @@ if (!empty($module['content'])) {
                             <i class="fas fa-expand"></i>
                             View Fullscreen
                         </button>
-                        <a href="' . htmlspecialchars($filePath) . '" target="_blank" class="bg-red-600 text-white px-6 py-3 rounded-xl hover:bg-red-700 transition font-semibold inline-flex items-center gap-2">
+                        <a href="' . htmlspecialchars($pdfFileUrl) . '" target="_blank" class="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition font-semibold inline-flex items-center gap-2">
                             <i class="fas fa-external-link-alt"></i>
                             Open in New Tab
                         </a>
@@ -202,46 +125,135 @@ if (!empty($module['content'])) {
                                 <i class="fas fa-times"></i>
                                 Close
                             </button>
-                            <iframe src="' . htmlspecialchars($filePath) . '#toolbar=0&navpanes=0&scrollbar=1&view=FitH" 
+                            <iframe src="' . htmlspecialchars($pdfFileUrl) . '#toolbar=0&navpanes=0&scrollbar=1&view=FitH" 
                                     class="w-full h-full border-0"
                                     type="application/pdf">
                             </iframe>
                         </div>
                     </div>
-                    
-                    <div class="bg-green-50 border-2 border-green-200 rounded-xl p-4 text-center">
-                        <p class="text-sm text-green-800">
-                            <strong>✓ Viewing PDF directly in browser</strong> - Click "View Fullscreen" for best mobile experience
-                        </p>
-                    </div>
                 </div>';
-                
-            } elseif (in_array($extension, ['docx', 'doc'])) {
+            } else {
                 $moduleContent = '
-                <div class="bg-gradient-to-br from-green-600 to-emerald-700 rounded-3xl p-12 text-white text-center shadow-2xl max-w-2xl mx-auto">
-                    <div class="mb-8">
-                        <div class="inline-flex items-center justify-center w-24 h-24 bg-white/20 rounded-full mb-6">
-                            <i class="fas fa-file-word text-5xl"></i>
-                        </div>
-                        <h2 class="text-3xl font-bold mb-3">Word Document</h2>
-                        <p class="text-green-100">' . htmlspecialchars(basename($filePath)) . '</p>
+                <div class="max-w-2xl mx-auto">
+                    <div class="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-8 text-center mb-6">
+                        <div class="text-5xl mb-4">⚠️</div>
+                        <h3 class="text-xl font-bold text-yellow-800 mb-2">PDF Conversion Unavailable</h3>
+                        <p class="text-yellow-700 mb-4">LibreOffice is not installed. Please download the presentation.</p>
                     </div>
-                    <div class="space-y-3">
-                        <a href="' . htmlspecialchars($filePath) . '" target="_blank" class="block bg-white text-green-700 px-8 py-4 rounded-2xl shadow-xl hover:bg-green-50 font-bold text-lg">📄 Open</a>
-                        <a href="' . htmlspecialchars($filePath) . '" download class="block bg-green-800 text-white px-8 py-4 rounded-2xl hover:bg-green-900 font-bold text-lg">⬇️ Download</a>
+                    <div class="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl p-12 text-white text-center shadow-2xl">
+                        <div class="mb-8">
+                            <div class="inline-flex items-center justify-center w-24 h-24 bg-white/20 rounded-full mb-6">
+                                <i class="fas fa-file-powerpoint text-5xl"></i>
+                            </div>
+                            <h2 class="text-3xl font-bold mb-3">PowerPoint Presentation</h2>
+                            <p class="text-blue-100">' . htmlspecialchars(basename($filePath)) . '</p>
+                        </div>
+                        <div class="space-y-4 max-w-md mx-auto">
+                            <a href="' . htmlspecialchars($filePath) . '" target="_blank" class="block bg-white text-blue-700 px-8 py-4 rounded-2xl shadow-xl hover:bg-blue-50 font-bold text-lg">📺 View</a>
+                            <a href="' . htmlspecialchars($filePath) . '" download class="block bg-blue-800 text-white px-8 py-4 rounded-2xl hover:bg-blue-900 font-bold text-lg">⬇️ Download</a>
+                        </div>
                     </div>
                 </div>';
-                
-            } elseif (in_array($extension, ['html', 'htm'])) {
-                $moduleContent = file_get_contents($filePath);
-                
-            } elseif ($extension === 'txt') {
-                $moduleContent = '<div class="bg-white p-8 rounded-2xl shadow-lg border-2 max-w-4xl mx-auto"><pre class="whitespace-pre-wrap font-mono text-sm">' . htmlspecialchars(file_get_contents($filePath)) . '</pre></div>';
             }
+            
+        } elseif ($extension === 'pdf') {
+            $pdfFileUrl = $filePath;
+            $moduleContent = '
+            <div class="space-y-4" x-data="{ fullscreen: false }">
+                <div class="bg-gradient-to-r from-red-500 to-red-600 text-white p-4 rounded-xl flex items-center justify-between shadow-lg">
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-file-pdf text-2xl"></i>
+                        <div>
+                            <p class="font-semibold">PDF Document</p>
+                            <p class="text-sm text-red-100">' . htmlspecialchars(basename($filePath)) . '</p>
+                        </div>
+                    </div>
+                    <a href="' . htmlspecialchars($filePath) . '" download class="bg-white text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition font-medium text-sm flex items-center gap-2">
+                        <i class="fas fa-download"></i>
+                        Download
+                    </a>
+                </div>
+                
+                <div class="bg-white rounded-2xl overflow-hidden shadow-2xl border-2 border-gray-200" style="height:750px;">
+                    <iframe src="' . htmlspecialchars($filePath) . '#toolbar=1&navpanes=1&scrollbar=1" 
+                            class="w-full h-full border-0" 
+                            type="application/pdf"
+                            title="PDF Document">
+                    </iframe>
+                </div>
+                
+                <div class="flex gap-3 justify-center flex-wrap">
+                    <button @click="fullscreen = true" class="bg-purple-600 text-white px-6 py-3 rounded-xl hover:bg-purple-700 transition font-semibold inline-flex items-center gap-2 shadow-lg">
+                        <i class="fas fa-expand"></i>
+                        View Fullscreen
+                    </button>
+                    <a href="' . htmlspecialchars($filePath) . '" target="_blank" class="bg-red-600 text-white px-6 py-3 rounded-xl hover:bg-red-700 transition font-semibold inline-flex items-center gap-2">
+                        <i class="fas fa-external-link-alt"></i>
+                        Open in New Tab
+                    </a>
+                </div>
+                
+                <!-- Fullscreen Modal -->
+                <div x-show="fullscreen" 
+                     class="fixed inset-0 z-[100] bg-black" 
+                     x-transition
+                     @keydown.escape.window="fullscreen = false"
+                     x-cloak>
+                    <div class="relative w-full h-full">
+                        <button @click="fullscreen = false" 
+                                class="absolute top-4 right-4 z-10 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition font-medium flex items-center gap-2 shadow-lg">
+                            <i class="fas fa-times"></i>
+                            Close
+                        </button>
+                        <iframe src="' . htmlspecialchars($filePath) . '#toolbar=0&navpanes=0&scrollbar=1&view=FitH" 
+                                class="w-full h-full border-0"
+                                type="application/pdf">
+                        </iframe>
+                    </div>
+                </div>
+                
+                <div class="bg-green-50 border-2 border-green-200 rounded-xl p-4 text-center">
+                    <p class="text-sm text-green-800">
+                        <strong>✓ Viewing PDF directly in browser</strong> - Click "View Fullscreen" for best mobile experience
+                    </p>
+                </div>
+            </div>';
+            
+        } elseif (in_array($extension, ['docx', 'doc'])) {
+            $moduleContent = '
+            <div class="bg-gradient-to-br from-green-600 to-emerald-700 rounded-3xl p-12 text-white text-center shadow-2xl max-w-2xl mx-auto">
+                <div class="mb-8">
+                    <div class="inline-flex items-center justify-center w-24 h-24 bg-white/20 rounded-full mb-6">
+                        <i class="fas fa-file-word text-5xl"></i>
+                    </div>
+                    <h2 class="text-3xl font-bold mb-3">Word Document</h2>
+                    <p class="text-green-100">' . htmlspecialchars(basename($filePath)) . '</p>
+                </div>
+                <div class="space-y-3">
+                    <a href="' . htmlspecialchars($filePath) . '" target="_blank" class="block bg-white text-green-700 px-8 py-4 rounded-2xl shadow-xl hover:bg-green-50 font-bold text-lg">📄 Open</a>
+                    <a href="' . htmlspecialchars($filePath) . '" download class="block bg-green-800 text-white px-8 py-4 rounded-2xl hover:bg-green-900 font-bold text-lg">⬇️ Download</a>
+                </div>
+            </div>';
+            
+        } elseif (in_array($extension, ['html', 'htm'])) {
+            $moduleContent = file_get_contents($filePath);
+            
+        } elseif ($extension === 'txt') {
+            $moduleContent = '<div class="bg-white p-8 rounded-2xl shadow-lg border-2 max-w-4xl mx-auto"><pre class="whitespace-pre-wrap font-mono text-sm">' . htmlspecialchars(file_get_contents($filePath)) . '</pre></div>';
         }
     } else {
-        $moduleContent = '<div class="bg-white p-8 rounded-2xl shadow-lg border-2 max-w-4xl mx-auto prose prose-lg max-w-none">' . nl2br(htmlspecialchars($module['content'])) . '</div>';
+        // File doesn't exist, show error with the path being looked for
+        $moduleContent = '<div class="bg-red-50 border-2 border-red-200 rounded-2xl p-8 text-center max-w-2xl mx-auto">
+            <div class="text-5xl mb-4">❌</div>
+            <h3 class="text-xl font-bold text-red-800 mb-2">File Not Found</h3>
+            <p class="text-red-700 mb-4">The module file could not be found at:</p>
+            <p class="text-sm font-mono bg-red-100 p-3 rounded text-red-900 break-all">' . htmlspecialchars($filePath) . '</p>
+            <p class="text-sm text-red-600 mt-4">Please contact your instructor.</p>
+        </div>';
     }
+} else {
+    // No content field value
+    $moduleContent = '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center"><i class="fas fa-inbox text-5xl text-gray-300 mb-4"></i><p class="text-gray-500 text-lg">No content available for this module.</p></div>';
 }
 
 if ($module['status'] === 'Pending') {
@@ -482,7 +494,7 @@ $statusClass = match (strtolower($module['status'])) {
 
             <!-- Module Content -->
             <div class="animate-fade-in-up" style="animation-delay: 0.1s;">
-                <?= $moduleContent ?: '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center"><i class="fas fa-inbox text-5xl text-gray-300 mb-4"></i><p class="text-gray-500 text-lg">No content available for this module.</p></div>' ?>
+                <?= $moduleContent ?>
             </div>
         </div>
     </main>
