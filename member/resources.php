@@ -32,12 +32,17 @@ if (!empty($student['gender'])) {
 // Profile picture
 $profilePic = !empty($student['profile_pic']) ? "../" . $student['profile_pic'] : $defaultAvatar;
 
-// FIX: Fetch all available modules (only published ones)
+// FIXED: Fetch all available modules (both 'active' and 'published' status to match view_module.php)
 $stmt = $conn->prepare("
-    SELECT m.id, m.title, m.description, m.content, COALESCE(sp.status, 'Pending') AS status
+    SELECT 
+        m.id, 
+        m.title, 
+        m.description, 
+        m.content, 
+        COALESCE(sp.status, 'Pending') AS status
     FROM modules m
     LEFT JOIN student_progress sp ON sp.module_id = m.id AND sp.student_id = ?
-    WHERE m.status = 'published'
+    WHERE m.status IN ('active', 'published')
     ORDER BY m.display_order ASC, m.created_at DESC
 ");
 $stmt->execute([$studentId]);
@@ -45,6 +50,11 @@ $modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Daily tip
 $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMIT 1")->fetchColumn();
+
+// Get success/error messages from session
+$successMessage = $_SESSION['success_message'] ?? null;
+$errorMessage = $_SESSION['error_message'] ?? null;
+unset($_SESSION['success_message'], $_SESSION['error_message']);
 ?>
 <!DOCTYPE html>
 <html lang="en" class="scroll-smooth">
@@ -125,6 +135,21 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
             animation: fadeInUp 0.6s ease-out;
         }
 
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-slide-down {
+            animation: slideDown 0.4s ease-out;
+        }
+
         .sidebar-transition {
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
@@ -174,7 +199,7 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
         }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800 antialiased" x-data="{ activeFilter: 'All', searchQuery: '' }">
+<body class="bg-gray-50 text-gray-800 antialiased" x-data="{ activeFilter: 'All', searchQuery: '', showAlert: <?= ($successMessage || $errorMessage) ? 'true' : 'false' ?> }">
 
 <div class="flex min-h-screen">
     <!-- Sidebar -->
@@ -246,6 +271,35 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
 
         <!-- Content -->
         <div class="px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Success/Error Messages -->
+            <?php if ($successMessage): ?>
+            <div x-show="showAlert" class="mb-6 animate-slide-down">
+                <div class="bg-green-50 border-l-4 border-green-500 rounded-lg p-4 flex items-start justify-between shadow-sm">
+                    <div class="flex items-start">
+                        <i class="fas fa-check-circle text-green-500 text-xl mr-3 mt-0.5"></i>
+                        <p class="text-green-800 font-medium"><?= htmlspecialchars($successMessage) ?></p>
+                    </div>
+                    <button @click="showAlert = false" class="text-green-500 hover:text-green-700 ml-4">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <?php if ($errorMessage): ?>
+            <div x-show="showAlert" class="mb-6 animate-slide-down">
+                <div class="bg-red-50 border-l-4 border-red-500 rounded-lg p-4 flex items-start justify-between shadow-sm">
+                    <div class="flex items-start">
+                        <i class="fas fa-exclamation-circle text-red-500 text-xl mr-3 mt-0.5"></i>
+                        <p class="text-red-800 font-medium"><?= htmlspecialchars($errorMessage) ?></p>
+                    </div>
+                    <button @click="showAlert = false" class="text-red-500 hover:text-red-700 ml-4">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <?php endif; ?>
+
             <!-- Search and Filters -->
             <div class="flex flex-col sm:flex-row gap-4 mb-6 animate-fade-in-up">
                 <div class="relative flex-1">
@@ -275,7 +329,7 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
 
             <!-- Modules Count -->
             <div class="mb-4 text-sm text-gray-600 animate-fade-in-up">
-                Showing <strong><?= count($modules) ?></strong> published module(s)
+                Showing <strong><?= count($modules) ?></strong> available module(s)
             </div>
 
             <!-- Modules Grid -->
@@ -284,7 +338,7 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
                 <div class="inline-flex items-center justify-center w-20 h-20 bg-gray-100 rounded-full mb-4">
                     <i class="fas fa-book text-4xl text-gray-400"></i>
                 </div>
-                <h3 class="text-lg font-semibold text-gray-900 mb-2">No published modules yet</h3>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">No modules available yet</h3>
                 <p class="text-gray-600">Check back later for new learning materials</p>
             </div>
             <?php else: ?>
@@ -344,7 +398,7 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
 
             <!-- Daily Tip -->
             <?php if ($dailyTip): ?>
-            <div class="bg-gradient-to-br from-purple-50 to-blue-50 rounded-2xl p-6 sm:p-8 text-center border-2 border-purple-200 shadow-sm mt-8 animate-fade-in-up" style="animation-delay: 0.2s;">
+            <div class="bg-gradient-to-br from-purple-50 to-blue-50 rounded-2xl p-6 sm:px-8 text-center border-2 border-purple-200 shadow-sm mt-8 animate-fade-in-up" style="animation-delay: 0.2s;">
                 <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full mb-4 shadow-lg">
                     <i class="fas fa-lightbulb text-2xl text-white"></i>
                 </div>
@@ -419,6 +473,13 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
             }
         }, 250);
     });
+
+    // Auto-hide alert after 6 seconds
+    <?php if ($successMessage || $errorMessage): ?>
+    setTimeout(() => {
+        document.querySelector('[x-data]').__x.$data.showAlert = false;
+    }, 6000);
+    <?php endif; ?>
 </script>
 
 </body>

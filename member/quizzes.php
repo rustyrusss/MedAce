@@ -30,10 +30,14 @@ if (!empty($student['gender'])) {
 }
 $profilePic = !empty($student['profile_pic']) ? "../" . $student['profile_pic'] : $defaultAvatar;
 
-// ✅ Get latest attempt per quiz (using attempted_at)
+// ✅ Get latest attempt per quiz with highest score - FIXED: Using SUM of points from questions table
 $stmt = $conn->prepare("
   SELECT q.id, q.title, q.publish_time, q.deadline_time,
-         qa.id AS attempt_id, COALESCE(qa.status, 'Pending') AS status
+         qa.id AS attempt_id, 
+         COALESCE(qa.status, 'Pending') AS status,
+         qa.score AS latest_score_raw,
+         (SELECT MAX(score) FROM quiz_attempts WHERE quiz_id = q.id AND student_id = ?) AS highest_score_raw,
+         (SELECT COALESCE(SUM(points), 0) FROM questions WHERE quiz_id = q.id) AS total_points
   FROM quizzes q
   LEFT JOIN (
       SELECT qa1.*
@@ -47,8 +51,14 @@ $stmt = $conn->prepare("
   ) qa ON q.id = qa.quiz_id
   ORDER BY q.publish_time DESC
 ");
-$stmt->execute([$studentId]);
+$stmt->execute([$studentId, $studentId]);
 $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Helper function to calculate percentage
+function calculatePercentage($score, $total) {
+    if ($total == 0) return 0;
+    return round(($score / $total) * 100, 1);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en" class="scroll-smooth">
@@ -59,6 +69,7 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -255,7 +266,7 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
                            class="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all">
                     <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                 </div>
-                <div class="flex gap-2">
+                <div class="flex gap-2 flex-wrap">
                     <button @click="filter = 'all'" :class="filter === 'all' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'" 
                             class="px-4 py-3 rounded-lg font-medium transition-all shadow-sm whitespace-nowrap">
                         All
@@ -294,6 +305,10 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         'pending' => ['bg' => 'bg-amber-100', 'text' => 'text-amber-700', 'icon' => 'fa-clock', 'btnBg' => 'bg-primary-600 hover:bg-primary-700', 'btnText' => 'Start Quiz', 'btnIcon' => 'fa-play'],
                         default => ['bg' => 'bg-gray-100', 'text' => 'text-gray-700', 'icon' => 'fa-info-circle', 'btnBg' => 'bg-primary-600 hover:bg-primary-700', 'btnText' => 'Start', 'btnIcon' => 'fa-play']
                     };
+                    
+                    // Calculate percentages based on total points
+                    $latestPercentage = calculatePercentage($quiz['latest_score_raw'], $quiz['total_points']);
+                    $highestPercentage = calculatePercentage($quiz['highest_score_raw'], $quiz['total_points']);
                 ?>
                 <div x-show="(filter === 'all' || filter === '<?= $status ?>') && ('<?= strtolower(htmlspecialchars($quiz['title'])) ?>'.includes(search.toLowerCase()))"
                      class="bg-white border border-gray-200 rounded-xl overflow-hidden card-hover animate-fade-in-up">
@@ -322,10 +337,32 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <?php endif; ?>
 
                         <?php if ($quiz['deadline_time']): ?>
-                        <p class="text-xs text-red-600 mb-4">
+                        <p class="text-xs text-red-600 mb-3">
                             <i class="fas fa-clock mr-1"></i>
                             Due: <?= date('M d, Y g:i A', strtotime($quiz['deadline_time'])) ?>
                         </p>
+                        <?php endif; ?>
+
+                        <!-- Score Display for Completed/Failed -->
+                        <?php if ($status !== 'pending' && $quiz['total_points'] > 0): ?>
+                        <div class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-3 mb-4 border border-blue-100">
+                            <div class="flex items-center justify-between">
+                                <div class="flex-1">
+                                    <p class="text-xs text-gray-600 mb-1">Latest Score</p>
+                                    <p class="text-lg font-bold text-gray-900"><?= $latestPercentage ?>%</p>
+                                    <p class="text-xs text-gray-500"><?= $quiz['latest_score_raw'] ?> / <?= $quiz['total_points'] ?> pts</p>
+                                </div>
+                                <div class="h-12 w-px bg-gray-300 mx-2"></div>
+                                <div class="flex-1 text-right">
+                                    <p class="text-xs text-gray-600 mb-1">Highest Score</p>
+                                    <p class="text-lg font-bold text-green-600">
+                                        <i class="fas fa-trophy text-amber-500 mr-1"></i>
+                                        <?= $highestPercentage ?>%
+                                    </p>
+                                    <p class="text-xs text-gray-500"><?= $quiz['highest_score_raw'] ?> / <?= $quiz['total_points'] ?> pts</p>
+                                </div>
+                            </div>
+                        </div>
                         <?php endif; ?>
 
                         <!-- Action Buttons -->
@@ -350,7 +387,7 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 </a>
                             <?php endif; ?>
 
-                            <button @click="openModal = 'quiz<?= $quiz['id'] ?>'"
+                            <button @click="openModal = 'quiz<?= $quiz['id'] ?>'; setTimeout(() => createChart<?= $quiz['id'] ?>(), 100)"
                                     class="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors text-sm">
                                 <i class="fas fa-history"></i>
                             </button>
@@ -358,26 +395,27 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     </div>
                 </div>
 
-                <!-- History Modal -->
+                <!-- History Modal with Chart -->
                 <div x-show="openModal === 'quiz<?= $quiz['id'] ?>'"
                      x-transition
                      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div @click.away="openModal = null" class="bg-white rounded-xl shadow-2xl w-full max-w-md">
-                        <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                            <h2 class="text-lg font-semibold text-gray-900">Attempt History</h2>
+                    <div @click.away="openModal = null" class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                        <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white z-10">
+                            <h2 class="text-lg font-semibold text-gray-900">Attempt History & Progress</h2>
                             <button @click="openModal = null" class="text-gray-400 hover:text-gray-600">
                                 <i class="fas fa-times text-xl"></i>
                             </button>
                         </div>
-                        <div class="p-6 max-h-96 overflow-y-auto">
+                        <div class="p-6">
                             <?php
                             $historyStmt = $conn->prepare("
-                                SELECT id, attempt_number, attempted_at, score, status
-                                FROM quiz_attempts
-                                WHERE student_id = ? AND quiz_id = ?
-                                ORDER BY attempted_at DESC
+                                SELECT qa.id, qa.attempt_number, qa.attempted_at, qa.score, qa.status,
+                                       (SELECT COALESCE(SUM(points), 0) FROM questions WHERE quiz_id = ?) AS total_points
+                                FROM quiz_attempts qa
+                                WHERE qa.student_id = ? AND qa.quiz_id = ?
+                                ORDER BY qa.attempted_at ASC
                             ");
-                            $historyStmt->execute([$studentId, $quiz['id']]);
+                            $historyStmt->execute([$quiz['id'], $studentId, $quiz['id']]);
                             $attempts = $historyStmt->fetchAll(PDO::FETCH_ASSOC);
                             ?>
                             <?php if (empty($attempts)): ?>
@@ -386,25 +424,48 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     <p class="text-gray-500">No attempts yet</p>
                                 </div>
                             <?php else: ?>
+                                <!-- Progress Chart -->
+                                <div class="mb-6 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-6 border-2 border-blue-100">
+                                    <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                                        <i class="fas fa-chart-line text-blue-600 mr-2"></i>
+                                        Score Progress
+                                    </h3>
+                                    <canvas id="chart<?= $quiz['id'] ?>" class="w-full" style="max-height: 250px;"></canvas>
+                                </div>
+
+                                <!-- Attempt List -->
+                                <h3 class="text-lg font-semibold text-gray-900 mb-3">All Attempts</h3>
                                 <div class="space-y-3">
-                                    <?php foreach ($attempts as $attempt): ?>
-                                        <div class="p-4 border border-gray-200 rounded-lg hover:border-primary-300 transition-colors">
+                                    <?php foreach (array_reverse($attempts) as $attempt): 
+                                        $attemptPercentage = calculatePercentage($attempt['score'], $attempt['total_points']);
+                                    ?>
+                                        <div class="p-4 border-2 border-gray-200 rounded-lg hover:border-primary-300 transition-colors bg-white">
                                             <div class="flex items-center justify-between mb-2">
                                                 <span class="font-semibold text-gray-900">Attempt #<?= $attempt['attempt_number'] ?></span>
-                                                <span class="text-sm font-semibold 
-                                                    <?= strtolower($attempt['status']) === 'completed' ? 'text-green-600' : 
-                                                       (strtolower($attempt['status']) === 'failed' ? 'text-red-600' : 'text-amber-600') ?>">
+                                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold
+                                                    <?= strtolower($attempt['status']) === 'completed' ? 'bg-green-100 text-green-700' : 
+                                                       (strtolower($attempt['status']) === 'failed' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700') ?>">
                                                     <?= ucfirst($attempt['status']) ?>
                                                 </span>
                                             </div>
-                                            <p class="text-xs text-gray-500 mb-1">
+                                            <p class="text-xs text-gray-500 mb-2">
                                                 <i class="fas fa-calendar mr-1"></i>
                                                 <?= date('M d, Y g:i A', strtotime($attempt['attempted_at'])) ?>
                                             </p>
-                                            <p class="text-sm text-gray-700">
-                                                <i class="fas fa-star mr-1 text-amber-500"></i>
-                                                Score: <strong><?= htmlspecialchars($attempt['score']) ?></strong>
-                                            </p>
+                                            <div class="flex items-center justify-between">
+                                                <div>
+                                                    <p class="text-sm font-semibold text-gray-700">
+                                                        <i class="fas fa-star mr-1 text-amber-500"></i>
+                                                        Score: <strong class="text-lg"><?= $attemptPercentage ?>%</strong>
+                                                    </p>
+                                                    <p class="text-xs text-gray-500 mt-1"><?= $attempt['score'] ?> out of <?= $attempt['total_points'] ?> points</p>
+                                                </div>
+                                                <?php if ($attemptPercentage == $highestPercentage): ?>
+                                                    <span class="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full font-semibold">
+                                                        <i class="fas fa-trophy"></i> Best
+                                                    </span>
+                                                <?php endif; ?>
+                                            </div>
                                         </div>
                                     <?php endforeach; ?>
                                 </div>
@@ -412,6 +473,92 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         </div>
                     </div>
                 </div>
+
+                <!-- Chart Script -->
+                <script>
+                function createChart<?= $quiz['id'] ?>() {
+                    const ctx = document.getElementById('chart<?= $quiz['id'] ?>');
+                    if (!ctx) return;
+                    
+                    // Destroy existing chart if it exists
+                    if (window.chartInstance<?= $quiz['id'] ?>) {
+                        window.chartInstance<?= $quiz['id'] ?>.destroy();
+                    }
+                    
+                    const data = {
+                        labels: [<?php foreach ($attempts as $a): ?>'Attempt #<?= $a['attempt_number'] ?>',<?php endforeach; ?>],
+                        datasets: [{
+                            label: 'Score (%)',
+                            data: [<?php foreach ($attempts as $a): ?><?= calculatePercentage($a['score'], $a['total_points']) ?>,<?php endforeach; ?>],
+                            borderColor: 'rgb(59, 130, 246)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.4,
+                            fill: true,
+                            pointRadius: 6,
+                            pointHoverRadius: 8,
+                            pointBackgroundColor: 'rgb(59, 130, 246)',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2
+                        }]
+                    };
+                    
+                    window.chartInstance<?= $quiz['id'] ?> = new Chart(ctx, {
+                        type: 'line',
+                        data: data,
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                legend: {
+                                    display: false
+                                },
+                                tooltip: {
+                                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                    padding: 12,
+                                    titleFont: {
+                                        size: 14
+                                    },
+                                    bodyFont: {
+                                        size: 13
+                                    },
+                                    callbacks: {
+                                        label: function(context) {
+                                            return 'Score: ' + context.parsed.y + '%';
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 100,
+                                    ticks: {
+                                        callback: function(value) {
+                                            return value + '%';
+                                        },
+                                        font: {
+                                            size: 11
+                                        }
+                                    },
+                                    grid: {
+                                        color: 'rgba(0, 0, 0, 0.05)'
+                                    }
+                                },
+                                x: {
+                                    grid: {
+                                        display: false
+                                    },
+                                    ticks: {
+                                        font: {
+                                            size: 11
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+                </script>
                 <?php endforeach; ?>
             </div>
             <?php endif; ?>
