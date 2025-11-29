@@ -2,59 +2,282 @@
 session_start();
 require_once '../config/db_conn.php';
 
-// Redirect if not student
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
     header("Location: ../public/index.php");
     exit();
 }
 
-$studentId = $_SESSION['user_id'];
+if (!isset($_GET['id']) || empty($_GET['id'])) {
+    header("Location: resources.php");
+    exit();
+}
 
-// Get student info
-$stmt = $conn->prepare("SELECT firstname, lastname, email, profile_pic, gender FROM users WHERE id = ?");
+$studentId = $_SESSION['user_id'];
+$moduleId = (int)$_GET['id'];
+
+$stmt = $conn->prepare("SELECT firstname, lastname, profile_pic, gender FROM users WHERE id = ?");
 $stmt->execute([$studentId]);
 $student = $stmt->fetch(PDO::FETCH_ASSOC);
 $studentName = $student ? $student['firstname'] . " " . $student['lastname'] : "Student";
 
-// Default avatar
 if (!empty($student['gender'])) {
-    if (strtolower($student['gender']) === "male") {
-        $defaultAvatar = "../assets/img/avatar_male.png";
-    } elseif (strtolower($student['gender']) === "female") {
-        $defaultAvatar = "../assets/img/avatar_female.png";
-    } else {
-        $defaultAvatar = "../assets/img/avatar_neutral.png";
-    }
+    $defaultAvatar = strtolower($student['gender']) === "male" ? "../assets/img/avatar_male.png" : 
+                     (strtolower($student['gender']) === "female" ? "../assets/img/avatar_female.png" : "../assets/img/avatar_neutral.png");
 } else {
     $defaultAvatar = "../assets/img/avatar_neutral.png";
 }
 
-// Profile picture
 $profilePic = !empty($student['profile_pic']) ? "../" . $student['profile_pic'] : $defaultAvatar;
 
-// FIX: Fetch all available modules (only published ones)
+// FIXED: Changed from 'active' to 'published' to match your database
 $stmt = $conn->prepare("
-    SELECT m.id, m.title, m.description, m.content, COALESCE(sp.status, 'Pending') AS status
+    SELECT m.id, m.title, m.description, m.content, m.created_at,
+           COALESCE(sp.status, 'Pending') AS status
     FROM modules m
     LEFT JOIN student_progress sp ON sp.module_id = m.id AND sp.student_id = ?
-    WHERE m.status = 'published'
-    ORDER BY m.display_order ASC, m.created_at DESC
+    WHERE m.id = ? AND m.status = 'published'
 ");
-$stmt->execute([$studentId]);
-$modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$stmt->execute([$studentId, $moduleId]);
+$module = $stmt->fetch(PDO::FETCH_ASSOC);
 
-// Daily tip
-$dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMIT 1")->fetchColumn();
+if (!$module) {
+    header("Location: resources.php");
+    exit();
+}
+
+function convertPPTXtoPDF($pptxPath) {
+    $pdfPath = str_replace(['.pptx', '.ppt'], '.pdf', $pptxPath);
+    if (file_exists($pdfPath)) {
+        return $pdfPath;
+    }
+    $outputDir = dirname($pptxPath);
+    $command = "soffice --headless --convert-to pdf --outdir " . escapeshellarg($outputDir) . " " . escapeshellarg($pptxPath) . " 2>&1";
+    exec($command, $output, $returnCode);
+    if (file_exists($pdfPath)) {
+        return $pdfPath;
+    }
+    return false;
+}
+
+$moduleContent = '';
+$pdfFileUrl = '';
+
+if (!empty($module['content'])) {
+    // FIXED: Don't add ../ if the path already starts with ../
+    if (strpos($module['content'], '../') === 0) {
+        $filePath = $module['content'];
+    } else {
+        $filePath = "../" . $module['content'];
+    }
+    
+    if (file_exists($filePath)) {
+        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        
+        if (in_array($extension, ['pptx', 'ppt'])) {
+            $pdfPath = convertPPTXtoPDF($filePath);
+            
+            if ($pdfPath && file_exists($pdfPath)) {
+                $pdfFileUrl = $pdfPath;
+                $moduleContent = '
+                <div class="space-y-4" x-data="{ fullscreen: false }">
+                    <div class="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-xl flex items-center justify-between shadow-lg">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-file-powerpoint text-2xl"></i>
+                            <div>
+                                <p class="font-semibold">PowerPoint Presentation (PDF)</p>
+                                <p class="text-sm text-blue-100">' . htmlspecialchars(basename($filePath)) . '</p>
+                            </div>
+                        </div>
+                        <a href="' . htmlspecialchars($filePath) . '" download class="bg-white text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-50 transition font-medium text-sm flex items-center gap-2">
+                            <i class="fas fa-download"></i>
+                            Download
+                        </a>
+                    </div>
+                    
+                    <div class="bg-white rounded-2xl overflow-hidden shadow-2xl border-2 border-gray-200" style="height:750px;">
+                        <iframe src="' . htmlspecialchars($pdfFileUrl) . '#toolbar=1&navpanes=1&scrollbar=1" 
+                                class="w-full h-full border-0"
+                                type="application/pdf"
+                                title="PowerPoint Presentation">
+                        </iframe>
+                    </div>
+                    
+                    <div class="flex gap-3 justify-center flex-wrap">
+                        <button @click="fullscreen = true" class="bg-purple-600 text-white px-6 py-3 rounded-xl hover:bg-purple-700 transition font-semibold inline-flex items-center gap-2 shadow-lg">
+                            <i class="fas fa-expand"></i>
+                            View Fullscreen
+                        </button>
+                        <a href="' . htmlspecialchars($pdfFileUrl) . '" target="_blank" class="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition font-semibold inline-flex items-center gap-2">
+                            <i class="fas fa-external-link-alt"></i>
+                            Open in New Tab
+                        </a>
+                    </div>
+                    
+                    <!-- Fullscreen Modal -->
+                    <div x-show="fullscreen" 
+                         class="fixed inset-0 z-[100] bg-black" 
+                         x-transition
+                         @keydown.escape.window="fullscreen = false"
+                         x-cloak>
+                        <div class="relative w-full h-full">
+                            <button @click="fullscreen = false" 
+                                    class="absolute top-4 right-4 z-10 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition font-medium flex items-center gap-2 shadow-lg">
+                                <i class="fas fa-times"></i>
+                                Close
+                            </button>
+                            <iframe src="' . htmlspecialchars($pdfFileUrl) . '#toolbar=0&navpanes=0&scrollbar=1&view=FitH" 
+                                    class="w-full h-full border-0"
+                                    type="application/pdf">
+                            </iframe>
+                        </div>
+                    </div>
+                </div>';
+            } else {
+                $moduleContent = '
+                <div class="max-w-2xl mx-auto">
+                    <div class="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-8 text-center mb-6">
+                        <div class="text-5xl mb-4">⚠️</div>
+                        <h3 class="text-xl font-bold text-yellow-800 mb-2">PDF Conversion Unavailable</h3>
+                        <p class="text-yellow-700 mb-4">LibreOffice is not installed. Please download the presentation.</p>
+                    </div>
+                    <div class="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl p-12 text-white text-center shadow-2xl">
+                        <div class="mb-8">
+                            <div class="inline-flex items-center justify-center w-24 h-24 bg-white/20 rounded-full mb-6">
+                                <i class="fas fa-file-powerpoint text-5xl"></i>
+                            </div>
+                            <h2 class="text-3xl font-bold mb-3">PowerPoint Presentation</h2>
+                            <p class="text-blue-100">' . htmlspecialchars(basename($filePath)) . '</p>
+                        </div>
+                        <div class="space-y-4 max-w-md mx-auto">
+                            <a href="' . htmlspecialchars($filePath) . '" target="_blank" class="block bg-white text-blue-700 px-8 py-4 rounded-2xl shadow-xl hover:bg-blue-50 font-bold text-lg">📺 View</a>
+                            <a href="' . htmlspecialchars($filePath) . '" download class="block bg-blue-800 text-white px-8 py-4 rounded-2xl hover:bg-blue-900 font-bold text-lg">⬇️ Download</a>
+                        </div>
+                    </div>
+                </div>';
+            }
+            
+        } elseif ($extension === 'pdf') {
+            $pdfFileUrl = $filePath;
+            $moduleContent = '
+            <div class="space-y-4" x-data="{ fullscreen: false }">
+                <div class="bg-gradient-to-r from-red-500 to-red-600 text-white p-4 rounded-xl flex items-center justify-between shadow-lg">
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-file-pdf text-2xl"></i>
+                        <div>
+                            <p class="font-semibold">PDF Document</p>
+                            <p class="text-sm text-red-100">' . htmlspecialchars(basename($filePath)) . '</p>
+                        </div>
+                    </div>
+                    <a href="' . htmlspecialchars($filePath) . '" download class="bg-white text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition font-medium text-sm flex items-center gap-2">
+                        <i class="fas fa-download"></i>
+                        Download
+                    </a>
+                </div>
+                
+                <div class="bg-white rounded-2xl overflow-hidden shadow-2xl border-2 border-gray-200" style="height:750px;">
+                    <iframe src="' . htmlspecialchars($filePath) . '#toolbar=1&navpanes=1&scrollbar=1" 
+                            class="w-full h-full border-0" 
+                            type="application/pdf"
+                            title="PDF Document">
+                    </iframe>
+                </div>
+                
+                <div class="flex gap-3 justify-center flex-wrap">
+                    <button @click="fullscreen = true" class="bg-purple-600 text-white px-6 py-3 rounded-xl hover:bg-purple-700 transition font-semibold inline-flex items-center gap-2 shadow-lg">
+                        <i class="fas fa-expand"></i>
+                        View Fullscreen
+                    </button>
+                    <a href="' . htmlspecialchars($filePath) . '" target="_blank" class="bg-red-600 text-white px-6 py-3 rounded-xl hover:bg-red-700 transition font-semibold inline-flex items-center gap-2">
+                        <i class="fas fa-external-link-alt"></i>
+                        Open in New Tab
+                    </a>
+                </div>
+                
+                <!-- Fullscreen Modal -->
+                <div x-show="fullscreen" 
+                     class="fixed inset-0 z-[100] bg-black" 
+                     x-transition
+                     @keydown.escape.window="fullscreen = false"
+                     x-cloak>
+                    <div class="relative w-full h-full">
+                        <button @click="fullscreen = false" 
+                                class="absolute top-4 right-4 z-10 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition font-medium flex items-center gap-2 shadow-lg">
+                            <i class="fas fa-times"></i>
+                            Close
+                        </button>
+                        <iframe src="' . htmlspecialchars($filePath) . '#toolbar=0&navpanes=0&scrollbar=1&view=FitH" 
+                                class="w-full h-full border-0"
+                                type="application/pdf">
+                        </iframe>
+                    </div>
+                </div>
+                
+                <div class="bg-green-50 border-2 border-green-200 rounded-xl p-4 text-center">
+                    <p class="text-sm text-green-800">
+                        <strong>✓ Viewing PDF directly in browser</strong> - Click "View Fullscreen" for best mobile experience
+                    </p>
+                </div>
+            </div>';
+            
+        } elseif (in_array($extension, ['docx', 'doc'])) {
+            $moduleContent = '
+            <div class="bg-gradient-to-br from-green-600 to-emerald-700 rounded-3xl p-12 text-white text-center shadow-2xl max-w-2xl mx-auto">
+                <div class="mb-8">
+                    <div class="inline-flex items-center justify-center w-24 h-24 bg-white/20 rounded-full mb-6">
+                        <i class="fas fa-file-word text-5xl"></i>
+                    </div>
+                    <h2 class="text-3xl font-bold mb-3">Word Document</h2>
+                    <p class="text-green-100">' . htmlspecialchars(basename($filePath)) . '</p>
+                </div>
+                <div class="space-y-3">
+                    <a href="' . htmlspecialchars($filePath) . '" target="_blank" class="block bg-white text-green-700 px-8 py-4 rounded-2xl shadow-xl hover:bg-green-50 font-bold text-lg">📄 Open</a>
+                    <a href="' . htmlspecialchars($filePath) . '" download class="block bg-green-800 text-white px-8 py-4 rounded-2xl hover:bg-green-900 font-bold text-lg">⬇️ Download</a>
+                </div>
+            </div>';
+            
+        } elseif (in_array($extension, ['html', 'htm'])) {
+            $moduleContent = file_get_contents($filePath);
+            
+        } elseif ($extension === 'txt') {
+            $moduleContent = '<div class="bg-white p-8 rounded-2xl shadow-lg border-2 max-w-4xl mx-auto"><pre class="whitespace-pre-wrap font-mono text-sm">' . htmlspecialchars(file_get_contents($filePath)) . '</pre></div>';
+        }
+    } else {
+        // File doesn't exist, show error with the path being looked for
+        $moduleContent = '<div class="bg-red-50 border-2 border-red-200 rounded-2xl p-8 text-center max-w-2xl mx-auto">
+            <div class="text-5xl mb-4">❌</div>
+            <h3 class="text-xl font-bold text-red-800 mb-2">File Not Found</h3>
+            <p class="text-red-700 mb-4">The module file could not be found at:</p>
+            <p class="text-sm font-mono bg-red-100 p-3 rounded text-red-900 break-all">' . htmlspecialchars($filePath) . '</p>
+            <p class="text-sm text-red-600 mt-4">Please contact your instructor.</p>
+        </div>';
+    }
+} else {
+    // No content field value
+    $moduleContent = '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center"><i class="fas fa-inbox text-5xl text-gray-300 mb-4"></i><p class="text-gray-500 text-lg">No content available for this module.</p></div>';
+}
+
+if ($module['status'] === 'Pending') {
+    $stmt = $conn->prepare("INSERT INTO student_progress (student_id, module_id, status, started_at) VALUES (?, ?, 'In Progress', NOW())");
+    $stmt->execute([$studentId, $moduleId]);
+}
+
+$statusClass = match (strtolower($module['status'])) {
+    'completed' => 'bg-green-100 text-green-700',
+    'in progress' => 'bg-blue-100 text-blue-700',
+    'pending' => 'bg-yellow-100 text-yellow-700',
+    default => 'bg-gray-100 text-gray-700'
+};
 ?>
 <!DOCTYPE html>
 <html lang="en" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Learning Resources - MedAce</title>
+    <title><?= htmlspecialchars($module['title']) ?> - MedAce</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <script>
         tailwind.config = {
             theme: {
@@ -150,15 +373,6 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
             width: auto;
         }
 
-        .card-hover {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .card-hover:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-        }
-
         [x-cloak] { display: none !important; }
 
         @media (max-width: 1024px) {
@@ -174,7 +388,7 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
         }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800 antialiased" x-data="{ activeFilter: 'All', searchQuery: '' }">
+<body class="bg-gray-50 text-gray-800 antialiased" x-data="{ showCompleteModal: false }">
 
 <div class="flex min-h-screen">
     <!-- Sidebar -->
@@ -239,126 +453,85 @@ $dailyTip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMI
                     <i class="fas fa-bars text-gray-600 text-xl"></i>
                 </button>
                 <div class="flex items-center space-x-4">
-                    <h1 class="text-xl font-bold text-gray-900">Learning Resources</h1>
+                    <a href="resources.php" class="inline-flex items-center text-primary-600 hover:text-primary-700 font-medium text-sm">
+                        <i class="fas fa-arrow-left mr-2"></i>
+                        Back to Resources
+                    </a>
                 </div>
             </div>
         </header>
 
         <!-- Content -->
         <div class="px-4 sm:px-6 lg:px-8 py-8">
-            <!-- Search and Filters -->
-            <div class="flex flex-col sm:flex-row gap-4 mb-6 animate-fade-in-up">
-                <div class="relative flex-1">
-                    <input type="text" x-model="searchQuery" placeholder="Search modules..." 
-                           class="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all">
-                    <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                </div>
-                <div class="flex gap-2 flex-wrap">
-                    <button @click="activeFilter = 'All'" :class="activeFilter === 'All' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'" 
-                            class="px-4 py-3 rounded-lg font-medium transition-all shadow-sm whitespace-nowrap">
-                        All
-                    </button>
-                    <button @click="activeFilter = 'Pending'" :class="activeFilter === 'Pending' ? 'bg-amber-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'" 
-                            class="px-4 py-3 rounded-lg font-medium transition-all shadow-sm whitespace-nowrap">
-                        Pending
-                    </button>
-                    <button @click="activeFilter = 'In Progress'" :class="activeFilter === 'In Progress' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'" 
-                            class="px-4 py-3 rounded-lg font-medium transition-all shadow-sm whitespace-nowrap">
-                        In Progress
-                    </button>
-                    <button @click="activeFilter = 'Completed'" :class="activeFilter === 'Completed' ? 'bg-green-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'" 
-                            class="px-4 py-3 rounded-lg font-medium transition-all shadow-sm whitespace-nowrap">
-                        Completed
-                    </button>
-                </div>
-            </div>
-
-            <!-- Modules Count -->
-            <div class="mb-4 text-sm text-gray-600 animate-fade-in-up">
-                Showing <strong><?= count($modules) ?></strong> published module(s)
-            </div>
-
-            <!-- Modules Grid -->
-            <?php if (empty($modules)): ?>
-            <div class="text-center py-20 animate-fade-in-up">
-                <div class="inline-flex items-center justify-center w-20 h-20 bg-gray-100 rounded-full mb-4">
-                    <i class="fas fa-book text-4xl text-gray-400"></i>
-                </div>
-                <h3 class="text-lg font-semibold text-gray-900 mb-2">No published modules yet</h3>
-                <p class="text-gray-600">Check back later for new learning materials</p>
-            </div>
-            <?php else: ?>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                <?php foreach ($modules as $module): ?>
-                    <?php
-                        $coverImage = "../assets/img/module/module_default.jpg";
-                        $status = ucwords(strtolower($module['status']));
-                        $statusConfig = match (strtolower($module['status'])) {
-                            'completed' => ['bg' => 'bg-green-100', 'text' => 'text-green-700', 'icon' => 'fa-check-circle'],
-                            'in progress' => ['bg' => 'bg-blue-100', 'text' => 'text-blue-700', 'icon' => 'fa-spinner'],
-                            'pending' => ['bg' => 'bg-amber-100', 'text' => 'text-amber-700', 'icon' => 'fa-clock'],
-                            default => ['bg' => 'bg-gray-100', 'text' => 'text-gray-700', 'icon' => 'fa-info-circle']
-                        };
-                        $moduleTitle = htmlspecialchars($module['title']);
-                        $moduleTitleLower = strtolower($module['title']);
-                    ?>
-                    <div x-show="(activeFilter === 'All' || activeFilter === '<?= htmlspecialchars($status) ?>') && 
-                                  (searchQuery === '' || '<?= htmlspecialchars($moduleTitleLower) ?>'.includes(searchQuery.toLowerCase()))"
-                         x-cloak
-                         class="bg-white border border-gray-200 rounded-xl overflow-hidden card-hover animate-fade-in-up">
-                        <!-- Cover Image -->
-                        <div class="h-40 overflow-hidden relative group">
-                            <img src="<?= $coverImage ?>" alt="<?= $moduleTitle ?>"
-                                 class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500">
-                            <div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
-                            <div class="absolute bottom-3 left-3 right-3">
-                                <div class="flex items-center justify-between">
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold <?= $statusConfig['bg'] ?> <?= $statusConfig['text'] ?> backdrop-blur-sm">
-                                        <i class="fas <?= $statusConfig['icon'] ?> mr-1"></i>
-                                        <?= htmlspecialchars($status) ?>
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Content -->
-                        <div class="p-5">
-                            <h3 class="font-semibold text-gray-900 text-lg mb-2">
-                                <?= $moduleTitle ?>
-                            </h3>
-                            <p class="text-sm text-gray-600 mb-4 line-clamp-3">
-                                <?= htmlspecialchars($module['description'] ?: "No description available.") ?>
-                            </p>
-
-                            <!-- Action Button -->
-                            <a href="view_module.php?id=<?= $module['id'] ?>"
-                               class="block w-full text-center bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors">
-                                <i class="fas fa-book-open mr-2"></i>
-                                Start Learning
-                            </a>
-                        </div>
+            <!-- Module Header -->
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6 animate-fade-in-up">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div class="flex-1">
+                        <h1 class="text-3xl font-bold text-gray-900 mb-2"><?= htmlspecialchars($module['title']) ?></h1>
+                        <?php if($module['description']): ?>
+                            <p class="text-gray-600"><?= htmlspecialchars($module['description']) ?></p>
+                        <?php endif; ?>
+                        <p class="text-sm text-gray-500 mt-2">
+                            <i class="fas fa-calendar mr-2"></i>
+                            Created: <?= date('F j, Y', strtotime($module['created_at'])) ?>
+                        </p>
                     </div>
-                <?php endforeach; ?>
-            </div>
-            <?php endif; ?>
-
-            <!-- Daily Tip -->
-            <?php if ($dailyTip): ?>
-            <div class="bg-gradient-to-br from-purple-50 to-blue-50 rounded-2xl p-6 sm:p-8 text-center border-2 border-purple-200 shadow-sm mt-8 animate-fade-in-up" style="animation-delay: 0.2s;">
-                <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full mb-4 shadow-lg">
-                    <i class="fas fa-lightbulb text-2xl text-white"></i>
+                    <div class="flex flex-col items-end gap-3">
+                        <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold <?= $statusClass ?>">
+                            <i class="fas <?= strtolower($module['status']) === 'completed' ? 'fa-check-circle' : (strtolower($module['status']) === 'in progress' ? 'fa-spinner' : 'fa-clock') ?> mr-2"></i>
+                            <?= htmlspecialchars(ucwords($module['status'])) ?>
+                        </span>
+                        <?php if(strtolower($module['status']) !== 'completed'): ?>
+                            <button @click="showCompleteModal = true" 
+                                    class="bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-semibold transition-colors shadow-sm">
+                                <i class="fas fa-check mr-2"></i>
+                                Mark Complete
+                            </button>
+                        <?php endif; ?>
+                    </div>
                 </div>
-                <h3 class="text-lg font-semibold mb-3 text-purple-900">💡 Daily Nursing Tip</h3>
-                <p class="text-gray-700 text-lg italic leading-relaxed max-w-2xl mx-auto">
-                    "<?= htmlspecialchars($dailyTip) ?>"
-                </p>
             </div>
-            <?php endif; ?>
+
+            <!-- Module Content -->
+            <div class="animate-fade-in-up" style="animation-delay: 0.1s;">
+                <?= $moduleContent ?>
+            </div>
         </div>
     </main>
 </div>
 
-<script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<!-- Complete Modal -->
+<div x-show="showCompleteModal" 
+     x-transition
+     class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+     @click.away="showCompleteModal = false"
+     x-cloak>
+    <div class="bg-white rounded-2xl max-w-md w-full p-8 animate-fade-in-up">
+        <div class="text-center">
+            <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
+                <i class="fas fa-check text-3xl text-green-600"></i>
+            </div>
+            <h3 class="text-2xl font-bold text-gray-900 mb-2">Mark as Complete?</h3>
+            <p class="text-gray-600 mb-6">Are you sure you want to mark this module as completed?</p>
+            
+            <form action="../actions/complete_module.php" method="POST" class="space-y-3">
+                <input type="hidden" name="module_id" value="<?= $moduleId ?>">
+                <input type="hidden" name="student_id" value="<?= $studentId ?>">
+                <button type="submit" 
+                        class="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors">
+                    <i class="fas fa-check mr-2"></i>
+                    Yes, Mark Complete
+                </button>
+                <button type="button" 
+                        @click="showCompleteModal = false" 
+                        class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 px-6 py-3 rounded-lg font-semibold transition-colors">
+                    Cancel
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
     let sidebarExpanded = false;
 
