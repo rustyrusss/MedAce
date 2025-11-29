@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Nov 25, 2025 at 06:01 PM
+-- Generation Time: Nov 29, 2025 at 04:55 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -104,6 +104,7 @@ CREATE TABLE `modules` (
   `title` varchar(255) DEFAULT NULL,
   `description` text DEFAULT NULL,
   `content` text DEFAULT NULL,
+  `cover_image` varchar(255) DEFAULT NULL,
   `order_number` int(11) DEFAULT NULL,
   `created_at` datetime DEFAULT current_timestamp(),
   `updated_at` datetime NOT NULL,
@@ -115,10 +116,10 @@ CREATE TABLE `modules` (
 -- Dumping data for table `modules`
 --
 
-INSERT INTO `modules` (`id`, `professor_id`, `title`, `description`, `content`, `order_number`, `created_at`, `updated_at`, `status`, `display_order`) VALUES
-(1, 11, 'MedAce', 'Try', 'uploads/modules/1759665851_MedAce A Smart Web-Based Review and Progress Tracker for Allied Health Licensure Exams (1).pptx', NULL, '2025-10-05 20:04:11', '0000-00-00 00:00:00', 'published', 0),
-(2, 11, 'Think Green', 'Think Green', 'uploads/modules/1760256144_Think Green · SlidesMania.pptx', NULL, '2025-10-12 16:02:24', '0000-00-00 00:00:00', 'published', 1),
-(10, 11, 'nursing', 'nursing', '../uploads/modules/module_6925dcb7310289.43839036.pdf', NULL, '2025-11-26 00:43:35', '0000-00-00 00:00:00', 'published', 2);
+INSERT INTO `modules` (`id`, `professor_id`, `title`, `description`, `content`, `cover_image`, `order_number`, `created_at`, `updated_at`, `status`, `display_order`) VALUES
+(1, 11, 'MedAce', 'Try', '../uploads/modules/module_6929b9a3515915.10667317.pdf', NULL, NULL, '2025-10-05 20:04:11', '0000-00-00 00:00:00', 'published', 0),
+(2, 11, 'Think Green', 'Think Green', 'uploads/modules/1760256144_Think Green · SlidesMania.pptx', NULL, NULL, '2025-10-12 16:02:24', '0000-00-00 00:00:00', 'published', 1),
+(10, 11, 'nursing', 'nursing', '../uploads/modules/module_6925dcb7310289.43839036.pdf', NULL, NULL, '2025-11-26 00:43:35', '0000-00-00 00:00:00', 'published', 2);
 
 -- --------------------------------------------------------
 
@@ -208,21 +209,22 @@ CREATE TABLE `quizzes` (
   `module_id` int(11) DEFAULT NULL,
   `lesson_id` int(11) DEFAULT NULL,
   `content` longtext NOT NULL,
-  `time_limit` int(11) DEFAULT 0
+  `time_limit` int(11) DEFAULT 0,
+  `total_questions` int(11) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `quizzes`
 --
 
-INSERT INTO `quizzes` (`id`, `title`, `description`, `created_by`, `created_at`, `status`, `publish_time`, `deadline_time`, `professor_id`, `module_id`, `lesson_id`, `content`, `time_limit`) VALUES
-(6, 'TEST', 'TEST', NULL, '2025-09-15 12:12:57', 'active', NULL, NULL, 11, NULL, 9, '{\"instructions\":\"TEST LANG PO\"}', 0),
-(8, 'TRY LANG PO ATE', 'TRYYYY', NULL, '2025-09-15 12:20:59', 'active', NULL, NULL, 11, NULL, 8, '{\"instructions\":\"TRYYYYY\"}', 10),
-(9, 'QUIZ NO. 2', 'INTRODUCTION TO HUMAN ANATOMY', NULL, '2025-09-18 10:19:24', 'inactive', NULL, NULL, 11, NULL, 7, '{\"instructions\":\"Multiple Choice\"}', 2),
-(10, 'Test ulit', 'Test ulit', NULL, '2025-09-18 10:29:29', 'active', '2025-09-18 18:28:00', '2025-09-19 17:28:00', 11, NULL, 8, '{\"instructions\":\"Testing ulit\"}', 0),
-(11, 'MUP', 'MUP', NULL, '2025-11-15 07:35:36', 'active', NULL, '2025-11-16 18:38:00', 11, NULL, 8, '{\"instructions\":\"MUP\"}', 0),
-(12, 'Basic Nursing Quiz', 'Basic quiz for nursing students', NULL, '2025-11-19 07:35:27', 'active', '2025-11-19 15:34:00', '2025-11-20 17:34:00', 11, NULL, 7, '{\"instructions\":\"Choose the best answer possible. As for the essays write the best answer you think suits the problem.\"}', 8),
-(14, 'try lang', 'try langg', NULL, '2025-11-19 08:01:53', 'active', NULL, NULL, 11, 2, NULL, 'try', 8);
+INSERT INTO `quizzes` (`id`, `title`, `description`, `created_by`, `created_at`, `status`, `publish_time`, `deadline_time`, `professor_id`, `module_id`, `lesson_id`, `content`, `time_limit`, `total_questions`) VALUES
+(6, 'TEST', 'TEST', NULL, '2025-09-15 12:12:57', 'active', NULL, NULL, 11, NULL, 9, '{\"instructions\":\"TEST LANG PO\"}', 0, 0),
+(8, 'TRY LANG PO ATE', 'TRYYYY', NULL, '2025-09-15 12:20:59', 'active', NULL, NULL, 11, NULL, 8, '{\"instructions\":\"TRYYYYY\"}', 10, 0),
+(9, 'QUIZ NO. 2', 'INTRODUCTION TO HUMAN ANATOMY', NULL, '2025-09-18 10:19:24', 'inactive', NULL, NULL, 11, NULL, 7, '{\"instructions\":\"Multiple Choice\"}', 2, 0),
+(10, 'Test ulit', 'Test ulit', NULL, '2025-09-18 10:29:29', 'active', '2025-09-18 18:28:00', '2025-09-19 17:28:00', 11, NULL, 8, '{\"instructions\":\"Testing ulit\"}', 0, 0),
+(11, 'MUP', 'MUP', NULL, '2025-11-15 07:35:36', 'active', NULL, '2025-11-16 18:38:00', 11, NULL, 8, '{\"instructions\":\"MUP\"}', 0, 0),
+(12, 'Basic Nursing Quiz', 'Basic quiz for nursing students', NULL, '2025-11-19 07:35:27', 'active', '2025-11-19 15:34:00', '2025-11-20 17:34:00', 11, NULL, 7, '{\"instructions\":\"Choose the best answer possible. As for the essays write the best answer you think suits the problem.\"}', 8, 0),
+(14, 'try lang', 'try langg', NULL, '2025-11-19 08:01:53', 'active', NULL, NULL, 11, 2, NULL, 'try', 8, 0);
 
 -- --------------------------------------------------------
 
@@ -271,7 +273,26 @@ INSERT INTO `quiz_attempts` (`id`, `quiz_id`, `student_id`, `status`, `score`, `
 (93, 12, 10, 'Completed', 5, '2025-11-25 10:12:08', 10),
 (94, 11, 10, 'Completed', 0, '2025-11-25 10:12:29', 7),
 (95, 11, 10, 'Completed', 0, '2025-11-25 10:16:34', 8),
-(96, 10, 10, 'Completed', 0, '2025-11-25 15:16:05', 1);
+(96, 10, 10, 'Completed', 0, '2025-11-25 15:16:05', 1),
+(97, 11, 10, '', 0, '2025-11-28 16:02:24', 9),
+(98, 12, 10, '', 0, '2025-11-28 16:02:58', 11),
+(99, 12, 10, 'Completed', 1, '2025-11-29 15:48:47', 12);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `screenshot_attempts`
+--
+
+CREATE TABLE `screenshot_attempts` (
+  `id` int(11) NOT NULL,
+  `student_id` int(11) NOT NULL,
+  `quiz_id` int(11) NOT NULL,
+  `attempt_id` int(11) DEFAULT NULL,
+  `attempted_at` datetime NOT NULL,
+  `ip_address` varchar(50) DEFAULT NULL,
+  `user_agent` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -361,7 +382,16 @@ INSERT INTO `student_answers` (`id`, `attempt_id`, `question_id`, `answer_id`, `
 (157, 93, 22, 78, '2025-11-25 10:12:08', '2025-11-25 10:12:08', NULL),
 (158, 93, 23, 80, '2025-11-25 10:12:08', '2025-11-25 10:12:08', NULL),
 (159, 93, 24, NULL, '2025-11-25 10:12:08', '2025-11-25 10:12:08', 'eas'),
-(160, 93, 25, NULL, '2025-11-25 10:12:08', '2025-11-25 10:12:08', 'asd');
+(160, 93, 25, NULL, '2025-11-25 10:12:08', '2025-11-25 10:12:08', 'asd'),
+(161, 98, 24, NULL, '2025-11-28 16:02:58', '2025-11-28 16:02:58', ''),
+(162, 98, 25, NULL, '2025-11-28 16:02:58', '2025-11-28 16:02:58', ''),
+(163, 99, 19, 63, '2025-11-29 15:48:47', '2025-11-29 15:48:47', NULL),
+(164, 99, 20, 68, '2025-11-29 15:48:47', '2025-11-29 15:48:47', NULL),
+(165, 99, 21, 71, '2025-11-29 15:48:47', '2025-11-29 15:48:47', NULL),
+(166, 99, 22, 75, '2025-11-29 15:48:47', '2025-11-29 15:48:47', NULL),
+(167, 99, 23, 79, '2025-11-29 15:48:47', '2025-11-29 15:48:47', NULL),
+(168, 99, 24, NULL, '2025-11-29 15:48:47', '2025-11-29 15:48:47', 'sadasdas'),
+(169, 99, 25, NULL, '2025-11-29 15:48:47', '2025-11-29 15:48:47', 'sadsadas');
 
 -- --------------------------------------------------------
 
@@ -387,7 +417,8 @@ CREATE TABLE `student_progress` (
 
 INSERT INTO `student_progress` (`id`, `student_id`, `module_id`, `step_type`, `step_id`, `status`, `started_at`, `completed_at`, `updated_at`) VALUES
 (6, 10, 2, 'lesson', 0, 'Completed', '2025-10-12 16:11:56', '2025-11-25 23:16:20', '2025-11-25 23:16:20'),
-(7, 10, 1, 'lesson', 0, 'Completed', '2025-11-15 19:20:45', '2025-11-25 23:17:12', '2025-11-25 23:17:12');
+(7, 10, 1, 'lesson', 0, 'Completed', '2025-11-15 19:20:45', '2025-11-25 23:17:12', '2025-11-25 23:17:12'),
+(9, 10, 10, 'lesson', 0, 'Completed', '2025-11-28 22:45:33', '2025-11-28 23:06:01', '2025-11-28 23:06:01');
 
 -- --------------------------------------------------------
 
@@ -427,7 +458,7 @@ INSERT INTO `users` (`id`, `firstName`, `lastName`, `username`, `email`, `gender
 (8, 'Russel', 'San', 'RusSan', 'RusSan@gmail.com', 'Male', '$2y$10$oUwBOK6zAwW5KLGo.ctbCOhnUI8rn009JrxhYoVg3KswrHqyK1RVS', 'student', '1B', '1', '', 'approved', '2025-09-12 18:41:36', NULL),
 (9, 'Dean', 'Ambrose', 'DeanAmbrose', 'DeanAmbrose@gmail.com', 'Male', '$2y$10$9ESbmXBUKXAeql7LW5GP1.ERSMm170BrGdecFF9/CneIeiSQnnIXG', 'dean', '1A', '1', '', 'approved', '2025-09-12 18:41:36', NULL),
 (10, 'russel', 'santos', 'Russel', 'Russel@gmail.com', 'Male', '$2y$10$MCnWjRopQARSJ2BvozN5S.C7iC3vOoBq6FiQLSNEWhrEV/jah8piC', 'student', '3B', '3', '', 'approved', '2025-09-12 18:41:36', 'uploads/profile_pics/profile_10_1759149624.jpg'),
-(11, 'Prof', 'lang', 'prof', 'prof@gmail.com', 'Male', '$2y$10$dLiecC3EB4VGZVjgsu4kKefsZL0iyBbJSk9XrDwLPkKx6CmyYHR8O', 'professor', '3D', '3', '', 'approved', '2025-09-12 18:41:36', 'uploads/profiles/profile_11_1764056806.jpg'),
+(11, 'Prof', 'lang', 'prof', 'prof@gmail.com', 'Male', '$2y$10$M3hJQm6IhNc6ShNWmxBpbOtDOKSBS1mYVZJNAn4bTto5aH64m4Tgm', 'professor', '3D', '3', '', 'approved', '2025-09-12 18:41:36', 'uploads/profiles/profile_11_1764056806.jpg'),
 (12, 'Proff', 'profy', 'profy', 'Profy@gmail.com', 'Male', '$2y$10$5uX/JetPE3MlxU8tGlnKWOffISbVE0gl0.s.qQMdNVvPnTWwQrk6W', 'professor', NULL, NULL, '', 'approved', '2025-09-12 18:41:36', NULL),
 (13, '', '', 'Dean', '', 'Male', '123456', 'dean', NULL, NULL, '', 'approved', '2025-09-12 18:41:36', NULL),
 (14, 'Dean', 'Dean', 'dean1', 'dean@gmail.com', 'Male', '$2y$10$/WQUetNkYay0vy1fug8PculcJSCwoT6gEhEimNr6HAINWEVjUZ3wG', 'dean', '3D', '3', '', 'approved', '2025-09-12 18:41:36', NULL),
@@ -496,6 +527,16 @@ ALTER TABLE `quiz_attempts`
   ADD PRIMARY KEY (`id`),
   ADD KEY `fk_quiz_attempts_student` (`student_id`),
   ADD KEY `fk_quiz_attempts_quiz` (`quiz_id`);
+
+--
+-- Indexes for table `screenshot_attempts`
+--
+ALTER TABLE `screenshot_attempts`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `attempt_id` (`attempt_id`),
+  ADD KEY `idx_student` (`student_id`),
+  ADD KEY `idx_quiz` (`quiz_id`),
+  ADD KEY `idx_date` (`attempted_at`);
 
 --
 -- Indexes for table `student_answers`
@@ -570,19 +611,25 @@ ALTER TABLE `quizzes`
 -- AUTO_INCREMENT for table `quiz_attempts`
 --
 ALTER TABLE `quiz_attempts`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=97;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=100;
+
+--
+-- AUTO_INCREMENT for table `screenshot_attempts`
+--
+ALTER TABLE `screenshot_attempts`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `student_answers`
 --
 ALTER TABLE `student_answers`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=161;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=170;
 
 --
 -- AUTO_INCREMENT for table `student_progress`
 --
 ALTER TABLE `student_progress`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT for table `users`
@@ -635,6 +682,14 @@ ALTER TABLE `quiz_attempts`
   ADD CONSTRAINT `fk_quiz_attempts_student` FOREIGN KEY (`student_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `quiz_attempts_ibfk_1` FOREIGN KEY (`quiz_id`) REFERENCES `quizzes` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `quiz_attempts_ibfk_2` FOREIGN KEY (`student_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `screenshot_attempts`
+--
+ALTER TABLE `screenshot_attempts`
+  ADD CONSTRAINT `screenshot_attempts_ibfk_1` FOREIGN KEY (`student_id`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `screenshot_attempts_ibfk_2` FOREIGN KEY (`quiz_id`) REFERENCES `quizzes` (`id`),
+  ADD CONSTRAINT `screenshot_attempts_ibfk_3` FOREIGN KEY (`attempt_id`) REFERENCES `quiz_attempts` (`id`);
 
 --
 -- Constraints for table `student_answers`
