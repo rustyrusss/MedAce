@@ -85,6 +85,9 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                             800: '#075985',
                             900: '#0c4a6e',
                         }
+                    },
+                    screens: {
+                        'xs': '475px',
                     }
                 }
             }
@@ -95,6 +98,12 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+        }
+
+        html, body {
+            overflow-x: hidden;
+            width: 100%;
+            max-width: 100vw;
         }
 
         body {
@@ -151,28 +160,98 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
         }
 
         .sidebar-transition {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                        width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        .sidebar-collapsed {
-            width: 5rem;
+        /* Desktop Sidebar Styles */
+        @media (min-width: 1025px) {
+            #sidebar {
+                width: 5rem;
+            }
+
+            #sidebar.sidebar-expanded {
+                width: 18rem;
+            }
+
+            #sidebar .nav-text,
+            #sidebar .profile-info {
+                opacity: 0;
+                width: 0;
+                overflow: hidden;
+                transition: opacity 0.2s ease;
+            }
+
+            #sidebar.sidebar-expanded .nav-text,
+            #sidebar.sidebar-expanded .profile-info {
+                opacity: 1;
+                width: auto;
+                transition: opacity 0.3s ease 0.1s;
+            }
+
+            #main-content {
+                margin-left: 5rem;
+            }
+
+            #main-content.content-expanded {
+                margin-left: 18rem;
+            }
         }
 
-        .sidebar-collapsed .nav-text,
-        .sidebar-collapsed .profile-info {
-            opacity: 0;
-            width: 0;
+        /* Mobile Sidebar Styles */
+        @media (max-width: 1024px) {
+            #sidebar {
+                width: 18rem;
+                transform: translateX(-100%);
+            }
+
+            #sidebar.sidebar-expanded {
+                transform: translateX(0);
+            }
+
+            #sidebar .nav-text,
+            #sidebar .profile-info {
+                opacity: 1;
+                width: auto;
+            }
+
+            #main-content {
+                margin-left: 0 !important;
+            }
+        }
+
+        @media (max-width: 768px) {
+            #sidebar {
+                width: 16rem;
+            }
+        }
+
+        @media (max-width: 640px) {
+            #sidebar {
+                width: 85vw;
+                max-width: 20rem;
+            }
+        }
+
+        /* Prevent body scroll when sidebar is open on mobile */
+        body.sidebar-open {
             overflow: hidden;
         }
 
-        .sidebar-expanded {
-            width: 18rem;
+        @media (min-width: 1025px) {
+            body.sidebar-open {
+                overflow: auto;
+            }
         }
 
-        .sidebar-expanded .nav-text,
-        .sidebar-expanded .profile-info {
+        /* Overlay transition */
+        #sidebar-overlay {
+            transition: opacity 0.3s ease;
+            opacity: 0;
+        }
+
+        #sidebar-overlay.show {
             opacity: 1;
-            width: auto;
         }
 
         .card-hover {
@@ -186,16 +265,11 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
 
         [x-cloak] { display: none !important; }
 
-        @media (max-width: 1024px) {
-            .sidebar-collapsed {
-                width: 0;
-                transform: translateX(-100%);
-            }
-            
-            .sidebar-expanded {
-                width: 18rem;
-                transform: translateX(0);
-            }
+        /* Main container responsiveness */
+        .main-container {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden;
         }
     </style>
 </head>
@@ -203,13 +277,13 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
 
 <div class="flex min-h-screen">
     <!-- Sidebar -->
-    <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 sidebar-transition sidebar-collapsed">
+    <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 sidebar-transition">
         <div class="flex flex-col h-full">
             <div class="flex items-center justify-between px-4 py-5 border-b border-gray-200">
                 <div class="flex items-center space-x-3 min-w-0">
                     <div class="relative flex-shrink-0">
-                        <img src="<?= htmlspecialchars($profilePic) ?>" alt="Profile" class="w-12 h-12 rounded-full object-cover ring-2 ring-primary-500">
-                        <span class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full"></span>
+                        <img src="<?= htmlspecialchars($profilePic) ?>" alt="Profile" class="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover ring-2 ring-primary-500">
+                        <span class="absolute bottom-0 right-0 w-3 h-3 sm:w-3.5 sm:h-3.5 bg-green-500 border-2 border-white rounded-full"></span>
                     </div>
                     <div class="profile-info sidebar-transition min-w-0">
                         <h3 class="font-semibold text-gray-900 text-sm truncate"><?= htmlspecialchars(ucwords(strtolower($studentName))) ?></h3>
@@ -218,9 +292,9 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                 </div>
             </div>
 
-            <div class="px-4 py-3 border-b border-gray-200">
-                <button onclick="toggleSidebar()" class="w-full flex items-center justify-center p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600">
-                    <i class="fas fa-bars text-lg"></i>
+            <div class="px-4 py-3 border-b border-gray-200 lg:hidden">
+                <button onclick="closeSidebar()" class="w-full flex items-center justify-center p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600">
+                    <i class="fas fa-times text-lg"></i>
                 </button>
             </div>
 
@@ -256,30 +330,29 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
     <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="closeSidebar()"></div>
 
     <!-- Main Content -->
-    <main id="main-content" class="flex-1 transition-all duration-300" style="margin-left: 5rem;">
+    <main id="main-content" class="flex-1 transition-all duration-300 main-container">
         <!-- Top Bar -->
         <header class="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-4">
-            <div class="flex items-center justify-between">
-                <button onclick="toggleSidebar()" class="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors">
+            <div class="flex items-center justify-between gap-4">
+                <button onclick="toggleSidebar()" class="p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0">
                     <i class="fas fa-bars text-gray-600 text-xl"></i>
                 </button>
-                <div class="flex items-center space-x-4">
-                    <h1 class="text-xl font-bold text-gray-900">Learning Resources</h1>
-                </div>
+                <h1 class="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 truncate">Learning Resources</h1>
+                <div class="w-10"></div> <!-- Spacer for centering -->
             </div>
         </header>
 
         <!-- Content -->
-        <div class="px-4 sm:px-6 lg:px-8 py-8">
+        <div class="px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-full">
             <!-- Success/Error Messages -->
             <?php if ($successMessage): ?>
             <div x-show="showAlert" class="mb-6 animate-slide-down">
                 <div class="bg-green-50 border-l-4 border-green-500 rounded-lg p-4 flex items-start justify-between shadow-sm">
-                    <div class="flex items-start">
-                        <i class="fas fa-check-circle text-green-500 text-xl mr-3 mt-0.5"></i>
-                        <p class="text-green-800 font-medium"><?= htmlspecialchars($successMessage) ?></p>
+                    <div class="flex items-start min-w-0 flex-1">
+                        <i class="fas fa-check-circle text-green-500 text-lg sm:text-xl mr-3 mt-0.5 flex-shrink-0"></i>
+                        <p class="text-green-800 font-medium text-sm sm:text-base break-words"><?= htmlspecialchars($successMessage) ?></p>
                     </div>
-                    <button @click="showAlert = false" class="text-green-500 hover:text-green-700 ml-4">
+                    <button @click="showAlert = false" class="text-green-500 hover:text-green-700 ml-4 flex-shrink-0">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
@@ -289,11 +362,11 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
             <?php if ($errorMessage): ?>
             <div x-show="showAlert" class="mb-6 animate-slide-down">
                 <div class="bg-red-50 border-l-4 border-red-500 rounded-lg p-4 flex items-start justify-between shadow-sm">
-                    <div class="flex items-start">
-                        <i class="fas fa-exclamation-circle text-red-500 text-xl mr-3 mt-0.5"></i>
-                        <p class="text-red-800 font-medium"><?= htmlspecialchars($errorMessage) ?></p>
+                    <div class="flex items-start min-w-0 flex-1">
+                        <i class="fas fa-exclamation-circle text-red-500 text-lg sm:text-xl mr-3 mt-0.5 flex-shrink-0"></i>
+                        <p class="text-red-800 font-medium text-sm sm:text-base break-words"><?= htmlspecialchars($errorMessage) ?></p>
                     </div>
-                    <button @click="showAlert = false" class="text-red-500 hover:text-red-700 ml-4">
+                    <button @click="showAlert = false" class="text-red-500 hover:text-red-700 ml-4 flex-shrink-0">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
@@ -301,49 +374,49 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
             <?php endif; ?>
 
             <!-- Search and Filters -->
-            <div class="flex flex-col sm:flex-row gap-4 mb-6 animate-fade-in-up">
-                <div class="relative flex-1">
+            <div class="flex flex-col gap-4 mb-6 animate-fade-in-up">
+                <div class="relative">
                     <input type="text" x-model="searchQuery" placeholder="Search modules..." 
-                           class="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all">
-                    <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                           class="w-full pl-10 sm:pl-12 pr-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm sm:text-base">
+                    <i class="fas fa-search absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm sm:text-base"></i>
                 </div>
                 <div class="flex gap-2 flex-wrap">
                     <button @click="activeFilter = 'All'" :class="activeFilter === 'All' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'" 
-                            class="px-4 py-3 rounded-lg font-medium transition-all shadow-sm whitespace-nowrap">
+                            class="px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-medium transition-all shadow-sm whitespace-nowrap text-xs sm:text-sm">
                         All
                     </button>
                     <button @click="activeFilter = 'Pending'" :class="activeFilter === 'Pending' ? 'bg-amber-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'" 
-                            class="px-4 py-3 rounded-lg font-medium transition-all shadow-sm whitespace-nowrap">
+                            class="px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-medium transition-all shadow-sm whitespace-nowrap text-xs sm:text-sm">
                         Pending
                     </button>
                     <button @click="activeFilter = 'In Progress'" :class="activeFilter === 'In Progress' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'" 
-                            class="px-4 py-3 rounded-lg font-medium transition-all shadow-sm whitespace-nowrap">
+                            class="px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-medium transition-all shadow-sm whitespace-nowrap text-xs sm:text-sm">
                         In Progress
                     </button>
                     <button @click="activeFilter = 'Completed'" :class="activeFilter === 'Completed' ? 'bg-green-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'" 
-                            class="px-4 py-3 rounded-lg font-medium transition-all shadow-sm whitespace-nowrap">
+                            class="px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-medium transition-all shadow-sm whitespace-nowrap text-xs sm:text-sm">
                         Completed
                     </button>
                 </div>
             </div>
 
             <!-- Modules Count -->
-            <div class="mb-4 text-sm text-gray-600 animate-fade-in-up">
+            <div class="mb-4 text-xs sm:text-sm text-gray-600 animate-fade-in-up">
                 Showing <strong><?= count($modules) ?></strong> available module(s)
             </div>
 
             <!-- Modules Grid -->
             <?php if (empty($modules)): ?>
-            <div class="text-center py-20 animate-fade-in-up">
-                <div class="inline-flex items-center justify-center w-20 h-20 bg-gray-100 rounded-full mb-4">
-                    <i class="fas fa-book text-4xl text-gray-400"></i>
+            <div class="text-center py-12 sm:py-20 animate-fade-in-up">
+                <div class="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-full mb-4">
+                    <i class="fas fa-book text-3xl sm:text-4xl text-gray-400"></i>
                 </div>
-                <h3 class="text-lg font-semibold text-gray-900 mb-2">No modules available yet</h3>
-                <p class="text-gray-600">Check back later for new learning materials</p>
+                <h3 class="text-base sm:text-lg font-semibold text-gray-900 mb-2">No modules available yet</h3>
+                <p class="text-sm sm:text-base text-gray-600">Check back later for new learning materials</p>
             </div>
             <?php else: ?>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                <?php foreach ($modules as $module): ?>
+            <div class="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+                <?php foreach ($modules as $index => $module): ?>
                     <?php
                         $coverImage = "../assets/img/module/module_default.jpg";
                         $status = ucwords(strtolower($module['status']));
@@ -359,15 +432,16 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                     <div x-show="(activeFilter === 'All' || activeFilter === '<?= htmlspecialchars($status) ?>') && 
                                   (searchQuery === '' || '<?= htmlspecialchars($moduleTitleLower) ?>'.includes(searchQuery.toLowerCase()))"
                          x-cloak
-                         class="bg-white border border-gray-200 rounded-xl overflow-hidden card-hover animate-fade-in-up">
+                         class="bg-white border border-gray-200 rounded-xl overflow-hidden card-hover animate-fade-in-up"
+                         style="animation-delay: <?= $index * 0.05 ?>s;">
                         <!-- Cover Image -->
-                        <div class="h-40 overflow-hidden relative group">
+                        <div class="h-32 xs:h-36 sm:h-40 overflow-hidden relative group">
                             <img src="<?= $coverImage ?>" alt="<?= $moduleTitle ?>"
                                  class="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500">
                             <div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
-                            <div class="absolute bottom-3 left-3 right-3">
+                            <div class="absolute bottom-2 sm:bottom-3 left-2 sm:left-3 right-2 sm:right-3">
                                 <div class="flex items-center justify-between">
-                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold <?= $statusConfig['bg'] ?> <?= $statusConfig['text'] ?> backdrop-blur-sm">
+                                    <span class="inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs font-semibold <?= $statusConfig['bg'] ?> <?= $statusConfig['text'] ?> backdrop-blur-sm">
                                         <i class="fas <?= $statusConfig['icon'] ?> mr-1"></i>
                                         <?= htmlspecialchars($status) ?>
                                     </span>
@@ -376,18 +450,18 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                         </div>
 
                         <!-- Content -->
-                        <div class="p-5">
-                            <h3 class="font-semibold text-gray-900 text-lg mb-2">
+                        <div class="p-4 sm:p-5">
+                            <h3 class="font-semibold text-gray-900 text-base sm:text-lg mb-2 line-clamp-2">
                                 <?= $moduleTitle ?>
                             </h3>
-                            <p class="text-sm text-gray-600 mb-4 line-clamp-3">
+                            <p class="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4 line-clamp-2">
                                 <?= htmlspecialchars($module['description'] ?: "No description available.") ?>
                             </p>
 
                             <!-- Action Button -->
                             <a href="view_module.php?id=<?= $module['id'] ?>"
-                               class="block w-full text-center bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors">
-                                <i class="fas fa-book-open mr-2"></i>
+                               class="block w-full text-center bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 sm:py-2.5 rounded-lg font-semibold transition-colors text-xs sm:text-sm">
+                                <i class="fas fa-book-open mr-1 sm:mr-2"></i>
                                 Start Learning
                             </a>
                         </div>
@@ -398,12 +472,12 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
 
             <!-- Daily Tip -->
             <?php if ($dailyTip): ?>
-            <div class="bg-gradient-to-br from-purple-50 to-blue-50 rounded-2xl p-6 sm:px-8 text-center border-2 border-purple-200 shadow-sm mt-8 animate-fade-in-up" style="animation-delay: 0.2s;">
-                <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full mb-4 shadow-lg">
-                    <i class="fas fa-lightbulb text-2xl text-white"></i>
+            <div class="bg-gradient-to-br from-purple-50 to-blue-50 rounded-2xl p-4 sm:p-6 lg:p-8 text-center border-2 border-purple-200 shadow-sm mt-6 sm:mt-8 animate-fade-in-up" style="animation-delay: 0.2s;">
+                <div class="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full mb-3 sm:mb-4 shadow-lg">
+                    <i class="fas fa-lightbulb text-xl sm:text-2xl text-white"></i>
                 </div>
-                <h3 class="text-lg font-semibold mb-3 text-purple-900">💡 Daily Nursing Tip</h3>
-                <p class="text-gray-700 text-lg italic leading-relaxed max-w-2xl mx-auto">
+                <h3 class="text-base sm:text-lg font-semibold mb-2 sm:mb-3 text-purple-900">💡 Daily Nursing Tip</h3>
+                <p class="text-gray-700 text-sm sm:text-base lg:text-lg italic leading-relaxed max-w-2xl mx-auto break-words">
                     "<?= htmlspecialchars($dailyTip) ?>"
                 </p>
             </div>
@@ -423,27 +497,35 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
         
         sidebarExpanded = !sidebarExpanded;
         
-        if (window.innerWidth < 1024) {
-            sidebar.classList.toggle('sidebar-expanded');
-            sidebar.classList.toggle('sidebar-collapsed');
-            overlay.classList.toggle('hidden');
+        if (window.innerWidth < 1025) {
+            // Mobile behavior
             if (sidebarExpanded) {
-                mainContent.style.marginLeft = '0';
+                sidebar.classList.add('sidebar-expanded');
+                overlay.classList.remove('hidden');
+                overlay.classList.add('show');
+                document.body.classList.add('sidebar-open');
+            } else {
+                sidebar.classList.remove('sidebar-expanded');
+                overlay.classList.remove('show');
+                document.body.classList.remove('sidebar-open');
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                }, 300);
             }
         } else {
-            sidebar.classList.toggle('sidebar-expanded');
-            sidebar.classList.toggle('sidebar-collapsed');
-            
+            // Desktop behavior
             if (sidebarExpanded) {
-                mainContent.style.marginLeft = '18rem';
+                sidebar.classList.add('sidebar-expanded');
+                mainContent.classList.add('content-expanded');
             } else {
-                mainContent.style.marginLeft = '5rem';
+                sidebar.classList.remove('sidebar-expanded');
+                mainContent.classList.remove('content-expanded');
             }
         }
     }
 
     function closeSidebar() {
-        if (window.innerWidth < 1024 && sidebarExpanded) {
+        if (sidebarExpanded) {
             toggleSidebar();
         }
     }
@@ -457,27 +539,58 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
             const mainContent = document.getElementById('main-content');
             const overlay = document.getElementById('sidebar-overlay');
             
-            if (window.innerWidth >= 1024) {
+            if (window.innerWidth >= 1025) {
+                // Desktop mode - reset mobile states
                 overlay.classList.add('hidden');
-                if (sidebarExpanded) {
-                    mainContent.style.marginLeft = '18rem';
+                overlay.classList.remove('show');
+                document.body.classList.remove('sidebar-open');
+                
+                // Apply correct desktop state
+                if (!sidebarExpanded) {
+                    sidebar.classList.remove('sidebar-expanded');
+                    mainContent.classList.remove('content-expanded');
                 } else {
-                    mainContent.style.marginLeft = '5rem';
+                    sidebar.classList.add('sidebar-expanded');
+                    mainContent.classList.add('content-expanded');
                 }
             } else {
-                mainContent.style.marginLeft = '0';
+                // Mobile mode - reset desktop states
+                mainContent.classList.remove('content-expanded');
+                
                 if (!sidebarExpanded) {
-                    sidebar.classList.add('sidebar-collapsed');
                     sidebar.classList.remove('sidebar-expanded');
+                    overlay.classList.add('hidden');
+                    overlay.classList.remove('show');
+                    document.body.classList.remove('sidebar-open');
                 }
             }
         }, 250);
     });
 
+    // Initialize correct state on page load
+    window.addEventListener('DOMContentLoaded', function() {
+        const sidebar = document.getElementById('sidebar');
+        const mainContent = document.getElementById('main-content');
+        
+        if (window.innerWidth >= 1025) {
+            // Desktop: start collapsed
+            sidebar.classList.remove('sidebar-expanded');
+            mainContent.classList.remove('content-expanded');
+            sidebarExpanded = false;
+        } else {
+            // Mobile: ensure sidebar is hidden
+            sidebar.classList.remove('sidebar-expanded');
+            sidebarExpanded = false;
+        }
+    });
+
     // Auto-hide alert after 6 seconds
     <?php if ($successMessage || $errorMessage): ?>
     setTimeout(() => {
-        document.querySelector('[x-data]').__x.$data.showAlert = false;
+        const alpineData = document.querySelector('[x-data]')?.__x?.$data;
+        if (alpineData) {
+            alpineData.showAlert = false;
+        }
     }, 6000);
     <?php endif; ?>
 </script>
