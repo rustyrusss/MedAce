@@ -92,6 +92,11 @@ $stmt = $conn->prepare("SELECT MAX(score) as highest FROM quiz_attempts WHERE qu
 $stmt->execute([$attempt['quiz_id'], $studentId]);
 $highestScore = $stmt->fetchColumn();
 
+// Get student info for watermark
+$stmt = $conn->prepare("SELECT firstname, lastname FROM users WHERE id = ?");
+$stmt->execute([$studentId]);
+$student = $stmt->fetch(PDO::FETCH_ASSOC);
+
 $earnedPoints = $attempt['score'];
 $currentPercentage = $totalPoints > 0 ? round(($earnedPoints / $totalPoints) * 100, 1) : 0;
 $highestPercentage = $totalPoints > 0 ? round(($highestScore / $totalPoints) * 100, 1) : 0;
@@ -206,12 +211,6 @@ $highestPercentage = $totalPoints > 0 ? round(($highestScore / $totalPoints) * 1
       white-space: nowrap;
     }
 
-    /* Blur effect when window loses focus */
-    body.blurred .scrollable-content {
-      filter: blur(10px);
-      transition: filter 0.3s;
-    }
-
     /* Screenshot detection overlay */
     .screenshot-warning {
       position: fixed;
@@ -301,7 +300,7 @@ $highestPercentage = $totalPoints > 0 ? round(($highestScore / $totalPoints) * 1
   <div class="watermark-overlay">
     <?php for($i = 0; $i < 50; $i++): ?>
       <div class="watermark-text">
-        <?= htmlspecialchars($student['firstname'] ?? 'Student') ?> - <?= date('Y-m-d H:i') ?> - DO NOT SHARE
+        <?= htmlspecialchars(($student['firstname'] ?? 'Student') . ' ' . ($student['lastname'] ?? '')) ?> - <?= date('Y-m-d H:i') ?> - DO NOT SHARE
       </div>
     <?php endfor; ?>
   </div>
@@ -539,16 +538,35 @@ $highestPercentage = $totalPoints > 0 ? round(($highestScore / $totalPoints) * 1
   <script>
     let blackScreenTimeout;
     const blackScreen = document.getElementById('blackScreen');
+    let lastVisibilityChange = Date.now();
+    let focusLostTime = null;
 
     // Show black screen (Netflix-style)
-    function showBlackScreen() {
+    function showBlackScreen(duration = 2000) {
       blackScreen.classList.add('active');
       
-      // Keep black screen for 2 seconds
+      // Keep black screen for specified duration
       clearTimeout(blackScreenTimeout);
       blackScreenTimeout = setTimeout(() => {
         blackScreen.classList.remove('active');
-      }, 2000);
+      }, duration);
+    }
+
+    // Log screenshot attempt to server
+    function logScreenshotAttempt(method = 'unknown') {
+      console.warn('Screenshot attempt detected via:', method, 'at:', new Date().toISOString());
+      
+      fetch('log_screenshot_attempt.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          student_id: <?= $studentId ?>,
+          quiz_id: <?= $quiz['id'] ?>,
+          attempt_id: <?= $attemptId ?>,
+          method: method,
+          timestamp: new Date().toISOString()
+        })
+      }).catch(err => console.error('Failed to log:', err));
     }
 
     // Disable right-click context menu
@@ -557,130 +575,122 @@ $highestPercentage = $totalPoints > 0 ? round(($highestScore / $totalPoints) * 1
       return false;
     });
 
-    // Disable common screenshot keyboard shortcuts
+    // Detect keyboard shortcuts (Windows, Mac, Linux)
     document.addEventListener('keyup', function(e) {
-      // PrintScreen, Cmd+Shift+3/4/5 (Mac), Windows+Shift+S, etc.
-      if (e.key === 'PrintScreen' || 
-          (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4' || e.key === '5')) ||
-          (e.key === 's' && e.shiftKey && (e.metaKey || e.ctrlKey))) {
-        
-        // Show white screen immediately
+      // PrintScreen key (only detectable on keyup in some browsers)
+      if (e.key === 'PrintScreen' || e.keyCode === 44) {
         showBlackScreen();
-        
-        // Log the attempt
-        console.warn('Screenshot attempt detected at:', new Date().toISOString());
-        
-        // Send to server
-        fetch('log_screenshot_attempt.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            student_id: <?= $studentId ?>,
-            quiz_id: <?= $quiz['id'] ?>,
-            attempt_id: <?= $attemptId ?>,
-            timestamp: new Date().toISOString()
-          })
-        }).catch(err => console.error('Failed to log:', err));
+        logScreenshotAttempt('PrintScreen key');
       }
     });
 
-    // Also trigger white screen on keydown for faster response
     document.addEventListener('keydown', function(e) {
-      if (e.key === 'PrintScreen' || 
-          (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4' || e.key === '5')) ||
-          (e.key === 's' && e.shiftKey && (e.metaKey || e.ctrlKey))) {
+      // Mac screenshots: Cmd+Shift+3, Cmd+Shift+4, Cmd+Shift+5
+      if (e.metaKey && e.shiftKey && ['3', '4', '5'].includes(e.key)) {
         showBlackScreen();
-      }
-    });
-
-    // Detect when user switches tabs/apps (possible screenshot)
-    document.addEventListener('visibilitychange', function() {
-      if (document.hidden) {
-        document.body.classList.add('blurred');
-        // Show black screen when tab is hidden
-        showBlackScreen();
-      } else {
-        document.body.classList.remove('blurred');
-      }
-    });
-
-    // Blur content when window loses focus
-    window.addEventListener('blur', function() {
-      document.body.classList.add('blurred');
-      showBlackScreen();
-    });
-
-    window.addEventListener('focus', function() {
-      document.body.classList.remove('blurred');
-    });
-
-    // Disable F12 (DevTools)
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'F12' || 
-          (e.ctrlKey && e.shiftKey && e.key === 'I') ||
-          (e.ctrlKey && e.shiftKey && e.key === 'J') ||
-          (e.ctrlKey && e.key === 'U')) {
+        logScreenshotAttempt('Mac screenshot shortcut');
         e.preventDefault();
+        return false;
+      }
+      
+      // Windows Snipping Tool: Windows+Shift+S
+      if ((e.metaKey || e.key === 'Meta') && e.shiftKey && e.key.toLowerCase() === 's') {
         showBlackScreen();
+        logScreenshotAttempt('Windows Snipping Tool');
+        e.preventDefault();
+        return false;
+      }
+
+      // Disable F12 and DevTools shortcuts
+      if (e.key === 'F12' || 
+          (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i')) ||
+          (e.ctrlKey && e.shiftKey && (e.key === 'J' || e.key === 'j')) ||
+          (e.ctrlKey && (e.key === 'U' || e.key === 'u'))) {
+        e.preventDefault();
         return false;
       }
     });
 
-    // Detect if DevTools is open
-    var devtools = {open: false, orientation: null};
-    var threshold = 160;
-
-    setInterval(function() {
-      if (window.outerWidth - window.innerWidth > threshold || 
-          window.outerHeight - window.innerHeight > threshold) {
-        if (!devtools.open) {
-          console.warn('DevTools detected!');
-          document.body.classList.add('blurred');
-          showBlackScreen();
-        }
-        devtools.open = true;
+    // Detect when user switches away from tab (possible screenshot app)
+    document.addEventListener('visibilitychange', function() {
+      const now = Date.now();
+      
+      if (document.hidden) {
+        focusLostTime = now;
+        // Show black screen immediately when tab becomes hidden
+        showBlackScreen(500);
       } else {
-        if (devtools.open) {
-          document.body.classList.remove('blurred');
+        // If user was away for less than 3 seconds, might be taking screenshot
+        if (focusLostTime && (now - focusLostTime) < 3000) {
+          showBlackScreen(1000);
+          logScreenshotAttempt('Quick tab switch');
         }
-        devtools.open = false;
+        focusLostTime = null;
       }
-    }, 500);
+    });
+
+    // Detect window blur (when focus moves to another window)
+    let blurTime = null;
+    window.addEventListener('blur', function() {
+      blurTime = Date.now();
+      // Show black screen immediately when window loses focus
+      showBlackScreen(500);
+    });
+
+    window.addEventListener('focus', function() {
+      if (blurTime && (Date.now() - blurTime) < 2000) {
+        logScreenshotAttempt('Window focus loss');
+      }
+      blurTime = null;
+    });
 
     // Prevent drag and drop of images
     document.addEventListener('dragstart', function(e) {
-      e.preventDefault();
-      return false;
-    });
-
-    // Monitor for screenshot tools/apps opening
-    // Trigger white screen when window is resized (possible screenshot tool)
-    let resizeTimeout;
-    window.addEventListener('resize', function() {
-      clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(() => {
-        // Check if resize might be from screenshot tool
-        if (Math.abs(window.innerWidth - window.outerWidth) > 50) {
-          showBlackScreen();
-        }
-      }, 100);
-    });
-
-    // Additional protection: Monitor clipboard
-    document.addEventListener('copy', function(e) {
-      showBlackScreen();
-      e.preventDefault();
-      return false;
-    });
-
-    // Prevent screenshots via browser extensions
-    setInterval(function() {
-      // Detect if page is being captured by checking for canvas operations
-      const canvases = document.getElementsByTagName('canvas');
-      if (canvases.length > 0) {
-        showBlackScreen();
+      if (e.target.tagName === 'IMG') {
+        e.preventDefault();
+        return false;
       }
-    }, 1000);
+    });
+
+    // Prevent text/content copying
+    document.addEventListener('copy', function(e) {
+      e.preventDefault();
+      showBlackScreen(1000);
+      logScreenshotAttempt('Copy attempt');
+      return false;
+    });
+
+    // Prevent cut
+    document.addEventListener('cut', function(e) {
+      e.preventDefault();
+      return false;
+    });
+
+    // Prevent paste (less relevant but for completeness)
+    document.addEventListener('paste', function(e) {
+      e.preventDefault();
+      return false;
+    });
+
+    // Additional protection: Detect rapid window resizing (some screenshot tools do this)
+    let resizeTimeout;
+    let resizeCount = 0;
+    window.addEventListener('resize', function() {
+      resizeCount++;
+      clearTimeout(resizeTimeout);
+      
+      resizeTimeout = setTimeout(function() {
+        if (resizeCount > 3) {
+          logScreenshotAttempt('Rapid window resize');
+          showBlackScreen(1000);
+        }
+        resizeCount = 0;
+      }, 1000);
+    });
+
+    // Warning on page load
+    console.warn('%c⚠️ SECURITY NOTICE', 'color: red; font-size: 20px; font-weight: bold;');
+    console.warn('%cThis content is protected. Screenshots and copying are monitored and logged.', 'color: red; font-size: 14px;');
   </script>
 
 </body>
