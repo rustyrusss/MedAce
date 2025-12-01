@@ -23,6 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $time_limit = isset($_POST['time_limit']) ? intval($_POST['time_limit']) : 0;
         $publish_time = !empty($_POST['publish_time']) ? $_POST['publish_time'] : null;
         $deadline_time = !empty($_POST['deadline_time']) ? $_POST['deadline_time'] : null;
+        $prerequisite_module_id = !empty($_POST['prerequisite_module_id']) ? intval($_POST['prerequisite_module_id']) : null;
         
         if (empty($title) || empty($module_id)) {
             throw new Exception("Title and Module are required.");
@@ -35,10 +36,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             throw new Exception("Invalid module selected.");
         }
         
+        // Verify prerequisite module belongs to professor (if set)
+        if ($prerequisite_module_id) {
+            $stmt = $conn->prepare("SELECT id FROM modules WHERE id = ? AND professor_id = ?");
+            $stmt->execute([$prerequisite_module_id, $professorId]);
+            if (!$stmt->fetch()) {
+                throw new Exception("Invalid prerequisite module selected.");
+            }
+        }
+        
         // Insert quiz
         $stmt = $conn->prepare("
-            INSERT INTO quizzes (title, subject, description, module_id, lesson_id, professor_id, content, status, time_limit, publish_time, deadline_time, created_at) 
-            VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, NOW())
+            INSERT INTO quizzes (title, subject, description, module_id, lesson_id, professor_id, content, status, time_limit, publish_time, deadline_time, prerequisite_module_id, created_at) 
+            VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, NOW())
         ");
         $stmt->execute([
             $title,
@@ -50,7 +60,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $status,
             $time_limit,
             $publish_time,
-            $deadline_time
+            $deadline_time,
+            $prerequisite_module_id
         ]);
         
         $_SESSION['success'] = "Quiz created successfully!";
@@ -75,6 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $time_limit = isset($_POST['time_limit']) ? intval($_POST['time_limit']) : 0;
         $publish_time = !empty($_POST['publish_time']) ? $_POST['publish_time'] : null;
         $deadline_time = !empty($_POST['deadline_time']) ? $_POST['deadline_time'] : null;
+        $prerequisite_module_id = !empty($_POST['prerequisite_module_id']) ? intval($_POST['prerequisite_module_id']) : null;
         
         if (empty($title) || empty($module_id)) {
             throw new Exception("Title and Module are required.");
@@ -94,11 +106,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             throw new Exception("Invalid module selected.");
         }
         
+        // Verify prerequisite module belongs to professor (if set)
+        if ($prerequisite_module_id) {
+            $stmt = $conn->prepare("SELECT id FROM modules WHERE id = ? AND professor_id = ?");
+            $stmt->execute([$prerequisite_module_id, $professorId]);
+            if (!$stmt->fetch()) {
+                throw new Exception("Invalid prerequisite module selected.");
+            }
+        }
+        
         // Update quiz
         $stmt = $conn->prepare("
             UPDATE quizzes 
             SET title = ?, subject = ?, description = ?, module_id = ?, content = ?, status = ?, 
-                time_limit = ?, publish_time = ?, deadline_time = ?
+                time_limit = ?, publish_time = ?, deadline_time = ?, prerequisite_module_id = ?
             WHERE id = ? AND professor_id = ?
         ");
         $stmt->execute([
@@ -111,6 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $time_limit,
             $publish_time,
             $deadline_time,
+            $prerequisite_module_id,
             $quiz_id,
             $professorId
         ]);
@@ -137,15 +159,17 @@ $stmt->bindParam(':professor_id', $professorId);
 $stmt->execute();
 $modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// ✅ Fetch quizzes with attempt counts - FIXED: Changed user_id to student_id
+// ✅ Fetch quizzes with attempt counts and prerequisite module info
 try {
     $stmt = $conn->prepare("
-        SELECT q.id, q.title, q.subject, q.description, q.status, q.time_limit, q.created_at, q.module_id, q.content, q.publish_time, q.deadline_time, 
+        SELECT q.id, q.title, q.subject, q.description, q.status, q.time_limit, q.created_at, q.module_id, q.content, q.publish_time, q.deadline_time, q.prerequisite_module_id,
                m.title AS module_title,
+               pm.title AS prerequisite_module_title,
                COUNT(DISTINCT qa.student_id) as attempts_count,
                (SELECT COUNT(*) FROM users WHERE role = 'student') as total_students
         FROM quizzes q
         LEFT JOIN modules m ON q.module_id = m.id
+        LEFT JOIN modules pm ON q.prerequisite_module_id = pm.id
         LEFT JOIN quiz_attempts qa ON q.id = qa.quiz_id
         WHERE q.professor_id = :professor_id
         GROUP BY q.id
@@ -155,9 +179,9 @@ try {
     $stmt->execute();
     $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    // Fallback if subject column doesn't exist
+    // Fallback if prerequisite_module_id column doesn't exist
     $stmt = $conn->prepare("
-        SELECT q.id, q.title, q.description, q.status, q.time_limit, q.created_at, q.module_id, q.content, q.publish_time, q.deadline_time, 
+        SELECT q.id, q.title, q.subject, q.description, q.status, q.time_limit, q.created_at, q.module_id, q.content, q.publish_time, q.deadline_time, 
                m.title AS module_title,
                COUNT(DISTINCT qa.student_id) as attempts_count,
                (SELECT COUNT(*) FROM users WHERE role = 'student') as total_students
@@ -775,6 +799,7 @@ try {
                                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Quiz</th>
                                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Subject</th>
                                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">Module</th>
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden xl:table-cell">Prerequisite</th>
                                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Participation</th>
                                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
                                 <th class="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
@@ -813,6 +838,16 @@ try {
                                 </td>
                                 <td class="px-6 py-4 text-sm text-gray-600 hidden lg:table-cell">
                                     <?= htmlspecialchars($quiz['module_title'] ?? '—') ?>
+                                </td>
+                                <td class="px-6 py-4 text-sm hidden xl:table-cell">
+                                    <?php if (!empty($quiz['prerequisite_module_title'])): ?>
+                                        <span class="badge bg-amber-50 text-amber-700">
+                                            <i class="fas fa-lock mr-1"></i>
+                                            <?= htmlspecialchars($quiz['prerequisite_module_title']) ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="text-gray-400 text-xs">None</span>
+                                    <?php endif; ?>
                                 </td>
                                 <td class="px-6 py-4">
                                     <div class="flex items-center gap-2">
@@ -925,6 +960,12 @@ try {
                                         <span class="quiz-card-meta-item">
                                             <i class="fas fa-clock"></i>
                                             <?= $quiz['time_limit'] ?> min
+                                        </span>
+                                    <?php endif; ?>
+                                    <?php if (!empty($quiz['prerequisite_module_title'])): ?>
+                                        <span class="quiz-card-meta-item">
+                                            <i class="fas fa-lock"></i>
+                                            Req: <?= htmlspecialchars($quiz['prerequisite_module_title']) ?>
                                         </span>
                                     <?php endif; ?>
                                     <span class="badge <?= $statusConfig['bg'] ?> <?= $statusConfig['text'] ?> text-xs py-1 px-2">
@@ -1050,6 +1091,20 @@ try {
 
             <div>
                 <label class="block text-sm font-semibold text-gray-700 mb-2">
+                    <i class="fas fa-lock text-amber-500 mr-1"></i>
+                    Prerequisite Module (Optional)
+                </label>
+                <select name="prerequisite_module_id" class="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm sm:text-base">
+                    <option value="">— No prerequisite —</option>
+                    <?php foreach ($modules as $module): ?>
+                        <option value="<?= $module['id'] ?>"><?= htmlspecialchars($module['title']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <p class="text-xs text-gray-500 mt-1">Students must complete this module before taking the quiz</p>
+            </div>
+
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">
                     <i class="fas fa-file-lines text-primary-500 mr-1"></i>
                     Instructions
                 </label>
@@ -1169,6 +1224,20 @@ try {
                         <option value="<?= $module['id'] ?>"><?= htmlspecialchars($module['title']) ?></option>
                     <?php endforeach; ?>
                 </select>
+            </div>
+
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                    <i class="fas fa-lock text-amber-500 mr-1"></i>
+                    Prerequisite Module (Optional)
+                </label>
+                <select name="prerequisite_module_id" id="edit_prerequisite_module_id" class="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm sm:text-base">
+                    <option value="">— No prerequisite —</option>
+                    <?php foreach ($modules as $module): ?>
+                        <option value="<?= $module['id'] ?>"><?= htmlspecialchars($module['title']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <p class="text-xs text-gray-500 mt-1">Students must complete this module before taking the quiz</p>
             </div>
 
             <div>
@@ -1298,6 +1367,7 @@ try {
         document.getElementById('edit_subject').value = quiz.subject || '';
         document.getElementById('edit_description').value = quiz.description || '';
         document.getElementById('edit_module_id').value = quiz.module_id;
+        document.getElementById('edit_prerequisite_module_id').value = quiz.prerequisite_module_id || '';
         document.getElementById('edit_content').value = quiz.content || '';
         document.getElementById('edit_status').value = quiz.status;
         document.getElementById('edit_time_limit').value = quiz.time_limit || 0;

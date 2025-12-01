@@ -30,9 +30,12 @@ if (!empty($student['gender'])) {
 }
 $profilePic = !empty($student['profile_pic']) ? "../" . $student['profile_pic'] : $defaultAvatar;
 
-// ✅ Get quizzes with latest attempt and highest score
+// ✅ Get quizzes with latest attempt, highest score, and prerequisite info
 $stmt = $conn->prepare("
-  SELECT q.id, q.title, q.publish_time, q.deadline_time, q.subject,
+  SELECT q.id, q.title, q.publish_time, q.deadline_time, q.subject, q.prerequisite_module_id,
+         pm.title AS prerequisite_module_title,
+         sp.status AS prerequisite_status,
+         sp.completed_at AS prerequisite_completed_at,
          qa.id AS attempt_id, 
          COALESCE(qa.status, 'Pending') AS status,
          qa.score AS latest_score_raw,
@@ -40,6 +43,8 @@ $stmt = $conn->prepare("
          (SELECT COALESCE(SUM(points), 0) FROM questions WHERE quiz_id = q.id) AS total_points,
          (SELECT COUNT(*) FROM quiz_attempts WHERE quiz_id = q.id AND student_id = ?) AS attempt_count
   FROM quizzes q
+  LEFT JOIN modules pm ON q.prerequisite_module_id = pm.id
+  LEFT JOIN student_progress sp ON sp.module_id = q.prerequisite_module_id AND sp.student_id = ?
   LEFT JOIN (
       SELECT qa1.*
       FROM quiz_attempts qa1
@@ -50,9 +55,10 @@ $stmt = $conn->prepare("
           GROUP BY quiz_id
       ) latest ON qa1.quiz_id = latest.quiz_id AND qa1.attempted_at = latest.latest_attempt
   ) qa ON q.id = qa.quiz_id
+  WHERE q.status = 'active'
   ORDER BY q.publish_time DESC
 ");
-$stmt->execute([$studentId, $studentId, $studentId]);
+$stmt->execute([$studentId, $studentId, $studentId, $studentId]);
 $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Helper function to calculate percentage
@@ -236,6 +242,22 @@ function calculatePercentage($score, $total) {
                 grid-template-columns: repeat(4, 1fr);
             }
         }
+
+        .locked-quiz {
+            opacity: 0.7;
+            position: relative;
+        }
+
+        .locked-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 0.75rem;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 antialiased" x-data="{ filter: 'all', search: '', openModal: null }">
@@ -339,40 +361,6 @@ function calculatePercentage($score, $total) {
                 </div>
             </div>
 
-            <!-- Subject Filter Section (Future Feature - Uncomment when subject column is added) -->
-            <!-- 
-            <div class="mb-6 animate-fade-in-up" x-data="{ subjectFilter: 'all' }">
-                <h3 class="text-sm font-semibold text-gray-700 mb-3">Filter by Subject:</h3>
-                <div class="flex gap-2 flex-wrap">
-                    <button @click="subjectFilter = 'all'" :class="subjectFilter === 'all' ? 'bg-purple-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'" 
-                            class="px-4 py-2 rounded-lg font-medium transition-all shadow-sm text-sm">
-                        <i class="fas fa-th mr-1"></i>
-                        All Subjects
-                    </button>
-                    <button @click="subjectFilter = 'anatomy'" :class="subjectFilter === 'anatomy' ? 'bg-purple-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'" 
-                            class="px-4 py-2 rounded-lg font-medium transition-all shadow-sm text-sm">
-                        <i class="fas fa-user-md mr-1"></i>
-                        Anatomy
-                    </button>
-                    <button @click="subjectFilter = 'physiology'" :class="subjectFilter === 'physiology' ? 'bg-purple-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'" 
-                            class="px-4 py-2 rounded-lg font-medium transition-all shadow-sm text-sm">
-                        <i class="fas fa-heartbeat mr-1"></i>
-                        Physiology
-                    </button>
-                    <button @click="subjectFilter = 'pharmacology'" :class="subjectFilter === 'pharmacology' ? 'bg-purple-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'" 
-                            class="px-4 py-2 rounded-lg font-medium transition-all shadow-sm text-sm">
-                        <i class="fas fa-pills mr-1"></i>
-                        Pharmacology
-                    </button>
-                    <button @click="subjectFilter = 'nursing'" :class="subjectFilter === 'nursing' ? 'bg-purple-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'" 
-                            class="px-4 py-2 rounded-lg font-medium transition-all shadow-sm text-sm">
-                        <i class="fas fa-stethoscope mr-1"></i>
-                        Nursing Care
-                    </button>
-                </div>
-            </div>
-            -->
-
             <!-- Quiz Cards -->
             <?php if (empty($quizzes)): ?>
             <div class="text-center py-20 animate-fade-in-up">
@@ -397,13 +385,29 @@ function calculatePercentage($score, $total) {
                     $latestPercentage = calculatePercentage($quiz['latest_score_raw'], $quiz['total_points']);
                     $highestPercentage = calculatePercentage($quiz['highest_score_raw'], $quiz['total_points']);
                     
+                    // Check if prerequisite is met
+                    $prerequisiteMet = true;
+                    if ($quiz['prerequisite_module_id']) {
+                        $prerequisiteMet = ($quiz['prerequisite_status'] === 'completed');
+                    }
+                    
                     // Determine if quiz can be retaken (failed or already completed but want to improve)
                     $canRetake = ($status === 'failed' || ($status === 'completed' && $quiz['attempt_count'] > 0));
                 ?>
                 <div x-show="(filter === 'all' || filter === '<?= $status ?>') && ('<?= strtolower(htmlspecialchars($quiz['title'])) ?>'.includes(search.toLowerCase()))"
-                     class="bg-white border border-gray-200 rounded-xl overflow-hidden card-hover animate-fade-in-up">
+                     class="bg-white border border-gray-200 rounded-xl overflow-hidden card-hover animate-fade-in-up <?= !$prerequisiteMet ? 'locked-quiz' : '' ?>">
+                    
+                    <?php if (!$prerequisiteMet): ?>
+                    <div class="locked-overlay"></div>
+                    <?php endif; ?>
+                    
                     <!-- Header -->
                     <div class="h-32 bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center relative">
+                        <?php if (!$prerequisiteMet): ?>
+                        <div class="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
+                            <i class="fas fa-lock text-4xl text-white"></i>
+                        </div>
+                        <?php endif; ?>
                         <i class="fas fa-clipboard-question text-5xl text-white opacity-90"></i>
                     </div>
 
@@ -421,7 +425,6 @@ function calculatePercentage($score, $total) {
                         
                         <!-- Subject Badge -->
                         <?php 
-                        // Use actual subject from database
                         $subjectDisplay = !empty($quiz['subject']) ? $quiz['subject'] : 'General';
                         
                         $subjectColors = [
@@ -440,6 +443,30 @@ function calculatePercentage($score, $total) {
                                 <?= htmlspecialchars($subjectDisplay) ?>
                             </span>
                         </div>
+
+                        <!-- Prerequisite Warning/Status -->
+                        <?php if ($quiz['prerequisite_module_id']): ?>
+                            <?php if (!$prerequisiteMet): ?>
+                                <div class="mb-3 p-3 bg-amber-50 border-l-4 border-amber-500 rounded-r-lg">
+                                    <div class="flex items-start">
+                                        <i class="fas fa-lock text-amber-600 mt-0.5 mr-2 flex-shrink-0"></i>
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-xs font-semibold text-amber-900 mb-1">Prerequisite Required</p>
+                                            <p class="text-xs text-amber-800">
+                                                Complete <strong><?= htmlspecialchars($quiz['prerequisite_module_title']) ?></strong> first
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php else: ?>
+                                <div class="mb-3 p-2 bg-green-50 border border-green-200 rounded-lg">
+                                    <div class="flex items-center text-xs text-green-700">
+                                        <i class="fas fa-check-circle mr-2"></i>
+                                        <span class="font-medium">Prerequisite completed</span>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                        <?php endif; ?>
 
                         <?php if ($quiz['publish_time']): ?>
                         <p class="text-xs text-gray-500 mb-1">
@@ -479,7 +506,14 @@ function calculatePercentage($score, $total) {
 
                         <!-- Action Buttons -->
                         <div class="flex gap-2 mt-4">
-                            <?php if ($status === 'pending'): ?>
+                            <?php if (!$prerequisiteMet): ?>
+                                <!-- Locked - Show disabled button -->
+                                <button disabled
+                                        class="flex-1 bg-gray-300 text-gray-500 px-4 py-2.5 rounded-lg font-semibold cursor-not-allowed text-center text-sm">
+                                    <i class="fas fa-lock mr-1"></i>
+                                    Locked
+                                </button>
+                            <?php elseif ($status === 'pending'): ?>
                                 <!-- Pending quiz - Show Start button -->
                                 <a href="take_quiz.php?id=<?= $quiz['id'] ?>"
                                    class="flex-1 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors text-center text-sm">
