@@ -6,6 +6,9 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once __DIR__ . '/../config/db_conn.php';
 require_once __DIR__ . '/../includes/journey_fetch.php';
+require_once __DIR__ . '/../config/env.php';
+
+
 
 // ✅ Redirect if not student
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
