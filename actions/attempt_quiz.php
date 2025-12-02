@@ -16,9 +16,6 @@ if (!$quizId) {
     die("Invalid quiz ID.");
 }
 
-// Determine status: 'completed' for manual submits, 'auto-submitted' for auto-triggers
-$status = ($autoSubmitted === 1) ? 'auto-submitted' : 'completed';
-
 try {
     $conn->beginTransaction();
     
@@ -55,12 +52,23 @@ try {
         }
     }
     
-    // Create quiz attempt record (now includes status)
+    // Determine final status based on score (60% passing grade)
+    $percentage = $totalPoints > 0 ? ($score / $totalPoints) * 100 : 0;
+    
+    if ($autoSubmitted === 1) {
+        // Auto-submitted (time ran out)
+        $finalStatus = ($percentage >= 60) ? 'completed' : 'failed';
+    } else {
+        // Manual submission: determine if passed or failed
+        $finalStatus = ($percentage >= 60) ? 'completed' : 'failed';
+    }
+    
+    // Create quiz attempt record with proper status
     $stmt = $conn->prepare("
         INSERT INTO quiz_attempts (quiz_id, student_id, score, attempt_number, attempted_at, status) 
         VALUES (?, ?, ?, ?, NOW(), ?)
     ");
-    $stmt->execute([$quizId, $studentId, $score, $attemptNumber, $status]);
+    $stmt->execute([$quizId, $studentId, $score, $attemptNumber, $finalStatus]);
     $attemptId = $conn->lastInsertId();
     
     // Save student answers
@@ -97,6 +105,7 @@ try {
     $conn->commit();
     
     // Clear quiz timer session
+    unset($_SESSION['quiz_start_'.$quizId]);
     unset($_SESSION['quiz_end_'.$quizId]);
     
     // Redirect to results

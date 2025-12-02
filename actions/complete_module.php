@@ -45,23 +45,48 @@ try {
     $progress = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if ($progress) {
-        // Update existing progress to Completed
+        // Update existing progress to completed
         $stmt = $conn->prepare("
             UPDATE student_progress 
-            SET status = 'Completed', completed_at = NOW() 
+            SET status = 'completed', completed_at = NOW() 
             WHERE id = ?
         ");
         $stmt->execute([$progress['id']]);
     } else {
-        // Create new progress record as Completed (in case it was never started)
+        // Create new progress record as completed (in case it was never started)
         $stmt = $conn->prepare("
             INSERT INTO student_progress (student_id, module_id, status, started_at, completed_at) 
-            VALUES (?, ?, 'Completed', NOW(), NOW())
+            VALUES (?, ?, 'completed', NOW(), NOW())
         ");
         $stmt->execute([$studentId, $moduleId]);
     }
     
-    $_SESSION['success_message'] = "🎉 Congratulations! You've completed the module: " . htmlspecialchars($module['title']);
+    // ✅ NEW: Check if any quizzes are now unlocked by completing this module
+    $stmt = $conn->prepare("
+        SELECT id, title 
+        FROM quizzes 
+        WHERE prerequisite_module_id = ? 
+        AND status = 'active'
+    ");
+    $stmt->execute([$moduleId]);
+    $unlockedQuizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Build success message
+    $successMessage = "🎉 Congratulations! You've completed the module: " . htmlspecialchars($module['title']);
+    
+    // Add unlocked quizzes notification
+    if (!empty($unlockedQuizzes)) {
+        $quizCount = count($unlockedQuizzes);
+        $successMessage .= "<br><br>🔓 <strong>Great news!</strong> You've unlocked " . $quizCount . " quiz" . ($quizCount > 1 ? "es" : "") . ":<br>";
+        
+        foreach ($unlockedQuizzes as $quiz) {
+            $successMessage .= "• " . htmlspecialchars($quiz['title']) . "<br>";
+        }
+        
+        $successMessage .= '<br><a href="../member/quizzes.php" class="inline-block mt-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-semibold text-sm">View Available Quizzes</a>';
+    }
+    
+    $_SESSION['success_message'] = $successMessage;
     header("Location: ../member/view_module.php?id=" . $moduleId);
     exit();
     

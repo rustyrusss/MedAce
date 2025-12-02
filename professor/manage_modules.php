@@ -22,16 +22,23 @@ $profilePic = getProfilePicture($prof, "../");
 
 // Fetch modules (ordered by display_order if column exists, otherwise by created_at)
 try {
-    $stmt = $conn->prepare("SELECT id, title, description, content, status, created_at, display_order FROM modules WHERE professor_id = :professor_id ORDER BY display_order ASC, created_at DESC");
+    $stmt = $conn->prepare("SELECT id, title, description, content, status, subject, created_at, display_order FROM modules WHERE professor_id = :professor_id ORDER BY display_order ASC, created_at DESC");
     $stmt->bindParam(':professor_id', $professorId);
     $stmt->execute();
     $modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    // If display_order column doesn't exist, fall back to created_at
-    $stmt = $conn->prepare("SELECT id, title, description, content, status, created_at FROM modules WHERE professor_id = :professor_id ORDER BY created_at DESC");
-    $stmt->bindParam(':professor_id', $professorId);
-    $stmt->execute();
-    $modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // If display_order or subject column doesn't exist, fall back to created_at
+    try {
+        $stmt = $conn->prepare("SELECT id, title, description, content, status, subject, created_at FROM modules WHERE professor_id = :professor_id ORDER BY created_at DESC");
+        $stmt->bindParam(':professor_id', $professorId);
+        $stmt->execute();
+        $modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e2) {
+        $stmt = $conn->prepare("SELECT id, title, description, content, status, created_at FROM modules WHERE professor_id = :professor_id ORDER BY created_at DESC");
+        $stmt->bindParam(':professor_id', $professorId);
+        $stmt->execute();
+        $modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 }
 
 // Handle AJAX requests
@@ -102,6 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         body {
             font-family: 'Inter', sans-serif;
             background: #f8fafc;
+            overflow-x: hidden;
         }
 
         /* Scrollbar */
@@ -159,25 +167,158 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        .sidebar-collapsed {
-            width: 5rem;
+        /* Desktop Sidebar States */
+        @media (min-width: 1024px) {
+            .sidebar-collapsed {
+                width: 5rem;
+                transform: translateX(0);
+            }
+
+            .sidebar-collapsed .nav-text,
+            .sidebar-collapsed .profile-info {
+                opacity: 0;
+                width: 0;
+                overflow: hidden;
+            }
+
+            .sidebar-expanded {
+                width: 18rem;
+                transform: translateX(0);
+            }
+
+            .sidebar-expanded .nav-text,
+            .sidebar-expanded .profile-info {
+                opacity: 1;
+                width: auto;
+            }
         }
 
-        .sidebar-collapsed .nav-text,
-        .sidebar-collapsed .profile-info {
-            opacity: 0;
-            width: 0;
-            overflow: hidden;
+        /* Mobile Sidebar States */
+        @media (max-width: 1023px) {
+            .sidebar-collapsed {
+                width: 18rem;
+                transform: translateX(-100%);
+            }
+
+            .sidebar-collapsed .nav-text,
+            .sidebar-collapsed .profile-info {
+                opacity: 1;
+                width: auto;
+            }
+            
+            .sidebar-expanded {
+                width: 18rem;
+                transform: translateX(0);
+            }
+
+            .sidebar-expanded .nav-text,
+            .sidebar-expanded .profile-info {
+                opacity: 1;
+                width: auto;
+            }
         }
 
-        .sidebar-expanded {
-            width: 18rem;
+        /* Sidebar Toggle Icon */
+        .sidebar-toggle-btn {
+            width: 40px;
+            height: 40px;
+            position: relative;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: 2px solid #cbd5e1;
+            border-radius: 8px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            padding: 0;
+            flex-shrink: 0;
         }
 
-        .sidebar-expanded .nav-text,
-        .sidebar-expanded .profile-info {
-            opacity: 1;
-            width: auto;
+        .sidebar-toggle-btn:hover {
+            border-color: #0ea5e9;
+            background: #f0f9ff;
+        }
+
+        .sidebar-toggle-btn:active {
+            transform: scale(0.95);
+        }
+
+        .sidebar-toggle-btn .toggle-icon {
+            width: 24px;
+            height: 24px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Panel icon (left bar) */
+        .sidebar-toggle-btn .toggle-icon::before {
+            content: '';
+            position: absolute;
+            left: 2px;
+            width: 3px;
+            height: 16px;
+            background-color: #64748b;
+            border-radius: 2px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Chevron icon */
+        .sidebar-toggle-btn .toggle-icon::after {
+            content: '';
+            position: absolute;
+            right: 2px;
+            width: 6px;
+            height: 6px;
+            border-right: 2px solid #64748b;
+            border-bottom: 2px solid #64748b;
+            transform: rotate(-45deg);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .sidebar-toggle-btn:hover .toggle-icon::before,
+        .sidebar-toggle-btn:hover .toggle-icon::after {
+            border-color: #0ea5e9;
+            background-color: #0ea5e9;
+        }
+
+        /* Active state - chevron points left when sidebar is expanded */
+        .sidebar-toggle-btn.active .toggle-icon::after {
+            transform: rotate(135deg);
+            right: 4px;
+        }
+
+        .sidebar-toggle-btn.active .toggle-icon::before {
+            background-color: #0ea5e9;
+        }
+
+        .sidebar-toggle-btn.active {
+            border-color: #0ea5e9;
+            background: #f0f9ff;
+        }
+
+        /* Mobile-specific toggle button styling */
+        @media (max-width: 1023px) {
+            .sidebar-toggle-btn {
+                width: 36px;
+                height: 36px;
+            }
+
+            .sidebar-toggle-btn .toggle-icon {
+                width: 20px;
+                height: 20px;
+            }
+
+            .sidebar-toggle-btn .toggle-icon::before {
+                height: 14px;
+            }
+
+            .sidebar-toggle-btn .toggle-icon::after {
+                width: 5px;
+                height: 5px;
+            }
         }
 
         /* Table Row Hover */
@@ -253,6 +394,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 opacity: 1;
                 transform: translateY(0);
             }
+        }
+
+        /* Overlay fade effect */
+        #sidebar-overlay {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease-in-out;
+        }
+
+        #sidebar-overlay.show {
+            opacity: 1;
+            pointer-events: auto;
         }
 
         /* Badge */
@@ -378,14 +531,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         /* Responsive adjustments */
         @media (max-width: 1024px) {
-            .sidebar-collapsed {
-                width: 0;
-                transform: translateX(-100%);
+            #main-content {
+                margin-left: 0 !important;
             }
-            
-            .sidebar-expanded {
-                width: 18rem;
-                transform: translateX(0);
+
+            #sidebar-overlay {
+                display: none;
+            }
+
+            #sidebar-overlay.show {
+                display: block;
             }
         }
 
@@ -401,6 +556,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             .toast.show {
                 transform: translateY(0);
             }
+        }
+
+        /* Prevent horizontal overflow */
+        body {
+            overflow-x: hidden;
+        }
+
+        #main-content {
+            max-width: 100vw;
+            overflow-x: hidden;
         }
     </style>
 </head>
@@ -426,8 +591,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
             <!-- Toggle Button -->
             <div class="px-4 py-3 border-b border-gray-200">
-                <button onclick="toggleSidebar()" class="w-full flex items-center justify-center p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600">
-                    <i class="fas fa-bars text-lg"></i>
+                <button onclick="toggleSidebar()" class="sidebar-toggle-btn w-full" id="hamburgerBtn" aria-label="Toggle sidebar">
+                    <div class="toggle-icon"></div>
                 </button>
             </div>
 
@@ -462,17 +627,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     </aside>
 
     <!-- Sidebar Overlay (Mobile) -->
-    <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="closeSidebar()"></div>
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden transition-opacity duration-300" onclick="closeSidebar()"></div>
 
     <!-- Main Content -->
-    <main id="main-content" class="flex-1 transition-all duration-300" style="margin-left: 5rem;">
+    <main id="main-content" class="flex-1 w-full transition-all duration-300 lg:ml-20">
         <!-- Top Bar -->
         <header class="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-4">
             <div class="flex items-center justify-between">
-                <button onclick="toggleSidebar()" class="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors">
-                    <i class="fas fa-bars text-gray-600 text-xl"></i>
+                <button onclick="toggleSidebar()" class="sidebar-toggle-btn lg:hidden" id="mobileHamburgerBtn" aria-label="Toggle sidebar">
+                    <div class="toggle-icon"></div>
                 </button>
-                <div class="flex items-center space-x-3">
+                <div class="flex items-center space-x-3 ml-auto">
                     <button id="reorderBtn" onclick="toggleReorderMode()" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors font-semibold flex items-center space-x-2">
                         <i class="fas fa-arrows-alt"></i>
                         <span class="hidden sm:inline">Reorder</span>
@@ -529,7 +694,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <!-- Search Bar -->
             <div class="mb-6 animate-slide-in">
                 <div class="relative">
-                    <input type="text" id="searchInput" placeholder="Search modules by title or description..." 
+                    <input type="text" id="searchInput" placeholder="Search modules by title, subject, or description..." 
                            class="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all">
                     <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                 </div>
@@ -559,6 +724,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                 </th>
                                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">#</th>
                                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Title</th>
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden sm:table-cell">Subject</th>
                                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden md:table-cell">Description</th>
                                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
                                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden lg:table-cell">Created</th>
@@ -581,9 +747,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                         </div>
                                         <div>
                                             <p class="text-sm font-semibold text-gray-900"><?= htmlspecialchars($module['title']) ?></p>
-                                            <p class="text-xs text-gray-500 md:hidden truncate max-w-xs"><?= htmlspecialchars($module['description']) ?></p>
+                                            <p class="text-xs text-gray-500 sm:hidden truncate max-w-xs">
+                                                <?php if (!empty($module['subject'])): ?>
+                                                    <span class="font-medium"><?= htmlspecialchars($module['subject']) ?></span>
+                                                    <?php if (!empty($module['description'])): ?>
+                                                        - <?= htmlspecialchars($module['description']) ?>
+                                                    <?php endif; ?>
+                                                <?php else: ?>
+                                                    <?= htmlspecialchars($module['description']) ?>
+                                                <?php endif; ?>
+                                            </p>
                                         </div>
                                     </div>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-600 hidden sm:table-cell">
+                                    <?php if (!empty($module['subject'])): ?>
+                                        <span class="badge bg-purple-50 text-purple-700">
+                                            <i class="fas fa-book-open mr-1"></i>
+                                            <?= htmlspecialchars($module['subject']) ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="text-gray-400 text-xs">No subject</span>
+                                    <?php endif; ?>
                                 </td>
                                 <td class="px-6 py-4 text-sm text-gray-600 hidden md:table-cell">
                                     <p class="truncate max-w-xs"><?= htmlspecialchars($module['description']) ?></p>
@@ -664,6 +849,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <input type="text" name="title" required 
                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
                            placeholder="e.g., Introduction to Anatomy">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-book-open text-primary-500 mr-1"></i>
+                        Subject *
+                    </label>
+                    <input type="text" name="subject" required 
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                           placeholder="e.g., Anatomy, Physiology, Pharmacology">
                 </div>
                 
                 <div>
@@ -749,6 +944,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     </label>
                     <input type="text" name="title" id="edit_title" required 
                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-book-open text-primary-500 mr-1"></i>
+                        Subject *
+                    </label>
+                    <input type="text" name="subject" id="edit_subject" required 
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                           placeholder="e.g., Anatomy, Physiology, Pharmacology">
                 </div>
                 
                 <div>
@@ -942,17 +1147,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         const sidebar = document.getElementById('sidebar');
         const mainContent = document.getElementById('main-content');
         const overlay = document.getElementById('sidebar-overlay');
+        const hamburgerBtn = document.getElementById('hamburgerBtn');
+        const mobileHamburgerBtn = document.getElementById('mobileHamburgerBtn');
         
         sidebarExpanded = !sidebarExpanded;
         
+        // Toggle hamburger animation
+        hamburgerBtn.classList.toggle('active');
+        mobileHamburgerBtn.classList.toggle('active');
+        
         if (window.innerWidth < 1024) {
+            // Mobile behavior
             sidebar.classList.toggle('sidebar-expanded');
             sidebar.classList.toggle('sidebar-collapsed');
             overlay.classList.toggle('hidden');
+            overlay.classList.toggle('show');
+            
             if (sidebarExpanded) {
-                mainContent.style.marginLeft = '0';
+                document.body.style.overflow = 'hidden';
+            } else {
+                document.body.style.overflow = 'auto';
             }
         } else {
+            // Desktop behavior
             sidebar.classList.toggle('sidebar-expanded');
             sidebar.classList.toggle('sidebar-collapsed');
             
@@ -1039,10 +1256,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     // Modal Functions
     function openAddModal() {
         document.getElementById('addModuleModal').classList.add('show');
+        document.body.style.overflow = 'hidden';
     }
 
     function closeAddModal() {
         document.getElementById('addModuleModal').classList.remove('show');
+        document.body.style.overflow = 'auto';
         clearAddFile();
     }
 
@@ -1051,6 +1270,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         
         document.getElementById('edit_module_id').value = module.id;
         document.getElementById('edit_title').value = module.title;
+        document.getElementById('edit_subject').value = module.subject || '';
         document.getElementById('edit_description').value = module.description || '';
         
         // Normalize status value
@@ -1074,10 +1294,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         
         clearEditFile();
         document.getElementById('editModuleModal').classList.add('show');
+        document.body.style.overflow = 'hidden';
     }
 
     function closeEditModal() {
         document.getElementById('editModuleModal').classList.remove('show');
+        document.body.style.overflow = 'auto';
         clearEditFile();
     }
 
@@ -1090,10 +1312,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         deleteModuleFile = filePath;
         document.getElementById('deleteModuleName').textContent = title;
         document.getElementById('deleteModal').classList.add('show');
+        document.body.style.overflow = 'hidden';
     }
 
     function closeDeleteModal() {
         document.getElementById('deleteModal').classList.remove('show');
+        document.body.style.overflow = 'auto';
         deleteModuleId = null;
         deleteModuleFile = null;
     }
@@ -1128,9 +1352,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         
         rows.forEach(row => {
             const title = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
-            const description = row.querySelector('td:nth-child(4)')?.textContent.toLowerCase() || '';
+            const subject = row.querySelector('td:nth-child(4)')?.textContent.toLowerCase() || '';
+            const description = row.querySelector('td:nth-child(5)')?.textContent.toLowerCase() || '';
             
-            if (title.includes(searchTerm) || description.includes(searchTerm)) {
+            if (title.includes(searchTerm) || subject.includes(searchTerm) || description.includes(searchTerm)) {
                 row.style.display = '';
             } else {
                 row.style.display = 'none';
@@ -1146,6 +1371,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         <?php unset($_SESSION['file_uploaded']); ?>
         <?php endif; ?>
 
+        // Initialize sidebar state based on screen size
+        const sidebar = document.getElementById('sidebar');
+        const mainContent = document.getElementById('main-content');
+        
+        if (window.innerWidth >= 1024) {
+            // Desktop: Start collapsed
+            sidebar.classList.add('sidebar-collapsed');
+            sidebar.classList.remove('sidebar-expanded');
+            mainContent.style.marginLeft = '5rem';
+            sidebarExpanded = false;
+        } else {
+            // Mobile: Start hidden (collapsed off-screen)
+            sidebar.classList.add('sidebar-collapsed');
+            sidebar.classList.remove('sidebar-expanded');
+            mainContent.style.marginLeft = '0';
+            sidebarExpanded = false;
+        }
+
         // Handle window resize
         let resizeTimer;
         window.addEventListener('resize', function() {
@@ -1154,19 +1397,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 const sidebar = document.getElementById('sidebar');
                 const mainContent = document.getElementById('main-content');
                 const overlay = document.getElementById('sidebar-overlay');
+                const hamburgerBtn = document.getElementById('hamburgerBtn');
+                const mobileHamburgerBtn = document.getElementById('mobileHamburgerBtn');
                 
                 if (window.innerWidth >= 1024) {
+                    // Desktop mode
                     overlay.classList.add('hidden');
+                    overlay.classList.remove('show');
+                    document.body.style.overflow = 'auto';
+                    
+                    // Reset sidebar to proper desktop state
+                    if (!sidebar.classList.contains('sidebar-collapsed') && !sidebar.classList.contains('sidebar-expanded')) {
+                        sidebar.classList.add('sidebar-collapsed');
+                        sidebarExpanded = false;
+                    }
+                    
                     if (sidebarExpanded) {
                         mainContent.style.marginLeft = '18rem';
                     } else {
                         mainContent.style.marginLeft = '5rem';
                     }
                 } else {
+                    // Mobile mode
                     mainContent.style.marginLeft = '0';
-                    if (!sidebarExpanded) {
+                    
+                    // Reset sidebar to proper mobile state
+                    if (sidebarExpanded) {
+                        sidebar.classList.remove('sidebar-collapsed');
+                        sidebar.classList.add('sidebar-expanded');
+                        overlay.classList.remove('hidden');
+                        overlay.classList.add('show');
+                    } else {
                         sidebar.classList.add('sidebar-collapsed');
                         sidebar.classList.remove('sidebar-expanded');
+                        overlay.classList.add('hidden');
+                        overlay.classList.remove('show');
+                        hamburgerBtn.classList.remove('active');
+                        mobileHamburgerBtn.classList.remove('active');
+                        document.body.style.overflow = 'auto';
                     }
                 }
             }, 250);
@@ -1178,6 +1446,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 closeAddModal();
                 closeEditModal();
                 closeDeleteModal();
+                if (sidebarExpanded && window.innerWidth < 1024) {
+                    closeSidebar();
+                }
             }
         });
 
@@ -1186,10 +1457,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             document.getElementById(modalId).addEventListener('click', function(e) {
                 if (e.target === this) {
                     this.classList.remove('show');
+                    document.body.style.overflow = 'auto';
                 }
             });
         });
     });
+
+    // Touch swipe support for mobile sidebar
+    let touchStartX = 0;
+    let touchEndX = 0;
+    
+    document.addEventListener('touchstart', function(e) {
+        touchStartX = e.changedTouches[0].screenX;
+    }, false);
+    
+    document.addEventListener('touchend', function(e) {
+        touchEndX = e.changedTouches[0].screenX;
+        handleSwipe();
+    }, false);
+    
+    function handleSwipe() {
+        if (window.innerWidth < 1024) {
+            // Swipe right to open
+            if (touchEndX - touchStartX > 50 && !sidebarExpanded) {
+                toggleSidebar();
+            }
+            // Swipe left to close
+            if (touchStartX - touchEndX > 50 && sidebarExpanded) {
+                toggleSidebar();
+            }
+        }
+    }
 </script>
 
 </body>
