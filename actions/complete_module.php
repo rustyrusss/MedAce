@@ -24,8 +24,8 @@ if ($moduleId === 0) {
 }
 
 try {
-    // Check if the module exists and is active/published
-    $stmt = $conn->prepare("SELECT id, title FROM modules WHERE id = ? AND (status = 'active' OR status = 'published')");
+    // ✅ Check if the module exists and is active/published
+    $stmt = $conn->prepare("SELECT id, title FROM modules WHERE id = ? AND status IN ('active', 'published')");
     $stmt->execute([$moduleId]);
     $module = $stmt->fetch(PDO::FETCH_ASSOC);
     
@@ -35,7 +35,7 @@ try {
         exit();
     }
     
-    // Check if progress record exists
+    // ✅ Check if progress record exists
     $stmt = $conn->prepare("
         SELECT id, status 
         FROM student_progress 
@@ -45,23 +45,25 @@ try {
     $progress = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if ($progress) {
-        // Update existing progress to completed
-        $stmt = $conn->prepare("
-            UPDATE student_progress 
-            SET status = 'completed', completed_at = NOW() 
-            WHERE id = ?
-        ");
-        $stmt->execute([$progress['id']]);
+        // ✅ Update existing progress to completed (case-insensitive check)
+        if (strtolower(trim($progress['status'])) !== 'completed') {
+            $stmt = $conn->prepare("
+                UPDATE student_progress 
+                SET status = 'Completed', completed_at = NOW() 
+                WHERE id = ?
+            ");
+            $stmt->execute([$progress['id']]);
+        }
     } else {
-        // Create new progress record as completed (in case it was never started)
+        // ✅ Create new progress record as completed
         $stmt = $conn->prepare("
             INSERT INTO student_progress (student_id, module_id, status, started_at, completed_at) 
-            VALUES (?, ?, 'completed', NOW(), NOW())
+            VALUES (?, ?, 'Completed', NOW(), NOW())
         ");
         $stmt->execute([$studentId, $moduleId]);
     }
     
-    // ✅ NEW: Check if any quizzes are now unlocked by completing this module
+    // ✅ Check if any quizzes are now unlocked by completing this module
     $stmt = $conn->prepare("
         SELECT id, title 
         FROM quizzes 
@@ -83,7 +85,7 @@ try {
             $successMessage .= "• " . htmlspecialchars($quiz['title']) . "<br>";
         }
         
-        $successMessage .= '<br><a href="../member/quizzes.php" class="inline-block mt-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-semibold text-sm">View Available Quizzes</a>';
+        $successMessage .= '<br><a href="../member/quizzes.php" class="inline-block mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold text-sm">View Available Quizzes</a>';
     }
     
     $_SESSION['success_message'] = $successMessage;

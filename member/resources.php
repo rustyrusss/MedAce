@@ -164,87 +164,6 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                         width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        /* Sidebar Toggle Button */
-        .sidebar-toggle-btn {
-            width: 40px;
-            height: 40px;
-            position: relative;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: transparent;
-            border: 2px solid #cbd5e1;
-            border-radius: 8px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            padding: 0;
-            flex-shrink: 0;
-        }
-
-        .sidebar-toggle-btn:hover {
-            border-color: #0ea5e9;
-            background: #f0f9ff;
-        }
-
-        .sidebar-toggle-btn:active {
-            transform: scale(0.95);
-        }
-
-        .sidebar-toggle-btn .toggle-icon {
-            width: 24px;
-            height: 24px;
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        /* Panel icon (left bar) */
-        .sidebar-toggle-btn .toggle-icon::before {
-            content: '';
-            position: absolute;
-            left: 2px;
-            width: 3px;
-            height: 16px;
-            background-color: #64748b;
-            border-radius: 2px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        /* Chevron icon */
-        .sidebar-toggle-btn .toggle-icon::after {
-            content: '';
-            position: absolute;
-            right: 2px;
-            width: 6px;
-            height: 6px;
-            border-right: 2px solid #64748b;
-            border-bottom: 2px solid #64748b;
-            transform: rotate(-45deg);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .sidebar-toggle-btn:hover .toggle-icon::before,
-        .sidebar-toggle-btn:hover .toggle-icon::after {
-            border-color: #0ea5e9;
-            background-color: #0ea5e9;
-        }
-
-        /* Active state - chevron points left when sidebar is expanded */
-        .sidebar-toggle-btn.active .toggle-icon::after {
-            transform: rotate(135deg);
-            right: 4px;
-        }
-
-        .sidebar-toggle-btn.active .toggle-icon::before {
-            background-color: #0ea5e9;
-        }
-
-        .sidebar-toggle-btn.active {
-            border-color: #0ea5e9;
-            background: #f0f9ff;
-        }
-
         /* Desktop Sidebar Styles */
         @media (min-width: 1025px) {
             #sidebar {
@@ -277,6 +196,11 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
             #main-content.content-expanded {
                 margin-left: 18rem;
             }
+
+            /* Hide toggle button on desktop */
+            .mobile-toggle-btn {
+                display: none;
+            }
         }
 
         /* Mobile Sidebar Styles */
@@ -299,30 +223,21 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
             #main-content {
                 margin-left: 0 !important;
             }
+
+            /* Show toggle button on mobile */
+            .mobile-toggle-btn {
+                display: flex;
+            }
+
+            /* Hide desktop toggle button on mobile */
+            .desktop-toggle-section {
+                display: none;
+            }
         }
 
         @media (max-width: 768px) {
             #sidebar {
                 width: 16rem;
-            }
-            
-            .sidebar-toggle-btn {
-                width: 36px;
-                height: 36px;
-            }
-
-            .sidebar-toggle-btn .toggle-icon {
-                width: 20px;
-                height: 20px;
-            }
-
-            .sidebar-toggle-btn .toggle-icon::before {
-                height: 14px;
-            }
-
-            .sidebar-toggle-btn .toggle-icon::after {
-                width: 5px;
-                height: 5px;
             }
         }
 
@@ -371,6 +286,51 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
             max-width: 100%;
             overflow-x: hidden;
         }
+
+        /* ✅ Success message styling for HTML content */
+        .success-message-content {
+            line-height: 1.6;
+        }
+
+        .success-message-content strong {
+            font-weight: 600;
+            color: #166534;
+        }
+
+        .success-message-content a {
+            display: inline-block;
+            margin-top: 0.75rem;
+            padding: 0.5rem 1rem;
+            background: #0ea5e9;
+            color: white;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: background-color 0.2s;
+        }
+
+        .success-message-content a:hover {
+            background: #0284c7;
+        }
+
+        .success-message-content ul {
+            list-style: none;
+            margin: 0.5rem 0;
+            padding-left: 0;
+        }
+
+        .success-message-content ul li {
+            margin: 0.25rem 0;
+            padding-left: 1.25rem;
+            position: relative;
+        }
+
+        .success-message-content ul li::before {
+            content: "•";
+            position: absolute;
+            left: 0.5rem;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 antialiased" x-data="{ activeFilter: 'All', searchQuery: '', showAlert: <?= ($successMessage || $errorMessage) ? 'true' : 'false' ?> }">
@@ -392,10 +352,10 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                 </div>
             </div>
 
-            <!-- Toggle Button -->
-            <div class="px-4 py-3 border-b border-gray-200">
-                <button onclick="toggleSidebar()" class="sidebar-toggle-btn w-full" id="sidebarToggleBtn" aria-label="Toggle sidebar">
-                    <div class="toggle-icon"></div>
+            <!-- Desktop Toggle Button (Hidden on Mobile) -->
+            <div class="desktop-toggle-section px-4 py-3 border-b border-gray-200">
+                <button onclick="toggleSidebar()" class="w-full flex items-center justify-center p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600">
+                    <i class="fas fa-bars text-lg"></i>
                 </button>
             </div>
 
@@ -434,8 +394,16 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
     <main id="main-content" class="flex-1 transition-all duration-300 main-container">
         <!-- Top Bar -->
         <header class="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-4">
-            <div class="flex items-center justify-center">
-                <h1 class="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 truncate">Learning Resources</h1>
+            <div class="flex items-center justify-between gap-3">
+                <!-- Mobile Toggle Button (Visible on Mobile) -->
+                <button onclick="toggleSidebar()" class="mobile-toggle-btn lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0">
+                    <i class="fas fa-bars text-gray-600 text-xl"></i>
+                </button>
+                
+                <h1 class="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 truncate flex-1 text-center lg:text-left">Learning Resources</h1>
+                
+                <!-- Spacer for mobile to center title -->
+                <div class="w-10 lg:hidden"></div>
             </div>
         </header>
 
@@ -447,7 +415,9 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                 <div class="bg-green-50 border-l-4 border-green-500 rounded-lg p-4 flex items-start justify-between shadow-sm">
                     <div class="flex items-start min-w-0 flex-1">
                         <i class="fas fa-check-circle text-green-500 text-lg sm:text-xl mr-3 mt-0.5 flex-shrink-0"></i>
-                        <p class="text-green-800 font-medium text-sm sm:text-base break-words"><?= htmlspecialchars($successMessage) ?></p>
+                        <div class="text-green-800 font-medium text-sm sm:text-base break-words success-message-content">
+                            <?= $successMessage ?>
+                        </div>
                     </div>
                     <button @click="showAlert = false" class="text-green-500 hover:text-green-700 ml-4 flex-shrink-0">
                         <i class="fas fa-times"></i>
@@ -591,12 +561,8 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
         const sidebar = document.getElementById('sidebar');
         const mainContent = document.getElementById('main-content');
         const overlay = document.getElementById('sidebar-overlay');
-        const toggleBtn = document.getElementById('sidebarToggleBtn');
         
         sidebarExpanded = !sidebarExpanded;
-        
-        // Toggle button active state
-        toggleBtn.classList.toggle('active');
         
         if (window.innerWidth < 1025) {
             // Mobile behavior
@@ -639,7 +605,6 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
             const sidebar = document.getElementById('sidebar');
             const mainContent = document.getElementById('main-content');
             const overlay = document.getElementById('sidebar-overlay');
-            const toggleBtn = document.getElementById('sidebarToggleBtn');
             
             if (window.innerWidth >= 1025) {
                 // Desktop mode - reset mobile states
@@ -651,11 +616,9 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                 if (!sidebarExpanded) {
                     sidebar.classList.remove('sidebar-expanded');
                     mainContent.classList.remove('content-expanded');
-                    toggleBtn.classList.remove('active');
                 } else {
                     sidebar.classList.add('sidebar-expanded');
                     mainContent.classList.add('content-expanded');
-                    toggleBtn.classList.add('active');
                 }
             } else {
                 // Mobile mode - reset desktop states
@@ -666,7 +629,6 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                     overlay.classList.add('hidden');
                     overlay.classList.remove('show');
                     document.body.classList.remove('sidebar-open');
-                    toggleBtn.classList.remove('active');
                 }
             }
         }, 250);
@@ -676,18 +638,15 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
     window.addEventListener('DOMContentLoaded', function() {
         const sidebar = document.getElementById('sidebar');
         const mainContent = document.getElementById('main-content');
-        const toggleBtn = document.getElementById('sidebarToggleBtn');
         
         if (window.innerWidth >= 1025) {
             // Desktop: start collapsed
             sidebar.classList.remove('sidebar-expanded');
             mainContent.classList.remove('content-expanded');
-            toggleBtn.classList.remove('active');
             sidebarExpanded = false;
         } else {
             // Mobile: ensure sidebar is hidden
             sidebar.classList.remove('sidebar-expanded');
-            toggleBtn.classList.remove('active');
             sidebarExpanded = false;
         }
     });
@@ -725,14 +684,14 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
         }
     });
 
-    // Auto-hide alert after 6 seconds
+    // Auto-hide alert after 10 seconds
     <?php if ($successMessage || $errorMessage): ?>
     setTimeout(() => {
         const alpineData = document.querySelector('[x-data]')?.__x?.$data;
         if (alpineData) {
             alpineData.showAlert = false;
         }
-    }, 6000);
+    }, 10000);
     <?php endif; ?>
 </script>
 

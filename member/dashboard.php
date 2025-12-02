@@ -79,7 +79,52 @@ $stats = $journeyData['stats'] ?? [
     'pending' => 0,
     'progress' => 0
 ];
-$quizzes = $journeyData['quizzes'] ?? [];
+
+// ✅ FIXED: Fetch quizzes with prerequisite check using case-insensitive comparison
+$quizzesStmt = $conn->prepare("
+    SELECT q.id, q.title, q.prerequisite_module_id,
+           qa.status,
+           pm.title AS prerequisite_module_title,
+           LOWER(TRIM(COALESCE(sp.status, ''))) AS prerequisite_status
+    FROM quizzes q
+    LEFT JOIN modules pm ON q.prerequisite_module_id = pm.id
+    LEFT JOIN student_progress sp ON sp.module_id = q.prerequisite_module_id AND sp.student_id = ?
+    LEFT JOIN (
+        SELECT qa1.*
+        FROM quiz_attempts qa1
+        INNER JOIN (
+            SELECT quiz_id, MAX(attempted_at) AS latest_attempt
+            FROM quiz_attempts
+            WHERE student_id = ?
+            GROUP BY quiz_id
+        ) latest ON qa1.quiz_id = latest.quiz_id AND qa1.attempted_at = latest.latest_attempt
+    ) qa ON q.id = qa.quiz_id
+    WHERE q.status = 'active'
+    ORDER BY q.publish_time DESC
+");
+$quizzesStmt->execute([$studentId, $studentId]);
+$allQuizzes = $quizzesStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// ✅ Filter out locked quizzes (those with unmet prerequisites)
+$quizzes = [];
+foreach ($allQuizzes as $quiz) {
+    $prerequisiteMet = true;
+    
+    // Check if quiz has a prerequisite
+    if ($quiz['prerequisite_module_id']) {
+        // Check if prerequisite is completed (case-insensitive)
+        $prerequisiteMet = ($quiz['prerequisite_status'] === 'completed');
+    }
+    
+    // Only show quizzes where prerequisite is met
+    if ($prerequisiteMet) {
+        // Set default status if not attempted
+        if (empty($quiz['status'])) {
+            $quiz['status'] = 'Pending';
+        }
+        $quizzes[] = $quiz;
+    }
+}
 
 // ✅ Fetch daily tip safely
 $dailyTipStmt = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMIT 1");
@@ -863,8 +908,8 @@ $dailyTip = $dailyTipStmt ? $dailyTipStmt->fetchColumn() : null;
                     <div class="inline-flex items-center justify-center w-16 h-16 lg:w-20 lg:h-20 bg-gray-100 rounded-full mb-3 lg:mb-4">
                         <i class="fas fa-clipboard-list text-3xl lg:text-4xl text-gray-400"></i>
                     </div>
-                    <h3 class="text-base lg:text-lg font-semibold text-gray-900 mb-2">No quizzes yet</h3>
-                    <p class="text-sm lg:text-base text-gray-600">Check back later for new quizzes</p>
+                    <h3 class="text-base lg:text-lg font-semibold text-gray-900 mb-2">No quizzes available</h3>
+                    <p class="text-sm lg:text-base text-gray-600">Complete required modules to unlock quizzes</p>
                 </div>
                 <?php else: ?>
                 <div class="p-4 sm:p-6">

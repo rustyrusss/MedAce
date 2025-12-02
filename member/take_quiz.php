@@ -1210,25 +1210,19 @@ document.addEventListener("DOMContentLoaded", () => {
       alert("⚠️ Tab switching is not allowed during the quiz!");
     }
 
+    // Allow copy/paste/cut in text inputs, but nowhere else
     const isTextInput = e.target.classList.contains('text-answer-input');
     
     if (!isTextInput) {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
         e.preventDefault();
-        alert("⚠️ Copying is disabled during the quiz.");
       }
       if ((e.ctrlKey || e.metaKey) && (e.key === 'x' || e.key === 'X')) {
         e.preventDefault();
-        alert("⚠️ Cutting is disabled during the quiz.");
       }
       if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
         e.preventDefault();
-        alert("⚠️ Select all is disabled during the quiz.");
       }
-    }
-    
-    if (isTextInput && (e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {
-      return true;
     }
   });
 
@@ -1321,25 +1315,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 100);
   });
 
-  // Security
-  document.addEventListener("contextmenu", (e) => {
-    if (quizStarted && !e.target.classList.contains('text-answer-input')) {
-      e.preventDefault();
-      alert("Right-click is disabled during the quiz.");
-    }
-  });
-
+  // Security - removed context menu prevention, only prevent copy/cut/select on non-text elements
   document.addEventListener("copy", (e) => {
     if (quizStarted && !e.target.classList.contains('text-answer-input')) {
       e.preventDefault();
-      alert("⚠️ Copying is disabled during the quiz.");
     }
   });
 
   document.addEventListener("cut", (e) => {
     if (quizStarted && !e.target.classList.contains('text-answer-input')) {
       e.preventDefault();
-      alert("⚠️ Cutting is disabled during the quiz.");
     }
   });
 

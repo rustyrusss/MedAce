@@ -30,11 +30,11 @@ if (!empty($student['gender'])) {
 }
 $profilePic = !empty($student['profile_pic']) ? "../" . $student['profile_pic'] : $defaultAvatar;
 
-// ✅ Get quizzes with latest attempt, highest score, and prerequisite info
+// ✅ FIXED: Get quizzes with case-insensitive status check
 $stmt = $conn->prepare("
   SELECT q.id, q.title, q.publish_time, q.deadline_time, q.subject, q.prerequisite_module_id,
          pm.title AS prerequisite_module_title,
-         sp.status AS prerequisite_status,
+         LOWER(TRIM(COALESCE(sp.status, ''))) AS prerequisite_status,
          sp.completed_at AS prerequisite_completed_at,
          qa.id AS attempt_id, 
          COALESCE(qa.status, 'Pending') AS status,
@@ -385,9 +385,10 @@ function calculatePercentage($score, $total) {
                     $latestPercentage = calculatePercentage($quiz['latest_score_raw'], $quiz['total_points']);
                     $highestPercentage = calculatePercentage($quiz['highest_score_raw'], $quiz['total_points']);
                     
-                    // Check if prerequisite is met
+                    // ✅ FIXED: Check if prerequisite is met with case-insensitive comparison
                     $prerequisiteMet = true;
                     if ($quiz['prerequisite_module_id']) {
+                        // The query already lowercases and trims the status
                         $prerequisiteMet = ($quiz['prerequisite_status'] === 'completed');
                     }
                     
