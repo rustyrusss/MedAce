@@ -44,6 +44,16 @@ if (!$module) {
     exit();
 }
 
+// Check for assigned quiz based on prerequisite module
+$stmt = $conn->prepare("
+    SELECT q.id, q.title 
+    FROM quizzes q
+    WHERE q.prerequisite_module_id = ? AND q.status = 'active'
+    LIMIT 1
+");
+$stmt->execute([$moduleId]);
+$assignedQuiz = $stmt->fetch(PDO::FETCH_ASSOC);
+
 function convertPPTXtoPDF($pptxPath) {
     $pdfPath = str_replace(['.pptx', '.ppt'], '.pdf', $pptxPath);
     if (file_exists($pdfPath)) {
@@ -291,6 +301,12 @@ $statusClass = match (strtolower($module['status'])) {
         }
         .animate-fade-in-up { animation: fadeInUp 0.6s ease-out; }
         
+        @keyframes slideInFromRight {
+            from { opacity: 0; transform: translateX(100px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .animate-slide-in { animation: slideInFromRight 0.5s ease-out; }
+        
         .sidebar-transition { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         
         /* Desktop */
@@ -321,9 +337,25 @@ $statusClass = match (strtolower($module['status'])) {
         #sidebar-overlay { transition: opacity 0.3s ease; opacity: 0; }
         #sidebar-overlay.show { opacity: 1; }
         .main-container { width: 100%; max-width: 100%; overflow-x: hidden; }
+        
+        /* Quiz button styles */
+        .quiz-redirect-btn {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            z-index: 40;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        @media (max-width: 640px) {
+            .quiz-redirect-btn {
+                bottom: 1rem;
+                right: 1rem;
+            }
+        }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800 antialiased" x-data="{ showCompleteModal: false }">
+<body class="bg-gray-50 text-gray-800 antialiased" x-data="{ showCompleteModal: false, showQuizButton: <?= strtolower($module['status']) === 'completed' && $assignedQuiz ? 'true' : 'false' ?> }">
 
 <div class="flex min-h-screen">
     <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 sidebar-transition">
@@ -416,6 +448,7 @@ $statusClass = match (strtolower($module['status'])) {
     </main>
 </div>
 
+<!-- Complete Module Modal -->
 <div x-show="showCompleteModal" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" @click.away="showCompleteModal = false" x-cloak>
     <div class="bg-white rounded-2xl max-w-md w-full p-8 animate-fade-in-up">
         <div class="text-center">
@@ -439,6 +472,31 @@ $statusClass = match (strtolower($module['status'])) {
         </div>
     </div>
 </div>
+
+<!-- Quiz Redirect Button (appears after completion) -->
+<?php if ($assignedQuiz): ?>
+<div x-show="showQuizButton" 
+     x-transition:enter="transition ease-out duration-300"
+     x-transition:enter-start="opacity-0 transform translate-x-full"
+     x-transition:enter-end="opacity-100 transform translate-x-0"
+     x-transition:leave="transition ease-in duration-200"
+     x-transition:leave-start="opacity-100 transform translate-x-0"
+     x-transition:leave-end="opacity-0 transform translate-x-full"
+     class="quiz-redirect-btn animate-slide-in"
+     x-cloak>
+    <a href="take_quiz.php?id=<?= $assignedQuiz['id'] ?>" 
+       class="group flex items-center gap-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-4 rounded-2xl font-bold text-base transition-all duration-300 transform hover:scale-105">
+        <div class="flex items-center justify-center w-12 h-12 bg-white/20 rounded-xl group-hover:bg-white/30 transition-colors">
+            <i class="fas fa-clipboard-check text-2xl"></i>
+        </div>
+        <div class="flex flex-col items-start">
+            <span class="text-xs font-medium opacity-90">Take Quiz</span>
+            <span class="text-sm font-bold"><?= htmlspecialchars($assignedQuiz['title']) ?></span>
+        </div>
+        <i class="fas fa-arrow-right text-xl ml-2 group-hover:translate-x-1 transition-transform"></i>
+    </a>
+</div>
+<?php endif; ?>
 
 <script>
 let sidebarExpanded = false;
@@ -521,4 +579,4 @@ window.addEventListener('DOMContentLoaded', function() {
 </script>
 
 </body>
-</html>
+</html> 
