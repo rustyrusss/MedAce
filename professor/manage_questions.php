@@ -19,7 +19,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['question_text']) && !
         $question_type = trim($_POST['question_type']);
         $options_json = $_POST['options_json'] ?? '[]';
         $correct_answer_value = $_POST['correct_answer_value'] ?? '';
-        $question_points = isset($_POST['question_points']) ? intval($_POST['question_points']) : 1;
+        
+        // Only allow custom points for essay and short_answer
+        if (in_array($question_type, ['essay', 'short_answer'])) {
+            $question_points = isset($_POST['question_points']) ? intval($_POST['question_points']) : 10;
+        } else {
+            $question_points = 1; // Fixed at 1 point for other question types
+        }
         
         if (empty($quiz_id) || empty($question_text) || empty($question_type)) {
             throw new Exception("Please fill in all required fields.");
@@ -102,7 +108,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['question_id']) && iss
         $question_type = trim($_POST['question_type']);
         $options_json = $_POST['options_json'] ?? '[]';
         $correct_answer_value = $_POST['correct_answer_value'] ?? '';
-        $question_points = isset($_POST['question_points_edit']) ? intval($_POST['question_points_edit']) : 1;
+        
+        // Only allow custom points for essay and short_answer
+        if (in_array($question_type, ['essay', 'short_answer'])) {
+            $question_points = isset($_POST['question_points_edit']) ? intval($_POST['question_points_edit']) : 10;
+        } else {
+            $question_points = 1; // Fixed at 1 point for other question types
+        }
         
         // Verify ownership
         $stmt = $conn->prepare("
@@ -660,6 +672,11 @@ $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                             <i class="fas fa-trophy mr-1"></i>
                                                             <?= $points ?> point<?= $points != 1 ? 's' : '' ?>
                                                         </span>
+                                                    <?php else: ?>
+                                                        <span class="badge bg-gray-100 text-gray-600">
+                                                            <i class="fas fa-trophy mr-1"></i>
+                                                            1 point
+                                                        </span>
                                                     <?php endif; ?>
                                                 </div>
                                                 <p class="text-xl font-semibold text-gray-900 leading-relaxed">
@@ -777,6 +794,10 @@ $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                         </div>
                                                     <?php endforeach; ?>
                                                 </div>
+                                                <p class="text-xs text-gray-500 mt-2 italic">
+                                                    <i class="fas fa-info-circle mr-1"></i>
+                                                    Multiple choice, checkbox, and true/false questions are worth 1 point each
+                                                </p>
                                             </div>
                                             <?php else: ?>
                                             <div class="space-y-4">

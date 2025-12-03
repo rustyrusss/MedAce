@@ -20,13 +20,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $module_id = intval($_POST['module_id']);
         $content = trim($_POST['content'] ?? '');
         $status = $_POST['status'] ?? 'active';
-        $time_limit = isset($_POST['time_limit']) ? intval($_POST['time_limit']) : 0;
+        $time_limit = intval($_POST['time_limit']);
         $publish_time = !empty($_POST['publish_time']) ? $_POST['publish_time'] : null;
         $deadline_time = !empty($_POST['deadline_time']) ? $_POST['deadline_time'] : null;
         $prerequisite_module_id = !empty($_POST['prerequisite_module_id']) ? intval($_POST['prerequisite_module_id']) : null;
         
         if (empty($title) || empty($module_id)) {
             throw new Exception("Title and Module are required.");
+        }
+        
+        if ($time_limit < 1) {
+            throw new Exception("Time limit is required and must be at least 1 minute.");
         }
         
         // Verify module belongs to professor
@@ -83,13 +87,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $module_id = intval($_POST['module_id']);
         $content = trim($_POST['content'] ?? '');
         $status = $_POST['status'] ?? 'active';
-        $time_limit = isset($_POST['time_limit']) ? intval($_POST['time_limit']) : 0;
+        $time_limit = intval($_POST['time_limit']);
         $publish_time = !empty($_POST['publish_time']) ? $_POST['publish_time'] : null;
         $deadline_time = !empty($_POST['deadline_time']) ? $_POST['deadline_time'] : null;
         $prerequisite_module_id = !empty($_POST['prerequisite_module_id']) ? intval($_POST['prerequisite_module_id']) : null;
         
         if (empty($title) || empty($module_id)) {
             throw new Exception("Title and Module are required.");
+        }
+        
+        if ($time_limit < 1) {
+            throw new Exception("Time limit is required and must be at least 1 minute.");
         }
         
         // Verify quiz belongs to professor
@@ -625,6 +633,9 @@ try {
                 gap: 0.375rem;
                 transition: all 0.2s;
                 text-decoration: none;
+                border: none;
+                cursor: pointer;
+                background: transparent;
             }
         }
 
@@ -882,11 +893,11 @@ try {
                                 </td>
                                 <td class="px-6 py-4">
                                     <div class="flex items-center justify-center gap-2">
-                                        <a href="quiz_participants.php?quiz_id=<?= $quiz['id'] ?>" 
-                                           class="inline-flex items-center px-3 py-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 font-medium transition-colors text-sm"
-                                           title="View Participants">
+                                        <button onclick="openParticipantsModal(<?= $quiz['id'] ?>, '<?= htmlspecialchars(addslashes($quiz['title'])) ?>')" 
+                                                class="inline-flex items-center px-3 py-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 font-medium transition-colors text-sm"
+                                                title="View Participants">
                                             <i class="fas fa-users"></i>
-                                        </a>
+                                        </button>
                                         <a href="manage_questions.php?quiz_id=<?= $quiz['id'] ?>" 
                                            class="inline-flex items-center px-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 font-medium transition-colors text-sm"
                                            title="Manage Questions">
@@ -991,11 +1002,11 @@ try {
                         </div>
 
                         <div class="quiz-card-actions">
-                            <a href="quiz_participants.php?quiz_id=<?= $quiz['id'] ?>" 
-                               class="quiz-card-action-btn bg-emerald-50 text-emerald-700 hover:bg-emerald-100">
+                            <button onclick="openParticipantsModal(<?= $quiz['id'] ?>, '<?= htmlspecialchars(addslashes($quiz['title'])) ?>')" 
+                                    class="quiz-card-action-btn bg-emerald-50 text-emerald-700 hover:bg-emerald-100">
                                 <i class="fas fa-users"></i>
                                 <span>Participants</span>
-                            </a>
+                            </button>
                             <a href="manage_questions.php?quiz_id=<?= $quiz['id'] ?>" 
                                class="quiz-card-action-btn bg-indigo-50 text-indigo-700 hover:bg-indigo-100">
                                 <i class="fas fa-question-circle"></i>
@@ -1128,11 +1139,11 @@ try {
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">
                         <i class="fas fa-clock text-primary-500 mr-1"></i>
-                        Time Limit (min)
+                        Time Limit (min) *
                     </label>
-                    <input type="number" name="time_limit" min="0" value="0"
+                    <input type="number" name="time_limit" min="1" required
                            class="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm sm:text-base"
-                           placeholder="0 = No limit">
+                           placeholder="Enter time limit in minutes">
                 </div>
             </div>
 
@@ -1264,11 +1275,11 @@ try {
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">
                         <i class="fas fa-clock text-primary-500 mr-1"></i>
-                        Time Limit (min)
+                        Time Limit (min) *
                     </label>
-                    <input type="number" name="time_limit" id="edit_time_limit" min="0"
+                    <input type="number" name="time_limit" id="edit_time_limit" min="1" required
                            class="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm sm:text-base"
-                           placeholder="0 = No limit">
+                           placeholder="Enter time limit in minutes">
                 </div>
             </div>
 
@@ -1304,6 +1315,50 @@ try {
                 </button>
             </div>
         </form>
+    </div>
+</div>
+
+<!-- Participants Modal -->
+<div id="participantsModal" class="modal">
+    <div class="modal-content" style="max-width: 900px;">
+        <div class="flex items-center justify-between mb-4 sm:mb-6">
+            <h2 class="text-xl sm:text-2xl font-bold text-gray-900">
+                <i class="fas fa-users text-emerald-600 mr-2"></i>
+                <span id="participantsModalTitle">Quiz Participants</span>
+            </h2>
+            <button onclick="closeParticipantsModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                <i class="fas fa-times text-lg sm:text-xl"></i>
+            </button>
+        </div>
+        
+        <div id="participantsContent">
+            <div class="text-center py-12">
+                <i class="fas fa-spinner fa-spin text-4xl text-primary-500"></i>
+                <p class="text-gray-600 mt-4">Loading participants...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Student Attempts Modal -->
+<div id="attemptsModal" class="modal">
+    <div class="modal-content" style="max-width: 1000px;">
+        <div class="flex items-center justify-between mb-4 sm:mb-6">
+            <h2 class="text-xl sm:text-2xl font-bold text-gray-900">
+                <i class="fas fa-file-alt text-blue-600 mr-2"></i>
+                <span id="attemptsModalTitle">Student Attempts</span>
+            </h2>
+            <button onclick="closeAttemptsModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                <i class="fas fa-times text-lg sm:text-xl"></i>
+            </button>
+        </div>
+        
+        <div id="attemptsContent">
+            <div class="text-center py-12">
+                <i class="fas fa-spinner fa-spin text-4xl text-primary-500"></i>
+                <p class="text-gray-600 mt-4">Loading attempts...</p>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -1370,7 +1425,7 @@ try {
         document.getElementById('edit_prerequisite_module_id').value = quiz.prerequisite_module_id || '';
         document.getElementById('edit_content').value = quiz.content || '';
         document.getElementById('edit_status').value = quiz.status;
-        document.getElementById('edit_time_limit').value = quiz.time_limit || 0;
+        document.getElementById('edit_time_limit').value = quiz.time_limit || 1;
         
         if (quiz.publish_time) {
             const publishDate = new Date(quiz.publish_time);
@@ -1392,6 +1447,73 @@ try {
 
     function closeEditModal() {
         document.getElementById('editQuizModal').classList.remove('show');
+        document.body.style.overflow = 'auto';
+    }
+
+    function openParticipantsModal(quizId, quizTitle) {
+        document.getElementById('participantsModalTitle').textContent = quizTitle + ' - Participants';
+        document.getElementById('participantsModal').classList.add('show');
+        document.body.style.overflow = 'hidden';
+        
+        // Reset content
+        document.getElementById('participantsContent').innerHTML = `
+            <div class="text-center py-12">
+                <i class="fas fa-spinner fa-spin text-4xl text-primary-500"></i>
+                <p class="text-gray-600 mt-4">Loading participants...</p>
+            </div>
+        `;
+        
+        // Load participants via AJAX
+        fetch(`quiz_participants_ajax.php?quiz_id=${quizId}`)
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('participantsContent').innerHTML = html;
+            })
+            .catch(error => {
+                document.getElementById('participantsContent').innerHTML = `
+                    <div class="text-center py-12">
+                        <i class="fas fa-exclamation-circle text-4xl text-red-500"></i>
+                        <p class="text-gray-600 mt-4">Error loading participants</p>
+                    </div>
+                `;
+            });
+    }
+
+    function closeParticipantsModal() {
+        document.getElementById('participantsModal').classList.remove('show');
+        document.body.style.overflow = 'auto';
+    }
+
+    function openAttemptsModal(quizId, studentId, studentName) {
+        document.getElementById('attemptsModalTitle').textContent = studentName + ' - Attempts';
+        document.getElementById('attemptsModal').classList.add('show');
+        
+        // Reset content
+        document.getElementById('attemptsContent').innerHTML = `
+            <div class="text-center py-12">
+                <i class="fas fa-spinner fa-spin text-4xl text-primary-500"></i>
+                <p class="text-gray-600 mt-4">Loading attempts...</p>
+            </div>
+        `;
+        
+        // Load attempts via AJAX
+        fetch(`student_attempts_ajax.php?quiz_id=${quizId}&student_id=${studentId}`)
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('attemptsContent').innerHTML = html;
+            })
+            .catch(error => {
+                document.getElementById('attemptsContent').innerHTML = `
+                    <div class="text-center py-12">
+                        <i class="fas fa-exclamation-circle text-4xl text-red-500"></i>
+                        <p class="text-gray-600 mt-4">Error loading attempts</p>
+                    </div>
+                `;
+            });
+    }
+
+    function closeAttemptsModal() {
+        document.getElementById('attemptsModal').classList.remove('show');
         document.body.style.overflow = 'auto';
     }
 
@@ -1515,6 +1637,8 @@ try {
             if (e.key === 'Escape') {
                 closeAddModal();
                 closeEditModal();
+                closeParticipantsModal();
+                closeAttemptsModal();
                 if (sidebarExpanded && window.innerWidth < 1024) {
                     closeSidebar();
                 }
@@ -1530,6 +1654,18 @@ try {
         document.getElementById('editQuizModal').addEventListener('click', function(e) {
             if (e.target === this) {
                 closeEditModal();
+            }
+        });
+
+        document.getElementById('participantsModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeParticipantsModal();
+            }
+        });
+
+        document.getElementById('attemptsModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAttemptsModal();
             }
         });
     });
