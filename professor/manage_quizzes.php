@@ -670,6 +670,9 @@ try {
             overflow-x: hidden;
         }
     </style>
+    
+    <!-- Chart.js for progress graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body class="bg-gray-50 text-gray-800 antialiased">
 
