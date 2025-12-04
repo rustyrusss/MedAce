@@ -1,7 +1,5 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+session_start();
 require_once '../config/db_conn.php';
 
 // Access control
@@ -108,23 +106,21 @@ if (count($answers) === 0) {
                 <!-- Multiple Choice Answer -->
                 <?php
                     $options = json_decode($answer['options'], true);
-                    $studentAnswer = $answer['answer_text'] ? trim($answer['answer_text']) : '';
-                    $correctAnswer = $answer['correct_answer'] ? trim($answer['correct_answer']) : '';
+                    $studentAnswer = trim($answer['answer_text']);
+                    $correctAnswer = trim($answer['correct_answer']);
                 ?>
                 <div class="space-y-2">
                     <?php foreach ($options as $option): ?>
                         <?php 
-                            // Handle if option is an array or string
-                            $optionText = is_array($option) ? $option['text'] : $option;
-                            $isStudentChoice = (trim($optionText) === $studentAnswer);
-                            $isCorrectChoice = (trim($optionText) === $correctAnswer);
+                            $isStudentChoice = (trim($option) === $studentAnswer);
+                            $isCorrectChoice = (trim($option) === $correctAnswer);
                         ?>
                         <div class="flex items-center gap-2 p-3 rounded-lg <?= 
                             $isCorrectChoice ? 'bg-green-50 border-2 border-green-300' : 
                             ($isStudentChoice ? 'bg-red-50 border-2 border-red-300' : 'bg-gray-50 border border-gray-200') 
                         ?>">
                             <i class="fas fa-<?= $isCorrectChoice ? 'check-circle text-green-600' : ($isStudentChoice ? 'times-circle text-red-600' : 'circle text-gray-400') ?>"></i>
-                            <span class="text-sm <?= ($isStudentChoice || $isCorrectChoice) ? 'font-semibold' : '' ?>"><?= htmlspecialchars($optionText) ?></span>
+                            <span class="text-sm <?= ($isStudentChoice || $isCorrectChoice) ? 'font-semibold' : '' ?>"><?= htmlspecialchars($option) ?></span>
                             <?php if ($isStudentChoice && !$isCorrectChoice): ?>
                                 <span class="ml-auto text-xs text-red-600 font-medium">Student's Answer</span>
                             <?php elseif ($isCorrectChoice): ?>
@@ -140,11 +136,7 @@ if (count($answers) === 0) {
                     <div>
                         <label class="block text-xs font-semibold text-gray-700 mb-2">Student's Answer:</label>
                         <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                            <?php if (!empty($answer['answer_text'])): ?>
-                                <p class="text-sm text-gray-900 whitespace-pre-wrap"><?= nl2br(htmlspecialchars($answer['answer_text'])) ?></p>
-                            <?php else: ?>
-                                <p class="text-sm text-gray-400 italic">No answer provided</p>
-                            <?php endif; ?>
+                            <p class="text-sm text-gray-900 whitespace-pre-wrap"><?= nl2br(htmlspecialchars($answer['answer_text'])) ?></p>
                         </div>
                     </div>
 
@@ -159,16 +151,21 @@ if (count($answers) === 0) {
                                 <div class="flex items-center gap-2">
                                     <input type="number" 
                                            id="points-<?= $answer['id'] ?>" 
-                                           value="<?= intval($answer['points_earned'] ?? 0) ?>"
+                                           value="<?= $answer['points_earned'] ?? 0 ?>"
                                            min="0" 
                                            max="<?= $answer['points'] ?>" 
-                                           step="1"
+                                           step="0.5"
                                            class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
-                                           onchange="autoSaveGrade(<?= $answer['id'] ?>, <?= $attemptId ?>)">
+                                           onchange="updateGradeButton(<?= $answer['id'] ?>)">
                                     <span class="text-sm text-gray-600">/ <?= $answer['points'] ?> points</span>
-                                    <span id="save-status-<?= $answer['id'] ?>" class="text-xs text-gray-500 ml-2"></span>
                                 </div>
                             </div>
+                            <button onclick="saveGrade(<?= $answer['id'] ?>, <?= $attemptId ?>)" 
+                                    id="save-btn-<?= $answer['id'] ?>"
+                                    class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium text-sm transition-colors">
+                                <i class="fas fa-save mr-1"></i>
+                                Save Grade
+                            </button>
                         </div>
                         
                         <!-- Feedback Section -->
@@ -181,7 +178,7 @@ if (count($answers) === 0) {
                                       rows="2" 
                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm resize-none"
                                       placeholder="Provide feedback to the student..."
-                                      onchange="autoSaveGrade(<?= $answer['id'] ?>, <?= $attemptId ?>)"><?= htmlspecialchars($answer['feedback'] ?? '') ?></textarea>
+                                      onchange="updateGradeButton(<?= $answer['id'] ?>)"><?= htmlspecialchars($answer['feedback'] ?? '') ?></textarea>
                         </div>
 
                         <div id="grade-status-<?= $answer['id'] ?>" class="mt-2 text-sm"></div>
@@ -195,8 +192,8 @@ if (count($answers) === 0) {
     <!-- Recalculate Score Button -->
     <div class="flex items-center justify-between p-4 bg-gradient-to-r from-primary-50 to-blue-50 border border-primary-200 rounded-lg">
         <div>
-            <p class="text-sm font-semibold text-gray-900">Recalculate Final Score</p>
-            <p class="text-xs text-gray-600">Grades are saved automatically. Click to update the total score.</p>
+            <p class="text-sm font-semibold text-gray-900">After grading, recalculate the total score</p>
+            <p class="text-xs text-gray-600">This will update the student's final score for this attempt</p>
         </div>
         <button onclick="recalculateScore(<?= $attemptId ?>)" 
                 id="recalc-btn-<?= $attemptId ?>"

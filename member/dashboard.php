@@ -9,7 +9,6 @@ require_once __DIR__ . '/../includes/journey_fetch.php';
 require_once __DIR__ . '/../config/env.php';
 
 
-
 // ✅ Redirect if not student
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
     header("Location: ../public/index.php");
@@ -1046,113 +1045,7 @@ $dailyTip = $dailyTipStmt ? $dailyTipStmt->fetchColumn() : null;
     </main>
 </div>
 
-<!-- Chatbot Popup -->
-<div id="chatbotContainer" class="fixed bottom-4 right-4 z-50">
-    <!-- Chat Button -->
-    <button id="chatbotToggle" onclick="toggleChatbot()" class="w-14 h-14 lg:w-16 lg:h-16 bg-gradient-to-br from-primary-600 to-primary-500 text-white rounded-full shadow-2xl hover:shadow-primary-500/50 transition-all duration-300 hover:scale-110 flex items-center justify-center group">
-        <i id="chatbotIcon" class="fas fa-robot text-xl lg:text-2xl group-hover:animate-bounce"></i>
-        <span id="chatbotBadge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">1</span>
-    </button>
-
-    <!-- Chat Window -->
-    <div id="chatbotWindow" class="hidden absolute bottom-20 right-0 w-screen max-w-[380px] h-[500px] lg:h-[600px] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-200">
-        <!-- Chat Header -->
-        <div class="gradient-bg px-4 lg:px-6 py-4 flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
-                    <i class="fas fa-robot text-white text-lg"></i>
-                </div>
-                <div>
-                    <h3 class="text-white font-semibold text-sm lg:text-base">MedAce AI Assistant</h3>
-                    <p class="text-blue-100 text-xs">
-                        <span id="chatbotStatus" class="inline-flex items-center">
-                            <span class="w-2 h-2 bg-green-400 rounded-full mr-1 animate-pulse"></span>
-                            Online
-                        </span>
-                    </p>
-                </div>
-            </div>
-            <button onclick="toggleChatbot()" class="text-white hover:bg-white/20 rounded-lg p-2 transition-colors">
-                <i class="fas fa-times text-lg"></i>
-            </button>
-        </div>
-
-        <!-- Chat Messages -->
-        <div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-            <!-- Welcome Message -->
-            <div class="flex items-start space-x-2 animate-fade-in-up">
-                <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
-                    <i class="fas fa-robot text-primary-600 text-sm"></i>
-                </div>
-                <div class="flex-1">
-                    <div class="bg-white rounded-2xl rounded-tl-none px-4 py-3 shadow-sm">
-                        <p class="text-gray-800 text-sm">Hi <?= htmlspecialchars($student['firstname']) ?>! 👋</p>
-                        <p class="text-gray-800 text-sm mt-1">I'm your AI study assistant. I can help you with:</p>
-                        <ul class="text-gray-600 text-xs mt-2 space-y-1">
-                            <li>• Explaining nursing concepts</li>
-                            <li>• Study tips and strategies</li>
-                            <li>• Quiz preparation</li>
-                            <li>• Answering questions</li>
-                        </ul>
-                    </div>
-                    <span class="text-xs text-gray-500 mt-1 block">Just now</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Typing Indicator -->
-        <div id="typingIndicator" class="hidden px-4 py-2">
-            <div class="flex items-start space-x-2">
-                <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
-                    <i class="fas fa-robot text-primary-600 text-sm"></i>
-                </div>
-                <div class="bg-white rounded-2xl rounded-tl-none px-4 py-3 shadow-sm">
-                    <div class="flex space-x-1">
-                        <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0ms"></div>
-                        <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 150ms"></div>
-                        <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 300ms"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Chat Input -->
-        <div class="border-t border-gray-200 p-3 lg:p-4 bg-white">
-            <form id="chatForm" onsubmit="sendMessage(event)" class="flex items-end space-x-2">
-                <div class="flex-1">
-                    <textarea 
-                        id="chatInput" 
-                        rows="1"
-                        placeholder="Ask me anything..."
-                        class="w-full px-4 py-3 bg-gray-100 border-0 rounded-xl resize-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all text-sm lg:text-base"
-                        style="max-height: 120px;"
-                        onkeydown="handleInputKeydown(event)"
-                    ></textarea>
-                </div>
-                <button 
-                    type="submit" 
-                    id="sendButton"
-                    class="w-12 h-12 bg-primary-600 hover:bg-primary-700 text-white rounded-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 flex-shrink-0"
-                >
-                    <i class="fas fa-paper-plane"></i>
-                </button>
-            </form>
-            <p class="text-xs text-gray-500 mt-2 text-center">AI may make mistakes. Verify important information.</p>
-        </div>
-    </div>
-</div>
-
-<!-- Quick Actions (Optional - appears when chat is closed) -->
-<div id="quickActions" class="fixed bottom-24 right-4 z-40 space-y-2 hidden">
-    <button onclick="quickQuestion('How do I prepare for my quiz?')" class="bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-full shadow-lg text-sm transition-all hover:scale-105 flex items-center space-x-2">
-        <i class="fas fa-lightbulb text-yellow-500"></i>
-        <span>Quiz tips</span>
-    </button>
-    <button onclick="quickQuestion('Explain a nursing concept')" class="bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-full shadow-lg text-sm transition-all hover:scale-105 flex items-center space-x-2">
-        <i class="fas fa-book text-blue-500"></i>
-        <span>Study help</span>
-    </button>
-</div>
+<?php include __DIR__ . '/../includes/chatbot.php'; ?>
 
 <script>
     let sidebarExpanded = false;
@@ -1396,139 +1289,175 @@ $dailyTip = $dailyTipStmt ? $dailyTipStmt->fetchColumn() : null;
         dateElement.textContent = today.toLocaleDateString('en-US', options);
     }
 
-    // Toggle chatbot window
-    function toggleChatbot() {
-        const window = document.getElementById('chatbotWindow');
-        const icon = document.getElementById('chatbotIcon');
-        const badge = document.getElementById('chatbotBadge');
-        const quickActions = document.getElementById('quickActions');
-        
-        chatbotOpen = !chatbotOpen;
-        
-        if (chatbotOpen) {
-            window.classList.remove('hidden');
-            window.classList.add('animate-scale-in');
-            icon.classList.remove('fa-robot');
-            icon.classList.add('fa-times');
-            badge.classList.add('hidden');
+   // Toggle chatbot window
+function toggleChatbot() {
+    const window = document.getElementById('chatbotWindow');
+    const icon = document.getElementById('chatbotIcon');
+    const quickActions = document.getElementById('quickActions');
+    
+    if (!window || !icon) {
+        console.error('Chatbot elements not found!');
+        return;
+    }
+    
+    chatbotOpen = !chatbotOpen;
+    
+    console.log('Chatbot toggled:', chatbotOpen);
+    
+    if (chatbotOpen) {
+        window.classList.remove('hidden');
+        window.classList.add('animate-scale-in');
+        icon.classList.remove('fa-robot');
+        icon.classList.add('fa-times');
+        if (quickActions) {
             quickActions.classList.add('hidden');
-            
-            // Focus input
-            setTimeout(() => {
-                document.getElementById('chatInput').focus();
-            }, 300);
-        } else {
-            window.classList.add('hidden');
-            icon.classList.remove('fa-times');
-            icon.classList.add('fa-robot');
         }
+        
+        // Focus input after animation
+        setTimeout(() => {
+            const input = document.getElementById('chatInput');
+            if (input) {
+                input.focus();
+            }
+        }, 300);
+    } else {
+        window.classList.add('hidden');
+        window.classList.remove('animate-scale-in');
+        icon.classList.remove('fa-times');
+        icon.classList.add('fa-robot');
     }
+}
 
-    // Handle textarea auto-resize and enter key
-    function handleInputKeydown(event) {
-        const textarea = event.target;
-        
-        // Auto-resize
-        textarea.style.height = 'auto';
-        textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
-        
-        // Send on Enter (without Shift)
-        if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault();
-            document.getElementById('chatForm').dispatchEvent(new Event('submit'));
-        }
+  function handleInputKeydown(event) {
+    const textarea = event.target;
+    
+    // Auto-resize
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+    
+    // Send on Enter (without Shift)
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage(event);
     }
+}
 
     // Send message
-    async function sendMessage(event) {
+    
+async function sendMessage(event) {
+    // Prevent form submission if it's an event
+    if (event && event.preventDefault) {
         event.preventDefault();
-        
-        const input = document.getElementById('chatInput');
-        const message = input.value.trim();
-        
-        if (!message) return;
-        
-        // Add user message
-        addMessage(message, 'user');
-        input.value = '';
-        input.style.height = 'auto';
-        
-        // Show typing indicator
-        showTypingIndicator(true);
-        
-        // Send to API
-        try {
-            const response = await callChatAPI(message);
-            showTypingIndicator(false);
-            addMessage(response, 'bot');
-        } catch (error) {
-            showTypingIndicator(false);
-            console.error('Chat API error:', error);
-            addMessage('Error: ' + error.message, 'bot', true);
-        }
     }
+    
+    const input = document.getElementById('chatInput');
+    if (!input) {
+        console.error('Chat input not found!');
+        return;
+    }
+    
+    const message = input.value.trim();
+    
+    if (!message) {
+        console.log('Empty message, not sending');
+        return;
+    }
+    
+    console.log('Sending message:', message); // Debug log
+    
+    // Add user message
+    addMessage(message, 'user');
+    input.value = '';
+    input.style.height = 'auto';
+    
+    // Show typing indicator
+    showTypingIndicator(true);
+    
+    // Send to API
+    try {
+        const response = await callChatAPI(message);
+        showTypingIndicator(false);
+        addMessage(response, 'bot');
+    } catch (error) {
+        showTypingIndicator(false);
+        console.error('Chat API error:', error);
+        addMessage('Sorry, I encountered an error: ' + error.message, 'bot', true);
+    }
+}
 
     // Add message to chat
     function addMessage(text, sender, isError = false) {
-        const messagesContainer = document.getElementById('chatMessages');
-        const messageDiv = document.createElement('div');
-        
-        const timestamp = new Date().toLocaleTimeString('en-US', { 
-            hour: 'numeric', 
-            minute: '2-digit' 
-        });
-        
-        if (sender === 'user') {
-            messageDiv.className = 'flex items-start space-x-2 justify-end message-slide-in';
-            messageDiv.innerHTML = `
-                <div class="flex-1 flex flex-col items-end">
-                    <div class="bg-primary-600 text-white rounded-2xl rounded-tr-none px-4 py-3 shadow-sm max-w-[85%]">
-                        <p class="text-sm break-words">${escapeHtml(text)}</p>
-                    </div>
-                    <span class="text-xs text-gray-500 mt-1">${timestamp}</span>
-                </div>
-                <div class="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center flex-shrink-0">
-                    <i class="fas fa-user text-white text-sm"></i>
-                </div>
-            `;
-        } else {
-            messageDiv.className = 'flex items-start space-x-2 message-slide-in';
-            messageDiv.innerHTML = `
-                <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
-                    <i class="fas fa-robot text-primary-600 text-sm"></i>
-                </div>
-                <div class="flex-1">
-                    <div class="bg-white ${isError ? 'border-2 border-red-300' : ''} rounded-2xl rounded-tl-none px-4 py-3 shadow-sm">
-                        <p class="text-gray-800 text-sm break-words whitespace-pre-wrap">${isError ? escapeHtml(text) : formatBotMessage(text)}</p>
-                    </div>
-                    <span class="text-xs text-gray-500 mt-1 block">${timestamp}</span>
-                </div>
-            `;
-        }
-        
-        messagesContainer.appendChild(messageDiv);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        
-        // Store in history
-        messageHistory.push({ role: sender === 'user' ? 'user' : 'assistant', content: text });
+    const messagesContainer = document.getElementById('chatMessages');
+    if (!messagesContainer) {
+        console.error('Messages container not found!');
+        return;
     }
+    
+    const messageDiv = document.createElement('div');
+    
+    const timestamp = new Date().toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit' 
+    });
+    
+    if (sender === 'user') {
+        messageDiv.className = 'flex items-start space-x-2 justify-end message-slide-in mb-4';
+        messageDiv.innerHTML = `
+            <div class="flex-1 flex flex-col items-end">
+                <div class="bg-primary-600 text-white rounded-2xl rounded-tr-none px-4 py-3 shadow-sm max-w-[85%]">
+                    <p class="text-sm break-words">${escapeHtml(text)}</p>
+                </div>
+                <span class="text-xs text-gray-500 mt-1">${timestamp}</span>
+            </div>
+            <div class="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-user text-white text-sm"></i>
+            </div>
+        `;
+    } else {
+        messageDiv.className = 'flex items-start space-x-2 message-slide-in mb-4';
+        messageDiv.innerHTML = `
+            <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-robot text-primary-600 text-sm"></i>
+            </div>
+            <div class="flex-1">
+                <div class="bg-white ${isError ? 'border-2 border-red-300' : ''} rounded-2xl rounded-tl-none px-4 py-3 shadow-sm">
+                    <p class="text-gray-800 text-sm break-words whitespace-pre-wrap">${isError ? escapeHtml(text) : formatBotMessage(text)}</p>
+                </div>
+                <span class="text-xs text-gray-500 mt-1 block">${timestamp}</span>
+            </div>
+        `;
+    }
+    
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    
+    // Store in history
+    messageHistory.push({ role: sender === 'user' ? 'user' : 'assistant', content: text });
+}
 
     // Show/hide typing indicator
-    function showTypingIndicator(show) {
-        const indicator = document.getElementById('typingIndicator');
-        const messagesContainer = document.getElementById('chatMessages');
-        
-        if (show) {
-            indicator.classList.remove('hidden');
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        } else {
-            indicator.classList.add('hidden');
-        }
+   function showTypingIndicator(show) {
+    const indicator = document.getElementById('typingIndicator');
+    const messagesContainer = document.getElementById('chatMessages');
+    
+    if (!indicator) {
+        console.error('Typing indicator not found!');
+        return;
     }
+    
+    if (show) {
+        indicator.classList.remove('hidden');
+        if (messagesContainer) {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+    } else {
+        indicator.classList.add('hidden');
+    }
+}
 
-    // Call your chat API
-    async function callChatAPI(userMessage) {
-        // Build request for OpenAI
+// Call chat API
+async function callChatAPI(userMessage) {
+    try {
         const response = await fetch(API_CONFIG.url, {
             method: 'POST',
             headers: {
@@ -1542,25 +1471,26 @@ $dailyTip = $dailyTipStmt ? $dailyTipStmt->fetchColumn() : null;
         if (!response.ok) {
             const errorText = await response.text();
             console.error('API Error Response:', errorText);
-            throw new Error(`API request failed: ${response.status} - ${errorText}`);
+            throw new Error(`API request failed: ${response.status}`);
         }
 
         const data = await response.json();
         
-        // Check for error in response
         if (data.error) {
             throw new Error(data.error);
         }
         
-        // OpenAI response format
         if (data.reply) {
             return data.reply;
         }
         
-        // Fallback if unexpected format
-        console.error('Unexpected API response:', data);
         throw new Error('Invalid API response format');
+    } catch (error) {
+        console.error('Chat API Error:', error);
+        throw error;
     }
+}
+
 
     // Quick question shortcuts
     function quickQuestion(question) {
@@ -1574,56 +1504,58 @@ $dailyTip = $dailyTipStmt ? $dailyTipStmt->fetchColumn() : null;
     }
 
     // Utility functions
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
+   function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
 
-    function formatBotMessage(text) {
-        // Convert **bold** to <strong>
-        text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-        
-        // Convert numbered lists
-        text = text.replace(/^\d+\.\s+(.+)$/gm, '<div class="ml-2 mb-1">• $1</div>');
-        
-        // Convert bullet points
-        text = text.replace(/^[•\-]\s+(.+)$/gm, '<div class="ml-2 mb-1">• $1</div>');
-        
-        return text;
-    }
+ function formatBotMessage(text) {
+    // Convert **bold** to <strong>
+    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    
+    // Convert numbered lists
+    text = text.replace(/^\d+\.\s+(.+)$/gm, '<div class="ml-2 mb-1">• $1</div>');
+    
+    // Convert bullet points
+    text = text.replace(/^[•\-]\s+(.+)$/gm, '<div class="ml-2 mb-1">• $1</div>');
+    
+    return text;
+}
+
 
     // Initialize
-    document.addEventListener('DOMContentLoaded', function() {
-        displayCurrentDate();
-
-        // Handle window resize
-        let resizeTimer;
-        window.addEventListener('resize', function() {
-            clearTimeout(resizeTimer);
-            resizeTimer = setTimeout(function() {
-                const sidebar = document.getElementById('sidebar');
-                const mainContent = document.getElementById('main-content');
-                const overlay = document.getElementById('sidebar-overlay');
-                
-                if (window.innerWidth >= 1024) {
-                    overlay.classList.add('hidden');
-                    if (sidebarExpanded) {
-                        mainContent.classList.remove('lg:ml-20');
-                        mainContent.classList.add('lg:ml-72');
-                    } else {
-                        mainContent.classList.remove('lg:ml-72');
-                        mainContent.classList.add('lg:ml-20');
-                    }
-                } else {
-                    mainContent.classList.remove('lg:ml-20', 'lg:ml-72');
-                    if (!sidebarExpanded) {
-                        sidebar.classList.add('sidebar-collapsed');
-                        sidebar.classList.remove('sidebar-expanded');
-                    }
-                }
-            }, 250);
-        });
+   document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Initializing dashboard...');
+    
+    displayCurrentDate();
+    
+    // Verify chatbot elements
+    const chatWindow = document.getElementById('chatbotWindow');
+    const chatInput = document.getElementById('chatInput');
+    const chatToggle = document.getElementById('chatbotToggle');
+    
+    console.log('Chatbot Window:', chatWindow ? '✅ Found' : '❌ NOT FOUND');
+    console.log('Chat Input:', chatInput ? '✅ Found' : '❌ NOT FOUND');
+    console.log('Chat Toggle:', chatToggle ? '✅ Found' : '❌ NOT FOUND');
+    
+    if (!chatWindow || !chatInput || !chatToggle) {
+        console.error('⚠️ Chatbot elements missing! Check if chatbot.php is included properly.');
+    } else {
+        console.log('✅ Chatbot initialized successfully');
+    }
+    
+    // Show quick actions after delay
+    setTimeout(() => {
+        if (!chatbotOpen) {
+            const quickActions = document.getElementById('quickActions');
+            if (quickActions) {
+                quickActions.classList.remove('hidden');
+                quickActions.classList.add('animate-fade-in-up');
+            }
+        }
+    }, 3000);
+    
 
         // Close modals on escape key
         document.addEventListener('keydown', function(e) {
@@ -1664,6 +1596,55 @@ $dailyTip = $dailyTipStmt ? $dailyTipStmt->fetchColumn() : null;
         }, 3000);
     });
 
+     let resizeTimer;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function() {
+            const sidebar = document.getElementById('sidebar');
+            const mainContent = document.getElementById('main-content');
+            const overlay = document.getElementById('sidebar-overlay');
+            
+            if (window.innerWidth >= 1024) {
+                overlay.classList.add('hidden');
+                if (sidebarExpanded) {
+                    mainContent.classList.remove('lg:ml-20');
+                    mainContent.classList.add('lg:ml-72');
+                } else {
+                    mainContent.classList.remove('lg:ml-72');
+                    mainContent.classList.add('lg:ml-20');
+                }
+            } else {
+                mainContent.classList.remove('lg:ml-20', 'lg:ml-72');
+                if (!sidebarExpanded) {
+                    sidebar.classList.add('sidebar-collapsed');
+                    sidebar.classList.remove('sidebar-expanded');
+                }
+            }
+        }, 250);
+    });
+
+    // Close modals on escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeUploadModal();
+            closeProfileSettingsModal();
+            if (chatbotOpen) toggleChatbot();
+        }
+    });
+
+    // Close modals when clicking outside
+    document.getElementById('uploadModal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeUploadModal();
+        }
+    });
+
+    document.getElementById('profileSettingsModal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeProfileSettingsModal();
+        }
+    });
+    
     // Prevent zoom on double tap for iOS
     let lastTouchEnd = 0;
     document.addEventListener('touchend', function(event) {
@@ -1673,6 +1654,8 @@ $dailyTip = $dailyTipStmt ? $dailyTipStmt->fetchColumn() : null;
         }
         lastTouchEnd = now;
     }, false);
+
+    
 </script>
 
 </body>
