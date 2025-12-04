@@ -1,5 +1,7 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once '../config/db_conn.php';
 
 header('Content-Type: application/json');
@@ -18,7 +20,7 @@ $input = json_decode(file_get_contents('php://input'), true);
 
 $answerId = isset($input['answer_id']) ? intval($input['answer_id']) : 0;
 $attemptId = isset($input['attempt_id']) ? intval($input['attempt_id']) : 0;
-$points = isset($input['points']) ? floatval($input['points']) : 0;
+$points = isset($input['points']) ? intval($input['points']) : 0;
 $feedback = isset($input['feedback']) ? trim($input['feedback']) : null;
 
 if ($answerId <= 0 || $attemptId <= 0) {

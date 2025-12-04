@@ -1,5 +1,7 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once '../config/db_conn.php';
 
 // Access control
@@ -17,7 +19,7 @@ if ($attemptId <= 0) {
     exit();
 }
 
-// Verify attempt belongs to professor's quiz
+// Verify attempt belongs to professor
 $stmt = $conn->prepare("
     SELECT qa.*, q.professor_id 
     FROM quiz_attempts qa
@@ -32,17 +34,26 @@ if (!$attempt) {
     exit();
 }
 
-// Fetch student answers with question details
+// Fetch all answers
 $stmt = $conn->prepare("
     SELECT 
-        sa.*,
+        sa.id,
+        sa.question_id,
+        sa.answer_id,
+        sa.student_answer,
+        sa.points_earned,
+        sa.feedback,
+        sa.graded_at,
         q.question_text,
         q.question_type,
         q.options,
         q.correct_answer,
-        q.points
+        q.points,
+        a.answer_text AS selected_answer_text,
+        a.is_correct
     FROM student_answers sa
     JOIN questions q ON sa.question_id = q.id
+    LEFT JOIN answers a ON sa.answer_id = a.id
     WHERE sa.attempt_id = ?
     ORDER BY q.id ASC
 ");
@@ -61,13 +72,19 @@ if (count($answers) === 0) {
         $isEssay = ($answer['question_type'] === 'essay');
         $isShortAnswer = ($answer['question_type'] === 'short_answer');
         $isMultipleChoice = ($answer['question_type'] === 'multiple_choice');
-        
-        // Determine if correct (for multiple choice)
+
+        // For multiple choice, check if the selected answer is marked as correct in the answers table
         $isCorrect = false;
         if ($isMultipleChoice) {
-            $isCorrect = (trim(strtolower($answer['answer_text'])) === trim(strtolower($answer['correct_answer'])));
+            // Use the is_correct flag from the answers table
+            $isCorrect = ($answer['is_correct'] == 1);
         }
+        
+        $studentAnswerText = !empty($answer['selected_answer_text']) 
+            ? trim($answer['selected_answer_text'])
+            : trim($answer['student_answer']);
     ?>
+
     <div class="border border-gray-200 rounded-lg overflow-hidden">
         <!-- Question Header -->
         <div class="bg-gray-50 px-4 py-3 border-b border-gray-200">
@@ -77,7 +94,7 @@ if (count($answers) === 0) {
                         <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-primary-600 text-white font-semibold text-sm">
                             <?= $questionNum ?>
                         </span>
-                        <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium <?= match($answer['question_type']) {
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold <?= match($answer['question_type']) {
                             'multiple_choice' => 'bg-blue-100 text-blue-700',
                             'essay' => 'bg-purple-100 text-purple-700',
                             'short_answer' => 'bg-green-100 text-green-700',
@@ -91,6 +108,7 @@ if (count($answers) === 0) {
                     </div>
                     <p class="text-sm text-gray-900 font-medium"><?= nl2br(htmlspecialchars($answer['question_text'])) ?></p>
                 </div>
+
                 <?php if ($isMultipleChoice): ?>
                     <span class="ml-4 inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold <?= $isCorrect ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' ?>">
                         <i class="fas fa-<?= $isCorrect ? 'check' : 'times' ?> mr-1"></i>
@@ -102,41 +120,76 @@ if (count($answers) === 0) {
 
         <!-- Answer Section -->
         <div class="p-4">
+
             <?php if ($isMultipleChoice): ?>
-                <!-- Multiple Choice Answer -->
                 <?php
                     $options = json_decode($answer['options'], true);
-                    $studentAnswer = trim($answer['answer_text']);
-                    $correctAnswer = trim($answer['correct_answer']);
+                    
+                    // Fetch all answer options with their is_correct status
+                    $optionsStmt = $conn->prepare("
+                        SELECT answer_text, is_correct 
+                        FROM answers 
+                        WHERE question_id = ?
+                    ");
+                    $optionsStmt->execute([$answer['question_id']]);
+                    $answerOptions = $optionsStmt->fetchAll(PDO::FETCH_ASSOC);
+                    
+                    // Create lookup array for correct answers
+                    $correctAnswers = [];
+                    foreach ($answerOptions as $opt) {
+                        $correctAnswers[trim($opt['answer_text'])] = ($opt['is_correct'] == 1);
+                    }
                 ?>
                 <div class="space-y-2">
+
                     <?php foreach ($options as $option): ?>
                         <?php 
-                            $isStudentChoice = (trim($option) === $studentAnswer);
-                            $isCorrectChoice = (trim($option) === $correctAnswer);
+                            $optionText = is_array($option) ? $option['text'] : $option;
+                            $optionTextTrimmed = trim($optionText);
+
+                            $isStudentChoice = (strcasecmp($optionTextTrimmed, trim($studentAnswerText)) === 0);
+                            $isCorrectChoice = isset($correctAnswers[$optionTextTrimmed]) && $correctAnswers[$optionTextTrimmed];
                         ?>
+
                         <div class="flex items-center gap-2 p-3 rounded-lg <?= 
-                            $isCorrectChoice ? 'bg-green-50 border-2 border-green-300' : 
-                            ($isStudentChoice ? 'bg-red-50 border-2 border-red-300' : 'bg-gray-50 border border-gray-200') 
+                            $isCorrectChoice ? 'bg-green-50 border-2 border-green-300' :
+                            ($isStudentChoice ? 'bg-red-50 border-2 border-red-300' : 
+                            'bg-gray-50 border border-gray-200')
                         ?>">
-                            <i class="fas fa-<?= $isCorrectChoice ? 'check-circle text-green-600' : ($isStudentChoice ? 'times-circle text-red-600' : 'circle text-gray-400') ?>"></i>
-                            <span class="text-sm <?= ($isStudentChoice || $isCorrectChoice) ? 'font-semibold' : '' ?>"><?= htmlspecialchars($option) ?></span>
+                            <i class="fas fa-<?= 
+                                $isCorrectChoice ? 'check-circle text-green-600' :
+                                ($isStudentChoice ? 'times-circle text-red-600' : 
+                                'circle text-gray-400')
+                            ?>"></i>
+
+                            <span class="text-sm <?= ($isStudentChoice || $isCorrectChoice) ? 'font-semibold' : '' ?>">
+                                <?= htmlspecialchars($optionText) ?>
+                            </span>
+
                             <?php if ($isStudentChoice && !$isCorrectChoice): ?>
                                 <span class="ml-auto text-xs text-red-600 font-medium">Student's Answer</span>
                             <?php elseif ($isCorrectChoice): ?>
                                 <span class="ml-auto text-xs text-green-600 font-medium">Correct Answer</span>
                             <?php endif; ?>
                         </div>
+
                     <?php endforeach; ?>
                 </div>
 
             <?php elseif ($isEssay || $isShortAnswer): ?>
-                <!-- Essay/Short Answer with Grading -->
+
                 <div class="space-y-3">
+
                     <div>
                         <label class="block text-xs font-semibold text-gray-700 mb-2">Student's Answer:</label>
                         <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                            <p class="text-sm text-gray-900 whitespace-pre-wrap"><?= nl2br(htmlspecialchars($answer['answer_text'])) ?></p>
+                            <?php if (!empty($answer['student_answer'])): ?>
+                                <p class="text-sm text-gray-900 whitespace-pre-wrap">
+                                    <?= nl2br(htmlspecialchars($answer['student_answer'])) ?>
+                                </p>
+                            <?php else: ?>
+                                <p class="text-sm text-gray-400 italic">No answer provided</p>
+                            <?php endif; ?>
                         </div>
                     </div>
 
@@ -151,21 +204,16 @@ if (count($answers) === 0) {
                                 <div class="flex items-center gap-2">
                                     <input type="number" 
                                            id="points-<?= $answer['id'] ?>" 
-                                           value="<?= $answer['points_earned'] ?? 0 ?>"
+                                           value="<?= intval($answer['points_earned'] ?? 0) ?>"
                                            min="0" 
                                            max="<?= $answer['points'] ?>" 
-                                           step="0.5"
+                                           step="1"
                                            class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
-                                           onchange="updateGradeButton(<?= $answer['id'] ?>)">
+                                           onchange="autoSaveGrade(<?= $answer['id'] ?>, <?= $attemptId ?>)">
                                     <span class="text-sm text-gray-600">/ <?= $answer['points'] ?> points</span>
+                                    <span id="save-status-<?= $answer['id'] ?>" class="text-xs text-gray-500 ml-2"></span>
                                 </div>
                             </div>
-                            <button onclick="saveGrade(<?= $answer['id'] ?>, <?= $attemptId ?>)" 
-                                    id="save-btn-<?= $answer['id'] ?>"
-                                    class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium text-sm transition-colors">
-                                <i class="fas fa-save mr-1"></i>
-                                Save Grade
-                            </button>
                         </div>
                         
                         <!-- Feedback Section -->
@@ -178,12 +226,13 @@ if (count($answers) === 0) {
                                       rows="2" 
                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm resize-none"
                                       placeholder="Provide feedback to the student..."
-                                      onchange="updateGradeButton(<?= $answer['id'] ?>)"><?= htmlspecialchars($answer['feedback'] ?? '') ?></textarea>
+                                      onchange="autoSaveGrade(<?= $answer['id'] ?>, <?= $attemptId ?>)"><?= htmlspecialchars($answer['feedback'] ?? '') ?></textarea>
                         </div>
 
                         <div id="grade-status-<?= $answer['id'] ?>" class="mt-2 text-sm"></div>
                     </div>
                 </div>
+
             <?php endif; ?>
         </div>
     </div>
@@ -192,8 +241,8 @@ if (count($answers) === 0) {
     <!-- Recalculate Score Button -->
     <div class="flex items-center justify-between p-4 bg-gradient-to-r from-primary-50 to-blue-50 border border-primary-200 rounded-lg">
         <div>
-            <p class="text-sm font-semibold text-gray-900">After grading, recalculate the total score</p>
-            <p class="text-xs text-gray-600">This will update the student's final score for this attempt</p>
+            <p class="text-sm font-semibold text-gray-900">Recalculate Final Score</p>
+            <p class="text-xs text-gray-600">Grades are saved automatically. Click to update the total score.</p>
         </div>
         <button onclick="recalculateScore(<?= $attemptId ?>)" 
                 id="recalc-btn-<?= $attemptId ?>"
@@ -203,113 +252,3 @@ if (count($answers) === 0) {
         </button>
     </div>
 </div>
-
-<script>
-function updateGradeButton(answerId) {
-    const saveBtn = document.getElementById(`save-btn-${answerId}`);
-    if (saveBtn) {
-        saveBtn.classList.remove('bg-primary-600', 'hover:bg-primary-700');
-        saveBtn.classList.add('bg-orange-600', 'hover:bg-orange-700', 'animate-pulse');
-        saveBtn.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i> Unsaved';
-    }
-}
-
-function saveGrade(answerId, attemptId) {
-    const points = document.getElementById(`points-${answerId}`).value;
-    const feedback = document.getElementById(`feedback-${answerId}`).value;
-    const statusDiv = document.getElementById(`grade-status-${answerId}`);
-    const saveBtn = document.getElementById(`save-btn-${answerId}`);
-    
-    // Show loading
-    statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin text-primary-600"></i> Saving...';
-    saveBtn.disabled = true;
-    
-    fetch('save_grade_ajax.php', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            answer_id: answerId,
-            attempt_id: attemptId,
-            points: parseFloat(points),
-            feedback: feedback
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            statusDiv.innerHTML = '<span class="text-green-600"><i class="fas fa-check-circle mr-1"></i>Grade saved successfully!</span>';
-            saveBtn.classList.remove('bg-orange-600', 'hover:bg-orange-700', 'animate-pulse');
-            saveBtn.classList.add('bg-green-600', 'hover:bg-green-700');
-            saveBtn.innerHTML = '<i class="fas fa-check mr-1"></i> Saved';
-            
-            setTimeout(() => {
-                statusDiv.innerHTML = '';
-                saveBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
-                saveBtn.classList.add('bg-primary-600', 'hover:bg-primary-700');
-                saveBtn.innerHTML = '<i class="fas fa-save mr-1"></i> Save Grade';
-                saveBtn.disabled = false;
-            }, 2000);
-        } else {
-            statusDiv.innerHTML = '<span class="text-red-600"><i class="fas fa-times-circle mr-1"></i>' + (data.error || 'Failed to save') + '</span>';
-            saveBtn.disabled = false;
-        }
-    })
-    .catch(error => {
-        statusDiv.innerHTML = '<span class="text-red-600"><i class="fas fa-times-circle mr-1"></i>Error saving grade</span>';
-        saveBtn.disabled = false;
-    });
-}
-
-function recalculateScore(attemptId) {
-    const recalcBtn = document.getElementById(`recalc-btn-${attemptId}`);
-    const originalHTML = recalcBtn.innerHTML;
-    
-    recalcBtn.disabled = true;
-    recalcBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Calculating...';
-    
-    fetch('recalculate_score_ajax.php', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            attempt_id: attemptId
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            recalcBtn.innerHTML = '<i class="fas fa-check mr-2"></i>Score Updated: ' + data.new_score + '%';
-            recalcBtn.classList.remove('bg-primary-600', 'hover:bg-primary-700');
-            recalcBtn.classList.add('bg-green-600', 'hover:bg-green-700');
-            
-            // Reload the participants modal after a delay
-            setTimeout(() => {
-                // Refresh the parent modal if needed
-                const participantsModal = window.parent.document.getElementById('participantsContent');
-                if (participantsModal) {
-                    // Trigger a refresh of the participants list
-                    window.location.reload();
-                }
-            }, 1500);
-        } else {
-            recalcBtn.innerHTML = '<i class="fas fa-times mr-2"></i>' + (data.error || 'Failed');
-            recalcBtn.classList.add('bg-red-600');
-            setTimeout(() => {
-                recalcBtn.innerHTML = originalHTML;
-                recalcBtn.classList.remove('bg-red-600');
-                recalcBtn.disabled = false;
-            }, 2000);
-        }
-    })
-    .catch(error => {
-        recalcBtn.innerHTML = '<i class="fas fa-times mr-2"></i>Error';
-        setTimeout(() => {
-            recalcBtn.innerHTML = originalHTML;
-            recalcBtn.disabled = false;
-        }, 2000);
-    });
-}
-</script>

@@ -670,6 +670,9 @@ try {
             overflow-x: hidden;
         }
     </style>
+    
+    <!-- Chart.js for progress graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body class="bg-gray-50 text-gray-800 antialiased">
 
@@ -1515,6 +1518,123 @@ try {
     function closeAttemptsModal() {
         document.getElementById('attemptsModal').classList.remove('show');
         document.body.style.overflow = 'auto';
+    }
+
+    // Function to toggle attempt details (for the attempts modal)
+    window.toggleAttemptDetails = function(attemptId) {
+        const detailsDiv = document.getElementById(`attempt-details-${attemptId}`);
+        
+        if (detailsDiv.classList.contains('hidden')) {
+            detailsDiv.classList.remove('hidden');
+            
+            // Load details if not already loaded
+            if (!detailsDiv.dataset.loaded) {
+                loadAttemptDetails(attemptId);
+                detailsDiv.dataset.loaded = 'true';
+            }
+        } else {
+            detailsDiv.classList.add('hidden');
+        }
+    }
+
+    function loadAttemptDetails(attemptId) {
+        const detailsDiv = document.getElementById(`attempt-details-${attemptId}`);
+        
+        fetch(`attempts_details_ajax.php?attempt_id=${attemptId}`)
+            .then(response => response.text())
+            .then(html => {
+                detailsDiv.innerHTML = html;
+            })
+            .catch(error => {
+                detailsDiv.innerHTML = `
+                    <div class="text-center py-8">
+                        <i class="fas fa-exclamation-circle text-3xl text-red-500"></i>
+                        <p class="text-gray-600 mt-2">Error loading details</p>
+                    </div>
+                `;
+            });
+    }
+
+    // Grading functions (called from attempt details)
+    window.autoSaveGrade = function(answerId, attemptId) {
+        const points = document.getElementById(`points-${answerId}`).value;
+        const feedback = document.getElementById(`feedback-${answerId}`).value;
+        const statusDiv = document.getElementById(`save-status-${answerId}`);
+        
+        // Show saving indicator
+        statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin text-primary-600"></i> Saving...';
+        
+        fetch('save_grade_ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                answer_id: answerId,
+                attempt_id: attemptId,
+                points: parseInt(points),
+                feedback: feedback
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                statusDiv.innerHTML = '<i class="fas fa-check-circle text-green-600"></i> Saved';
+                setTimeout(() => {
+                    statusDiv.innerHTML = '';
+                }, 2000);
+            } else {
+                statusDiv.innerHTML = '<i class="fas fa-times-circle text-red-600"></i> Error';
+            }
+        })
+        .catch(error => {
+            statusDiv.innerHTML = '<i class="fas fa-times-circle text-red-600"></i> Error';
+        });
+    }
+
+    window.recalculateScore = function(attemptId) {
+        const recalcBtn = document.getElementById(`recalc-btn-${attemptId}`);
+        const originalHTML = recalcBtn.innerHTML;
+        
+        recalcBtn.disabled = true;
+        recalcBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Calculating...';
+        
+        fetch('recalculate_score_ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                attempt_id: attemptId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                recalcBtn.innerHTML = '<i class="fas fa-check mr-2"></i>Score Updated: ' + data.new_score + '%';
+                recalcBtn.classList.remove('bg-primary-600', 'hover:bg-primary-700');
+                recalcBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+            } else {
+                recalcBtn.innerHTML = '<i class="fas fa-times mr-2"></i>' + (data.error || 'Failed');
+                recalcBtn.classList.add('bg-red-600');
+                setTimeout(() => {
+                    recalcBtn.innerHTML = originalHTML;
+                    recalcBtn.classList.remove('bg-red-600');
+                    recalcBtn.disabled = false;
+                }, 2000);
+            }
+        })
+        .catch(error => {
+            recalcBtn.innerHTML = '<i class="fas fa-times mr-2"></i>Error';
+            setTimeout(() => {
+                recalcBtn.innerHTML = originalHTML;
+                recalcBtn.disabled = false;
+            }, 2000);
+        });
     }
 
     function formatDateTimeLocal(date) {
