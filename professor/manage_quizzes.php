@@ -426,45 +426,452 @@ $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 </div>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
-  const sidebar = document.getElementById("sidebar");
-  const toggle = document.getElementById("sidebarToggle");
-  const labels = document.querySelectorAll(".sidebar-label");
-  let expanded = false;
+    let sidebarExpanded = false;
 
-  function collapse() {
-    sidebar.classList.remove("sidebar-expanded");
-    sidebar.classList.add("sidebar-collapsed");
-    labels.forEach(l => l.classList.add("hidden"));
-  }
-  function expand() {
-    sidebar.classList.remove("sidebar-collapsed");
-    sidebar.classList.add("sidebar-expanded");
-    labels.forEach(l => l.classList.remove("hidden"));
-  }
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const mainContent = document.getElementById('main-content');
+        const overlay = document.getElementById('sidebar-overlay');
+        const hamburgerBtn = document.getElementById('hamburgerBtn');
+        const mobileHamburgerBtn = document.getElementById('mobileHamburgerBtn');
+        
+        sidebarExpanded = !sidebarExpanded;
+        
+        hamburgerBtn.classList.toggle('active');
+        mobileHamburgerBtn.classList.toggle('active');
+        
+        if (window.innerWidth < 1024) {
+            sidebar.classList.toggle('sidebar-expanded');
+            sidebar.classList.toggle('sidebar-collapsed');
+            overlay.classList.toggle('hidden');
+            overlay.classList.toggle('show');
+            
+            if (sidebarExpanded) {
+                document.body.style.overflow = 'hidden';
+            } else {
+                document.body.style.overflow = 'auto';
+            }
+        } else {
+            sidebar.classList.toggle('sidebar-expanded');
+            sidebar.classList.toggle('sidebar-collapsed');
+            
+            if (sidebarExpanded) {
+                mainContent.style.marginLeft = '18rem';
+            } else {
+                mainContent.style.marginLeft = '5rem';
+            }
+        }
+    }
 
-  collapse();
-  toggle.addEventListener("click", () => {
-    expanded = !expanded;
-    expanded ? expand() : collapse();
-  });
-});
+    function closeSidebar() {
+        if (window.innerWidth < 1024 && sidebarExpanded) {
+            toggleSidebar();
+        }
+    }
 
-function toggleModal() {
-  const modal = document.getElementById("addQuizModal");
-  const content = document.getElementById("modalContent");
-  if (modal.classList.contains("hidden")) {
-    modal.classList.remove("hidden");
-    modal.classList.add("flex");
-    setTimeout(() => content.classList.remove("scale-95", "opacity-0"), 10);
-  } else {
-    content.classList.add("scale-95", "opacity-0");
-    setTimeout(() => {
-      modal.classList.add("hidden");
-      modal.classList.remove("flex");
-    }, 200);
-  }
-}
+    function openAddModal() {
+        document.getElementById('addQuizModal').classList.add('show');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeAddModal() {
+        document.getElementById('addQuizModal').classList.remove('show');
+        document.body.style.overflow = 'auto';
+    }
+
+    function openEditModal(quiz) {
+        document.getElementById('edit_quiz_id').value = quiz.id;
+        document.getElementById('edit_title').value = quiz.title;
+        document.getElementById('edit_subject').value = quiz.subject || '';
+        document.getElementById('edit_description').value = quiz.description || '';
+        document.getElementById('edit_module_id').value = quiz.module_id;
+        document.getElementById('edit_prerequisite_module_id').value = quiz.prerequisite_module_id || '';
+        document.getElementById('edit_content').value = quiz.content || '';
+        document.getElementById('edit_status').value = quiz.status;
+        document.getElementById('edit_time_limit').value = quiz.time_limit || 1;
+        
+        if (quiz.publish_time) {
+            const publishDate = new Date(quiz.publish_time);
+            document.getElementById('edit_publish_time').value = formatDateTimeLocal(publishDate);
+        } else {
+            document.getElementById('edit_publish_time').value = '';
+        }
+        
+        if (quiz.deadline_time) {
+            const deadlineDate = new Date(quiz.deadline_time);
+            document.getElementById('edit_deadline_time').value = formatDateTimeLocal(deadlineDate);
+        } else {
+            document.getElementById('edit_deadline_time').value = '';
+        }
+        
+        document.getElementById('editQuizModal').classList.add('show');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeEditModal() {
+        document.getElementById('editQuizModal').classList.remove('show');
+        document.body.style.overflow = 'auto';
+    }
+
+    function openParticipantsModal(quizId, quizTitle) {
+        document.getElementById('participantsModalTitle').textContent = quizTitle + ' - Participants';
+        document.getElementById('participantsModal').classList.add('show');
+        document.body.style.overflow = 'hidden';
+        
+        // Reset content
+        document.getElementById('participantsContent').innerHTML = `
+            <div class="text-center py-12">
+                <i class="fas fa-spinner fa-spin text-4xl text-primary-500"></i>
+                <p class="text-gray-600 mt-4">Loading participants...</p>
+            </div>
+        `;
+        
+        // Load participants via AJAX
+        fetch(`quiz_participants_ajax.php?quiz_id=${quizId}`)
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('participantsContent').innerHTML = html;
+            })
+            .catch(error => {
+                document.getElementById('participantsContent').innerHTML = `
+                    <div class="text-center py-12">
+                        <i class="fas fa-exclamation-circle text-4xl text-red-500"></i>
+                        <p class="text-gray-600 mt-4">Error loading participants</p>
+                    </div>
+                `;
+            });
+    }
+
+    function closeParticipantsModal() {
+        document.getElementById('participantsModal').classList.remove('show');
+        document.body.style.overflow = 'auto';
+    }
+
+    function openAttemptsModal(quizId, studentId, studentName) {
+        document.getElementById('attemptsModalTitle').textContent = studentName + ' - Attempts';
+        document.getElementById('attemptsModal').classList.add('show');
+        
+        // Reset content
+        document.getElementById('attemptsContent').innerHTML = `
+            <div class="text-center py-12">
+                <i class="fas fa-spinner fa-spin text-4xl text-primary-500"></i>
+                <p class="text-gray-600 mt-4">Loading attempts...</p>
+            </div>
+        `;
+        
+        // Load attempts via AJAX
+        fetch(`student_attempts_ajax.php?quiz_id=${quizId}&student_id=${studentId}`)
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('attemptsContent').innerHTML = html;
+            })
+            .catch(error => {
+                document.getElementById('attemptsContent').innerHTML = `
+                    <div class="text-center py-12">
+                        <i class="fas fa-exclamation-circle text-4xl text-red-500"></i>
+                        <p class="text-gray-600 mt-4">Error loading attempts</p>
+                    </div>
+                `;
+            });
+    }
+
+    function closeAttemptsModal() {
+        document.getElementById('attemptsModal').classList.remove('show');
+        document.body.style.overflow = 'auto';
+    }
+
+    // Function to toggle attempt details (for the attempts modal)
+    window.toggleAttemptDetails = function(attemptId) {
+        const detailsDiv = document.getElementById(`attempt-details-${attemptId}`);
+        
+        if (detailsDiv.classList.contains('hidden')) {
+            detailsDiv.classList.remove('hidden');
+            
+            // Load details if not already loaded
+            if (!detailsDiv.dataset.loaded) {
+                loadAttemptDetails(attemptId);
+                detailsDiv.dataset.loaded = 'true';
+            }
+        } else {
+            detailsDiv.classList.add('hidden');
+        }
+    }
+
+    function loadAttemptDetails(attemptId) {
+        const detailsDiv = document.getElementById(`attempt-details-${attemptId}`);
+        
+        fetch(`attempts_details_ajax.php?attempt_id=${attemptId}`)
+            .then(response => response.text())
+            .then(html => {
+                detailsDiv.innerHTML = html;
+            })
+            .catch(error => {
+                detailsDiv.innerHTML = `
+                    <div class="text-center py-8">
+                        <i class="fas fa-exclamation-circle text-3xl text-red-500"></i>
+                        <p class="text-gray-600 mt-2">Error loading details</p>
+                    </div>
+                `;
+            });
+    }
+
+    // Grading functions (called from attempt details)
+    window.autoSaveGrade = function(answerId, attemptId) {
+        const points = document.getElementById(`points-${answerId}`).value;
+        const feedback = document.getElementById(`feedback-${answerId}`).value;
+        const statusDiv = document.getElementById(`save-status-${answerId}`);
+        
+        // Show saving indicator
+        statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin text-primary-600"></i> Saving...';
+        
+        fetch('save_grade_ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                answer_id: answerId,
+                attempt_id: attemptId,
+                points: parseInt(points),
+                feedback: feedback
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                statusDiv.innerHTML = '<i class="fas fa-check-circle text-green-600"></i> Saved';
+                setTimeout(() => {
+                    statusDiv.innerHTML = '';
+                }, 2000);
+            } else {
+                statusDiv.innerHTML = '<i class="fas fa-times-circle text-red-600"></i> Error';
+            }
+        })
+        .catch(error => {
+            statusDiv.innerHTML = '<i class="fas fa-times-circle text-red-600"></i> Error';
+        });
+    }
+
+    window.recalculateScore = function(attemptId) {
+        const recalcBtn = document.getElementById(`recalc-btn-${attemptId}`);
+        const originalHTML = recalcBtn.innerHTML;
+        
+        recalcBtn.disabled = true;
+        recalcBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Calculating...';
+        
+        fetch('recalculate_score_ajax.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                attempt_id: attemptId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                recalcBtn.innerHTML = '<i class="fas fa-check mr-2"></i>Score Updated: ' + data.new_score + '%';
+                recalcBtn.classList.remove('bg-primary-600', 'hover:bg-primary-700');
+                recalcBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+            } else {
+                recalcBtn.innerHTML = '<i class="fas fa-times mr-2"></i>' + (data.error || 'Failed');
+                recalcBtn.classList.add('bg-red-600');
+                setTimeout(() => {
+                    recalcBtn.innerHTML = originalHTML;
+                    recalcBtn.classList.remove('bg-red-600');
+                    recalcBtn.disabled = false;
+                }, 2000);
+            }
+        })
+        .catch(error => {
+            recalcBtn.innerHTML = '<i class="fas fa-times mr-2"></i>Error';
+            setTimeout(() => {
+                recalcBtn.innerHTML = originalHTML;
+                recalcBtn.disabled = false;
+            }, 2000);
+        });
+    }
+
+    function formatDateTimeLocal(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('searchInput');
+        const statusFilter = document.getElementById('statusFilter');
+        const quizRows = document.querySelectorAll('.quiz-row');
+        const quizRowsMobile = document.querySelectorAll('.quiz-row-mobile');
+
+        function filterQuizzes() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const statusValue = statusFilter.value.toLowerCase();
+
+            // Filter desktop table rows
+            quizRows.forEach(row => {
+                const title = row.getAttribute('data-title').toLowerCase();
+                const subject = row.getAttribute('data-subject').toLowerCase();
+                const status = row.getAttribute('data-status').toLowerCase();
+
+                const matchesSearch = title.includes(searchTerm) || subject.includes(searchTerm);
+                const matchesStatus = statusValue === 'all' || status === statusValue;
+
+                if (matchesSearch && matchesStatus) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Filter mobile cards
+            quizRowsMobile.forEach(card => {
+                const title = card.getAttribute('data-title').toLowerCase();
+                const subject = card.getAttribute('data-subject').toLowerCase();
+                const status = card.getAttribute('data-status').toLowerCase();
+
+                const matchesSearch = title.includes(searchTerm) || subject.includes(searchTerm);
+                const matchesStatus = statusValue === 'all' || status === statusValue;
+
+                if (matchesSearch && matchesStatus) {
+                    card.style.display = '';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+
+        searchInput.addEventListener('input', filterQuizzes);
+        statusFilter.addEventListener('change', filterQuizzes);
+
+        const sidebar = document.getElementById('sidebar');
+        const mainContent = document.getElementById('main-content');
+        
+        if (window.innerWidth >= 1024) {
+            sidebar.classList.add('sidebar-collapsed');
+            sidebar.classList.remove('sidebar-expanded');
+            mainContent.style.marginLeft = '5rem';
+            sidebarExpanded = false;
+        } else {
+            sidebar.classList.add('sidebar-collapsed');
+            sidebar.classList.remove('sidebar-expanded');
+            mainContent.style.marginLeft = '0';
+            sidebarExpanded = false;
+        }
+
+        let resizeTimer;
+        window.addEventListener('resize', function() {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(function() {
+                const sidebar = document.getElementById('sidebar');
+                const mainContent = document.getElementById('main-content');
+                const overlay = document.getElementById('sidebar-overlay');
+                const hamburgerBtn = document.getElementById('hamburgerBtn');
+                const mobileHamburgerBtn = document.getElementById('mobileHamburgerBtn');
+                
+                if (window.innerWidth >= 1024) {
+                    overlay.classList.add('hidden');
+                    overlay.classList.remove('show');
+                    document.body.style.overflow = 'auto';
+                    
+                    if (!sidebar.classList.contains('sidebar-collapsed') && !sidebar.classList.contains('sidebar-expanded')) {
+                        sidebar.classList.add('sidebar-collapsed');
+                        sidebarExpanded = false;
+                    }
+                    
+                    if (sidebarExpanded) {
+                        mainContent.style.marginLeft = '18rem';
+                    } else {
+                        mainContent.style.marginLeft = '5rem';
+                    }
+                } else {
+                    mainContent.style.marginLeft = '0';
+                    
+                    if (sidebarExpanded) {
+                        sidebar.classList.remove('sidebar-collapsed');
+                        sidebar.classList.add('sidebar-expanded');
+                        overlay.classList.remove('hidden');
+                        overlay.classList.add('show');
+                    } else {
+                        sidebar.classList.add('sidebar-collapsed');
+                        sidebar.classList.remove('sidebar-expanded');
+                        overlay.classList.add('hidden');
+                        overlay.classList.remove('show');
+                        hamburgerBtn.classList.remove('active');
+                        mobileHamburgerBtn.classList.remove('active');
+                        document.body.style.overflow = 'auto';
+                    }
+                }
+            }, 250);
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeAddModal();
+                closeEditModal();
+                closeParticipantsModal();
+                closeAttemptsModal();
+                if (sidebarExpanded && window.innerWidth < 1024) {
+                    closeSidebar();
+                }
+            }
+        });
+
+        document.getElementById('addQuizModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAddModal();
+            }
+        });
+
+        document.getElementById('editQuizModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeEditModal();
+            }
+        });
+
+        document.getElementById('participantsModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeParticipantsModal();
+            }
+        });
+
+        document.getElementById('attemptsModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAttemptsModal();
+            }
+        });
+    });
+
+    let touchStartX = 0;
+    let touchEndX = 0;
+    
+    document.addEventListener('touchstart', function(e) {
+        touchStartX = e.changedTouches[0].screenX;
+    }, false);
+    
+    document.addEventListener('touchend', function(e) {
+        touchEndX = e.changedTouches[0].screenX;
+        handleSwipe();
+    }, false);
+    
+    function handleSwipe() {
+        if (window.innerWidth < 1024) {
+            if (touchEndX - touchStartX > 50 && !sidebarExpanded) {
+                toggleSidebar();
+            }
+            if (touchStartX - touchEndX > 50 && sidebarExpanded) {
+                toggleSidebar();
+            }
+        }
+    }
 </script>
 
 </body>
