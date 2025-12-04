@@ -1,17 +1,21 @@
 <?php
 session_start();
 require_once '../config/db_conn.php';
+
 // Redirect if not student
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
     header("Location: ../public/index.php");
     exit();
 }
+
 $studentId = $_SESSION['user_id'];
+
 // Get student info
 $stmt = $conn->prepare("SELECT firstname, lastname, email, profile_pic, gender FROM users WHERE id = ?");
 $stmt->execute([$studentId]);
 $student = $stmt->fetch(PDO::FETCH_ASSOC);
 $studentName = $student ? $student['firstname'] . " " . $student['lastname'] : "Student";
+
 // Default avatar
 if (!empty($student['gender'])) {
     if (strtolower($student['gender']) === "male") {
@@ -26,7 +30,7 @@ if (!empty($student['gender'])) {
 }
 $profilePic = !empty($student['profile_pic']) ? "../" . $student['profile_pic'] : $defaultAvatar;
 
-// Get quizzes
+// ✅ FIXED: Get quizzes with case-insensitive status check
 $stmt = $conn->prepare("
   SELECT q.id, q.title, q.publish_time, q.deadline_time, q.subject, q.prerequisite_module_id,
          pm.title AS prerequisite_module_title,
@@ -104,24 +108,30 @@ function calculatePercentage($score, $total) {
             padding: 0;
             box-sizing: border-box;
         }
+
         body {
             font-family: 'Inter', sans-serif;
             background: #f8fafc;
         }
+
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
         }
+
         ::-webkit-scrollbar-track {
             background: #f1f5f9;
         }
+
         ::-webkit-scrollbar-thumb {
             background: #cbd5e1;
             border-radius: 4px;
         }
+
         ::-webkit-scrollbar-thumb:hover {
             background: #94a3b8;
         }
+
         @keyframes fadeInUp {
             from {
                 opacity: 0;
@@ -132,87 +142,112 @@ function calculatePercentage($score, $total) {
                 transform: translateY(0);
             }
         }
+
         .animate-fade-in-up {
             animation: fadeInUp 0.6s ease-out;
         }
+
         .sidebar-transition {
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
+
         .sidebar-collapsed {
             width: 5rem;
         }
+
         .sidebar-collapsed .nav-text,
         .sidebar-collapsed .profile-info {
             opacity: 0;
             width: 0;
             overflow: hidden;
         }
+
         .sidebar-expanded {
             width: 18rem;
         }
+
         .sidebar-expanded .nav-text,
         .sidebar-expanded .profile-info {
             opacity: 1;
             width: auto;
         }
+
         .card-hover {
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
+
         .card-hover:hover {
             transform: translateY(-4px);
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
         }
+
+        /* Improved sidebar transitions */
         aside {
             transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
                         width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
         }
+
+        /* Mobile sidebar */
         @media (max-width: 1024px) {
             .sidebar-collapsed {
                 width: 18rem;
                 transform: translateX(-100%);
             }
+            
             .sidebar-expanded {
                 width: 18rem;
                 transform: translateX(0);
             }
+            
+            /* Ensure main content takes full width on mobile */
             #main-content {
                 margin-left: 0 !important;
             }
         }
+
+        /* Desktop sidebar behavior */
         @media (min-width: 1025px) {
             .sidebar-collapsed {
                 width: 5rem;
                 transform: translateX(0);
             }
+            
             .sidebar-expanded {
                 width: 18rem;
                 transform: translateX(0);
             }
         }
+
+        /* Responsive quiz grid */
         @media (max-width: 640px) {
             .quiz-grid {
                 grid-template-columns: 1fr;
             }
         }
+
         @media (min-width: 641px) and (max-width: 1024px) {
             .quiz-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
         }
+
         @media (min-width: 1025px) and (max-width: 1280px) {
             .quiz-grid {
                 grid-template-columns: repeat(3, 1fr);
             }
         }
+
         @media (min-width: 1281px) {
             .quiz-grid {
                 grid-template-columns: repeat(4, 1fr);
             }
         }
+
         .locked-quiz {
             opacity: 0.7;
             position: relative;
         }
+
         .locked-overlay {
             position: absolute;
             top: 0;
@@ -226,6 +261,7 @@ function calculatePercentage($score, $total) {
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 antialiased" x-data="{ filter: 'all', search: '', openModal: null }">
+
 <div class="flex min-h-screen">
     <!-- Sidebar -->
     <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 sidebar-transition sidebar-collapsed">
@@ -242,11 +278,13 @@ function calculatePercentage($score, $total) {
                     </div>
                 </div>
             </div>
+
             <div class="px-4 py-3 border-b border-gray-200">
                 <button onclick="toggleSidebar()" class="w-full flex items-center justify-center p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600">
                     <i class="fas fa-bars text-lg"></i>
                 </button>
             </div>
+
             <nav class="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
                 <a href="dashboard.php" class="flex items-center space-x-3 px-3 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg font-medium transition-all">
                     <i class="fas fa-home text-gray-400 w-5 text-center flex-shrink-0"></i>
@@ -265,6 +303,7 @@ function calculatePercentage($score, $total) {
                     <span class="nav-text sidebar-transition whitespace-nowrap">Resources</span>
                 </a>
             </nav>
+
             <div class="px-3 py-4 border-t border-gray-200">
                 <a href="../actions/logout_action.php" class="flex items-center space-x-3 px-3 py-3 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-all">
                     <i class="fas fa-sign-out-alt w-5 text-center flex-shrink-0"></i>
@@ -273,8 +312,10 @@ function calculatePercentage($score, $total) {
             </div>
         </div>
     </aside>
+
     <!-- Sidebar Overlay (Mobile) -->
     <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="closeSidebar()"></div>
+
     <!-- Main Content -->
     <main id="main-content" class="flex-1 transition-all duration-300" style="margin-left: 5rem;">
         <!-- Top Bar -->
@@ -288,6 +329,7 @@ function calculatePercentage($score, $total) {
                 </div>
             </div>
         </header>
+
         <!-- Content -->
         <div class="px-4 sm:px-6 lg:px-8 py-8">
             <!-- Search and Filters -->
@@ -297,6 +339,7 @@ function calculatePercentage($score, $total) {
                            class="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all">
                     <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                 </div>
+                
                 <!-- Status Filters -->
                 <div class="flex gap-2 flex-wrap">
                     <button @click="filter = 'all'" :class="filter === 'all' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'" 
@@ -317,6 +360,7 @@ function calculatePercentage($score, $total) {
                     </button>
                 </div>
             </div>
+
             <!-- Quiz Cards -->
             <?php if (empty($quizzes)): ?>
             <div class="text-center py-20 animate-fade-in-up">
@@ -336,30 +380,29 @@ function calculatePercentage($score, $total) {
                         'pending' => ['bg' => 'bg-amber-100', 'text' => 'text-amber-700', 'icon' => 'fa-clock'],
                         default => ['bg' => 'bg-gray-100', 'text' => 'text-gray-700', 'icon' => 'fa-info-circle']
                     };
+                    
+                    // Calculate percentages based on total points
                     $latestPercentage = calculatePercentage($quiz['latest_score_raw'], $quiz['total_points']);
                     $highestPercentage = calculatePercentage($quiz['highest_score_raw'], $quiz['total_points']);
+                    
+                    // ✅ FIXED: Check if prerequisite is met with case-insensitive comparison
                     $prerequisiteMet = true;
                     if ($quiz['prerequisite_module_id']) {
+                        // The query already lowercases and trims the status
                         $prerequisiteMet = ($quiz['prerequisite_status'] === 'completed');
                     }
+                    
+                    // Determine if quiz can be retaken (failed or already completed but want to improve)
                     $canRetake = ($status === 'failed' || ($status === 'completed' && $quiz['attempt_count'] > 0));
-
-                    // 💡 FETCH FLASHCARD ATTEMPTS FOR THIS QUIZ
-                    $flashcardStmt = $conn->prepare("
-                        SELECT *
-                        FROM flashcard_attempts
-                        WHERE student_id = ? AND quiz_id = ?
-                        ORDER BY completed_at DESC
-                    ");
-                    $flashcardStmt->execute([$studentId, $quiz['id']]);
-                    $flashcardAttempts = $flashcardStmt->fetchAll(PDO::FETCH_ASSOC);
-                    $hasFlashcardAttempts = !empty($flashcardAttempts);
                 ?>
                 <div x-show="(filter === 'all' || filter === '<?= $status ?>') && ('<?= strtolower(htmlspecialchars($quiz['title'])) ?>'.includes(search.toLowerCase()))"
                      class="bg-white border border-gray-200 rounded-xl overflow-hidden card-hover animate-fade-in-up <?= !$prerequisiteMet ? 'locked-quiz' : '' ?>">
+                    
                     <?php if (!$prerequisiteMet): ?>
                     <div class="locked-overlay"></div>
                     <?php endif; ?>
+                    
+                    <!-- Header -->
                     <div class="h-32 bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center relative">
                         <?php if (!$prerequisiteMet): ?>
                         <div class="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
@@ -368,6 +411,8 @@ function calculatePercentage($score, $total) {
                         <?php endif; ?>
                         <i class="fas fa-clipboard-question text-5xl text-white opacity-90"></i>
                     </div>
+
+                    <!-- Content -->
                     <div class="p-5">
                         <div class="flex items-start justify-between mb-2">
                             <h3 class="font-semibold text-gray-900 text-lg flex-1 pr-2 line-clamp-2">
@@ -378,8 +423,11 @@ function calculatePercentage($score, $total) {
                                 <?= ucfirst($status) ?>
                             </span>
                         </div>
+                        
+                        <!-- Subject Badge -->
                         <?php 
                         $subjectDisplay = !empty($quiz['subject']) ? $quiz['subject'] : 'General';
+                        
                         $subjectColors = [
                             'Anatomy' => 'bg-pink-100 text-pink-700',
                             'Physiology' => 'bg-green-100 text-green-700',
@@ -396,6 +444,8 @@ function calculatePercentage($score, $total) {
                                 <?= htmlspecialchars($subjectDisplay) ?>
                             </span>
                         </div>
+
+                        <!-- Prerequisite Warning/Status -->
                         <?php if ($quiz['prerequisite_module_id']): ?>
                             <?php if (!$prerequisiteMet): ?>
                                 <div class="mb-3 p-3 bg-amber-50 border-l-4 border-amber-500 rounded-r-lg">
@@ -418,18 +468,22 @@ function calculatePercentage($score, $total) {
                                 </div>
                             <?php endif; ?>
                         <?php endif; ?>
+
                         <?php if ($quiz['publish_time']): ?>
                         <p class="text-xs text-gray-500 mb-1">
                             <i class="fas fa-calendar mr-1"></i>
                             <?= date('M d, Y', strtotime($quiz['publish_time'])) ?>
                         </p>
                         <?php endif; ?>
+
                         <?php if ($quiz['deadline_time']): ?>
                         <p class="text-xs text-red-600 mb-3">
                             <i class="fas fa-clock mr-1"></i>
                             Due: <?= date('M d, Y g:i A', strtotime($quiz['deadline_time'])) ?>
                         </p>
                         <?php endif; ?>
+
+                        <!-- Score Display for Completed/Failed -->
                         <?php if ($status !== 'pending' && $quiz['total_points'] > 0): ?>
                         <div class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-3 mb-4 border border-blue-100">
                             <div class="flex items-center justify-between">
@@ -450,52 +504,65 @@ function calculatePercentage($score, $total) {
                             </div>
                         </div>
                         <?php endif; ?>
-                        <!-- ACTION BUTTONS -->
+
+                        <!-- Action Buttons -->
                         <div class="flex gap-2 mt-4">
                             <?php if (!$prerequisiteMet): ?>
+                                <!-- Locked - Show disabled button -->
                                 <button disabled
                                         class="flex-1 bg-gray-300 text-gray-500 px-4 py-2.5 rounded-lg font-semibold cursor-not-allowed text-center text-sm">
-                                    <i class="fas fa-lock mr-1"></i> Locked
+                                    <i class="fas fa-lock mr-1"></i>
+                                    Locked
                                 </button>
                             <?php elseif ($status === 'pending'): ?>
+                                <!-- Pending quiz - Show Start button -->
                                 <a href="take_quiz.php?id=<?= $quiz['id'] ?>"
                                    class="flex-1 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors text-center text-sm">
-                                    <i class="fas fa-play mr-1"></i> Start Quiz
+                                    <i class="fas fa-play mr-1"></i>
+                                    Start Quiz
                                 </a>
-                            <?php elseif ($status === 'failed' || $status === 'completed'): ?>
+                            <?php elseif ($status === 'failed'): ?>
+                                <!-- Failed quiz - Show View Result + Retake -->
                                 <a href="quiz_result.php?attempt_id=<?= $quiz['attempt_id'] ?>"
                                    class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors text-center text-sm">
-                                    <i class="fas fa-eye mr-1"></i> View Result
+                                    <i class="fas fa-eye mr-1"></i>
+                                    View Result
                                 </a>
                                 <a href="take_quiz.php?id=<?= $quiz['id'] ?>"
                                    class="px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-semibold transition-colors text-sm flex-shrink-0">
-                                    <i class="fas fa-redo mr-1"></i> Retake
+                                    <i class="fas fa-redo mr-1"></i>
+                                    Retake
+                                </a>
+                            <?php elseif ($status === 'completed'): ?>
+                                <!-- Completed quiz - Show View Result + Retake -->
+                                <a href="quiz_result.php?attempt_id=<?= $quiz['attempt_id'] ?>"
+                                   class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors text-center text-sm">
+                                    <i class="fas fa-eye mr-1"></i>
+                                    View Result
+                                </a>
+                                <a href="take_quiz.php?id=<?= $quiz['id'] ?>"
+                                   class="px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-semibold transition-colors text-sm flex-shrink-0">
+                                    <i class="fas fa-redo mr-1"></i>
+                                    Retake
                                 </a>
                             <?php else: ?>
+                                <!-- Fallback - Unknown status -->
                                 <a href="take_quiz.php?id=<?= $quiz['id'] ?>"
                                    class="flex-1 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-lg font-semibold transition-colors text-center text-sm">
-                                    <i class="fas fa-play mr-1"></i> Start Quiz
+                                    <i class="fas fa-play mr-1"></i>
+                                    Start Quiz
                                 </a>
                             <?php endif; ?>
 
-                            <!-- Quiz History -->
                             <button @click="openModal = 'quiz<?= $quiz['id'] ?>'; setTimeout(() => createChart<?= $quiz['id'] ?>(), 100)"
                                     class="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors text-sm flex-shrink-0">
                                 <i class="fas fa-history"></i>
                             </button>
-
-                            <!-- 🔥 FLASHCARD HISTORY BUTTON -->
-                            <?php if ($hasFlashcardAttempts): ?>
-                            <button @click="openModal = 'flashcard<?= $quiz['id'] ?>';"
-                                    class="px-4 py-2.5 bg-indigo-100 text-indigo-700 rounded-lg font-semibold hover:bg-indigo-200 transition-colors text-sm flex-shrink-0">
-                                <i class="fas fa-layer-group mr-1"></i> Flashcards
-                            </button>
-                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
 
-                <!-- Quiz History Modal -->
+                <!-- History Modal with Chart -->
                 <div x-show="openModal === 'quiz<?= $quiz['id'] ?>'"
                      x-transition
                      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
@@ -525,12 +592,16 @@ function calculatePercentage($score, $total) {
                                     <p class="text-gray-500">No attempts yet</p>
                                 </div>
                             <?php else: ?>
+                                <!-- Progress Chart -->
                                 <div class="mb-6 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-6 border-2 border-blue-100">
                                     <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                                        <i class="fas fa-chart-line text-blue-600 mr-2"></i> Score Progress
+                                        <i class="fas fa-chart-line text-blue-600 mr-2"></i>
+                                        Score Progress
                                     </h3>
                                     <canvas id="chart<?= $quiz['id'] ?>" class="w-full" style="max-height: 250px;"></canvas>
                                 </div>
+
+                                <!-- Attempt List -->
                                 <h3 class="text-lg font-semibold text-gray-900 mb-3">All Attempts</h3>
                                 <div class="space-y-3">
                                     <?php foreach (array_reverse($attempts) as $attempt): 
@@ -571,64 +642,17 @@ function calculatePercentage($score, $total) {
                     </div>
                 </div>
 
-                <!-- 🔥 FLASHCARD HISTORY MODAL -->
-                <?php if ($hasFlashcardAttempts): ?>
-                <div x-show="openModal === 'flashcard<?= $quiz['id'] ?>'"
-                     x-transition
-                     class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-                     style="display: none;">
-                    <div @click.away="openModal = null" class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                        <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white z-10">
-                            <h2 class="text-lg font-semibold text-gray-900">Flashcard Practice History</h2>
-                            <button @click="openModal = null" class="text-gray-400 hover:text-gray-600">
-                                <i class="fas fa-times text-xl"></i>
-                            </button>
-                        </div>
-                        <div class="p-6">
-                            <div class="space-y-4">
-                                <?php foreach (array_reverse($flashcardAttempts) as $fa): ?>
-                                <div class="p-4 border border-gray-200 rounded-lg bg-indigo-50">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <span class="font-semibold text-indigo-800">Practice #<?= htmlspecialchars($fa['id']) ?></span>
-                                        <span class="text-xs bg-indigo-200 text-indigo-800 px-2 py-1 rounded">
-                                            <?= htmlspecialchars(ucfirst($fa['mode'])) ?>
-                                        </span>
-                                    </div>
-                                    <p class="text-xs text-gray-600 mb-2">
-                                        <i class="fas fa-calendar mr-1"></i>
-                                        <?= date('M d, Y g:i A', strtotime($fa['completed_at'])) ?>
-                                    </p>
-                                    <p class="text-sm text-gray-800">
-                                        <strong><?= $fa['correct_answers'] ?></strong> correct,
-                                        <strong><?= $fa['incorrect_answers'] ?></strong> incorrect
-                                        (out of <?= $fa['total_questions'] ?>)
-                                    </p>
-                                    <?php if (!is_null($fa['score_percentage'])): ?>
-                                    <p class="text-sm font-semibold text-indigo-700 mt-1">
-                                        Score: <strong><?= round($fa['score_percentage'], 1) ?>%</strong>
-                                    </p>
-                                    <?php endif; ?>
-                                    <?php if (!is_null($fa['time_spent_seconds'])): ?>
-                                    <p class="text-xs text-gray-600 mt-1">
-                                        Time spent: <strong><?= gmdate('H:i:s', $fa['time_spent_seconds']) ?></strong>
-                                    </p>
-                                    <?php endif; ?>
-                                </div>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <?php endif; ?>
-
                 <!-- Chart Script -->
                 <script>
                 function createChart<?= $quiz['id'] ?>() {
                     const ctx = document.getElementById('chart<?= $quiz['id'] ?>');
                     if (!ctx) return;
+                    
+                    // Destroy existing chart if it exists
                     if (window.chartInstance<?= $quiz['id'] ?>) {
                         window.chartInstance<?= $quiz['id'] ?>.destroy();
                     }
+                    
                     const data = {
                         labels: [<?php foreach ($attempts as $a): ?>'Attempt #<?= $a['attempt_number'] ?>',<?php endforeach; ?>],
                         datasets: [{
@@ -645,6 +669,7 @@ function calculatePercentage($score, $total) {
                             pointBorderWidth: 2
                         }]
                     };
+                    
                     window.chartInstance<?= $quiz['id'] ?> = new Chart(ctx, {
                         type: 'line',
                         data: data,
@@ -652,12 +677,18 @@ function calculatePercentage($score, $total) {
                             responsive: true,
                             maintainAspectRatio: true,
                             plugins: {
-                                legend: { display: false },
+                                legend: {
+                                    display: false
+                                },
                                 tooltip: {
                                     backgroundColor: 'rgba(0, 0, 0, 0.8)',
                                     padding: 12,
-                                    titleFont: { size: 14 },
-                                    bodyFont: { size: 13 },
+                                    titleFont: {
+                                        size: 14
+                                    },
+                                    bodyFont: {
+                                        size: 13
+                                    },
                                     callbacks: {
                                         label: function(context) {
                                             return 'Score: ' + context.parsed.y + '%';
@@ -670,14 +701,26 @@ function calculatePercentage($score, $total) {
                                     beginAtZero: true,
                                     max: 100,
                                     ticks: {
-                                        callback: function(value) { return value + '%'; },
-                                        font: { size: 11 }
+                                        callback: function(value) {
+                                            return value + '%';
+                                        },
+                                        font: {
+                                            size: 11
+                                        }
                                     },
-                                    grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                                    grid: {
+                                        color: 'rgba(0, 0, 0, 0.05)'
+                                    }
                                 },
                                 x: {
-                                    grid: { display: false },
-                                    ticks: { font: { size: 11 } }
+                                    grid: {
+                                        display: false
+                                    },
+                                    ticks: {
+                                        font: {
+                                            size: 11
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -690,15 +733,20 @@ function calculatePercentage($score, $total) {
         </div>
     </main>
 </div>
+
 <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <script>
     let sidebarExpanded = false;
+
     function toggleSidebar() {
         const sidebar = document.getElementById('sidebar');
         const mainContent = document.getElementById('main-content');
         const overlay = document.getElementById('sidebar-overlay');
+        
         sidebarExpanded = !sidebarExpanded;
+        
         if (window.innerWidth < 1025) {
+            // Mobile behavior
             if (sidebarExpanded) {
                 sidebar.classList.remove('sidebar-collapsed');
                 sidebar.classList.add('sidebar-expanded');
@@ -709,8 +757,10 @@ function calculatePercentage($score, $total) {
                 overlay.classList.add('hidden');
             }
         } else {
+            // Desktop behavior
             sidebar.classList.toggle('sidebar-expanded');
             sidebar.classList.toggle('sidebar-collapsed');
+            
             if (sidebarExpanded) {
                 mainContent.style.marginLeft = '18rem';
             } else {
@@ -718,11 +768,14 @@ function calculatePercentage($score, $total) {
             }
         }
     }
+
     function closeSidebar() {
         if (window.innerWidth < 1025 && sidebarExpanded) {
             toggleSidebar();
         }
     }
+
+    // Handle window resize
     let resizeTimer;
     window.addEventListener('resize', function() {
         clearTimeout(resizeTimer);
@@ -730,7 +783,9 @@ function calculatePercentage($score, $total) {
             const sidebar = document.getElementById('sidebar');
             const mainContent = document.getElementById('main-content');
             const overlay = document.getElementById('sidebar-overlay');
+            
             if (window.innerWidth >= 1025) {
+                // Desktop mode
                 overlay.classList.add('hidden');
                 if (sidebarExpanded) {
                     sidebar.classList.remove('sidebar-collapsed');
@@ -742,6 +797,7 @@ function calculatePercentage($score, $total) {
                     mainContent.style.marginLeft = '5rem';
                 }
             } else {
+                // Mobile mode
                 mainContent.style.marginLeft = '0';
                 if (!sidebarExpanded) {
                     sidebar.classList.add('sidebar-collapsed');
@@ -751,17 +807,23 @@ function calculatePercentage($score, $total) {
             }
         }, 250);
     });
+    
+    // Initialize on page load
     window.addEventListener('load', function() {
         const sidebar = document.getElementById('sidebar');
         const mainContent = document.getElementById('main-content');
+        
         if (window.innerWidth >= 1025) {
+            // Desktop: start with collapsed sidebar
             sidebar.classList.add('sidebar-collapsed');
             mainContent.style.marginLeft = '5rem';
         } else {
+            // Mobile: start with hidden sidebar
             sidebar.classList.add('sidebar-collapsed');
             mainContent.style.marginLeft = '0';
         }
     });
 </script>
+
 </body>
 </html>

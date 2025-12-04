@@ -140,8 +140,23 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
             }
         }
 
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
         .animate-fade-in-up {
             animation: fadeInUp 0.6s ease-out;
+        }
+
+        .animate-scale-in {
+            animation: scaleIn 0.4s ease-out;
         }
 
         .sidebar-transition {
@@ -244,6 +259,39 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
                 gap: 0.75rem;
             }
         }
+
+        /* Chatbot Styles */
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .message-slide-in {
+            animation: slideInRight 0.3s ease-out;
+        }
+
+        @media (max-width: 640px) {
+            #chatbotWindow {
+                position: fixed;
+                bottom: 0;
+                right: 0;
+                left: 0;
+                max-width: 100%;
+                height: calc(100vh - 80px);
+                border-radius: 1rem 1rem 0 0;
+            }
+            
+            #chatbotContainer {
+                bottom: 1rem;
+                right: 1rem;
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 antialiased" x-data="{ filter: 'all' }">
@@ -265,7 +313,7 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
                 </div>
             </div>
 
-            <div class="px-4 py-3 border-b border-gray-200">
+            <div class="px-4 py-3 border-b border-gray-200 hidden lg:block">
                 <button onclick="toggleSidebar()" class="w-full flex items-center justify-center p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600">
                     <i class="fas fa-bars text-lg"></i>
                 </button>
@@ -300,7 +348,7 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
     </aside>
 
     <!-- Sidebar Overlay (Mobile) -->
-    <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="closeSidebar()"></div>
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden lg:hidden" onclick="closeSidebar()"></div>
 
     <!-- Main Content -->
     <main id="main-content" class="flex-1 transition-all duration-300 main-container" style="margin-left: 5rem;">
@@ -324,7 +372,7 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
                     <!-- Chart -->
                     <div class="chart-container">
                         <canvas id="progressChart"></canvas>
-                        <div class="absolute inset-0 flex flex-col items-center justify-center">
+                        <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                             <p class="text-3xl sm:text-4xl font-bold text-primary-600"><?= $progressPercent ?>%</p>
                             <p class="text-xs sm:text-sm text-gray-500">Complete</p>
                         </div>
@@ -487,29 +535,49 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
     </main>
 </div>
 
+<?php 
+// Include the FIXED chatbot component
+include __DIR__ . '/../includes/chatbot.php'; 
+?>
+
 <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <script>
+    // ============================================
+    // GLOBAL VARIABLES (Shared with chatbot)
+    // ============================================
     let sidebarExpanded = false;
+    let chatbotOpen = false;
 
+    // ============================================
+    // SIDEBAR FUNCTIONS
+    // ============================================
     function toggleSidebar() {
         const sidebar = document.getElementById('sidebar');
         const mainContent = document.getElementById('main-content');
         const overlay = document.getElementById('sidebar-overlay');
         
+        if (!sidebar || !mainContent || !overlay) {
+            console.error('Sidebar elements not found!');
+            return;
+        }
+        
         sidebarExpanded = !sidebarExpanded;
         
         if (window.innerWidth < 1024) {
-            sidebar.classList.toggle('sidebar-expanded');
-            sidebar.classList.toggle('sidebar-collapsed');
-            overlay.classList.toggle('hidden');
-            
-            // Toggle body scroll lock on mobile
+            // Mobile behavior
             if (sidebarExpanded) {
+                sidebar.classList.remove('sidebar-collapsed');
+                sidebar.classList.add('sidebar-expanded');
+                overlay.classList.remove('hidden');
                 document.body.classList.add('sidebar-open');
             } else {
+                sidebar.classList.remove('sidebar-expanded');
+                sidebar.classList.add('sidebar-collapsed');
+                overlay.classList.add('hidden');
                 document.body.classList.remove('sidebar-open');
             }
         } else {
+            // Desktop behavior
             sidebar.classList.toggle('sidebar-expanded');
             sidebar.classList.toggle('sidebar-collapsed');
             
@@ -527,7 +595,46 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
         }
     }
 
-    // Chart
+    // ============================================
+    // CHATBOT TOGGLE (called from chatbot.php)
+    // ============================================
+    function toggleChatbot() {
+        const chatWindow = document.getElementById('chatbotWindow');
+        const icon = document.getElementById('chatbotIcon');
+        const quickActions = document.getElementById('quickActions');
+        
+        if (!chatWindow || !icon) {
+            console.error('Chatbot elements not found!');
+            return;
+        }
+        
+        chatbotOpen = !chatbotOpen;
+        console.log('Chatbot toggled:', chatbotOpen);
+        
+        if (chatbotOpen) {
+            chatWindow.classList.remove('hidden');
+            chatWindow.classList.add('animate-scale-in');
+            icon.classList.remove('fa-robot');
+            icon.classList.add('fa-times');
+            if (quickActions) {
+                quickActions.classList.add('hidden');
+            }
+            
+            setTimeout(() => {
+                const input = document.getElementById('chatInput');
+                if (input) input.focus();
+            }, 300);
+        } else {
+            chatWindow.classList.add('hidden');
+            chatWindow.classList.remove('animate-scale-in');
+            icon.classList.remove('fa-times');
+            icon.classList.add('fa-robot');
+        }
+    }
+
+    // ============================================
+    // CHART INITIALIZATION
+    // ============================================
     const ctx = document.getElementById('progressChart');
     new Chart(ctx, {
         type: 'doughnut',
@@ -564,7 +671,9 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
         }
     });
 
-    // Handle window resize
+    // ============================================
+    // WINDOW RESIZE HANDLER
+    // ============================================
     let resizeTimer;
     window.addEventListener('resize', function() {
         clearTimeout(resizeTimer);
@@ -595,6 +704,20 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
                 }
             }
         }, 250);
+    });
+
+    // ============================================
+    // PAGE INITIALIZATION
+    // ============================================
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('📊 Progress page initialized');
+        console.log('Progress data available for chatbot:', {
+            completed: <?= $completedModules ?>,
+            passed: <?= $passedSteps ?>,
+            failed: <?= $failedSteps ?>,
+            pending: <?= $pendingSteps ?>,
+            percent: <?= $progressPercent ?>
+        });
     });
 </script>
 

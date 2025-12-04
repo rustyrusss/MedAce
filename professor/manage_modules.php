@@ -20,6 +20,55 @@ $profName = $prof ? $prof['firstname'] . " " . $prof['lastname'] : "Professor";
 // Use avatar helper to resolve profile picture path
 $profilePic = getProfilePicture($prof, "../");
 
+// Fetch subjects from existing table
+try {
+    $stmt = $conn->prepare("
+        SELECT id, name, description, icon, color FROM subjects 
+        WHERE status = 'active'
+        ORDER BY display_order ASC, name ASC
+    ");
+    $stmt->execute();
+    $subjects = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $subjects = [];
+}
+
+// Handle adding new subject via AJAX
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_subject') {
+    header('Content-Type: application/json');
+    
+    $subjectName = trim($_POST['subject_name'] ?? '');
+    $subjectDescription = trim($_POST['subject_description'] ?? '');
+    
+    if (empty($subjectName)) {
+        echo json_encode(['success' => false, 'error' => 'Subject name is required']);
+        exit();
+    }
+    
+    try {
+        // Get max display_order
+        $stmt = $conn->query("SELECT COALESCE(MAX(display_order), 0) + 1 FROM subjects");
+        $nextOrder = $stmt->fetchColumn();
+        
+        $stmt = $conn->prepare("INSERT INTO subjects (name, description, display_order, status, created_at, updated_at) VALUES (?, ?, ?, 'active', NOW(), NOW())");
+        $stmt->execute([$subjectName, $subjectDescription ?: null, $nextOrder]);
+        $newId = $conn->lastInsertId();
+        
+        echo json_encode([
+            'success' => true, 
+            'id' => $newId, 
+            'name' => $subjectName
+        ]);
+    } catch (PDOException $e) {
+        if ($e->getCode() == 23000) {
+            echo json_encode(['success' => false, 'error' => 'Subject already exists']);
+        } else {
+            echo json_encode(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
+        }
+    }
+    exit();
+}
+
 // Fetch modules (ordered by display_order if column exists, otherwise by created_at)
 try {
     $stmt = $conn->prepare("SELECT id, title, description, content, status, subject, created_at, display_order FROM modules WHERE professor_id = :professor_id ORDER BY display_order ASC, created_at DESC");
@@ -41,11 +90,10 @@ try {
     }
 }
 
-// Handle AJAX requests
+// Handle AJAX requests for reorder
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    header('Content-Type: application/json');
-    
     if ($_POST['action'] === 'reorder') {
+        header('Content-Type: application/json');
         $order = json_decode($_POST['order'], true);
         try {
             foreach ($order as $index => $id) {
@@ -253,7 +301,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             justify-content: center;
         }
 
-        /* Panel icon (left bar) */
         .sidebar-toggle-btn .toggle-icon::before {
             content: '';
             position: absolute;
@@ -265,7 +312,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        /* Chevron icon */
         .sidebar-toggle-btn .toggle-icon::after {
             content: '';
             position: absolute;
@@ -284,7 +330,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             background-color: #0ea5e9;
         }
 
-        /* Active state - chevron points left when sidebar is expanded */
         .sidebar-toggle-btn.active .toggle-icon::after {
             transform: rotate(135deg);
             right: 4px;
@@ -299,7 +344,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             background: #f0f9ff;
         }
 
-        /* Mobile-specific toggle button styling */
         @media (max-width: 1023px) {
             .sidebar-toggle-btn {
                 width: 36px;
@@ -396,7 +440,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
         }
 
-        /* Overlay fade effect */
         #sidebar-overlay {
             opacity: 0;
             pointer-events: none;
@@ -408,7 +451,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             pointer-events: auto;
         }
 
-        /* Badge */
         .badge {
             display: inline-flex;
             align-items: center;
@@ -445,17 +487,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             opacity: 1;
         }
 
-        .toast.success {
-            border-left-color: #10b981;
-        }
-
-        .toast.error {
-            border-left-color: #ef4444;
-        }
-
-        .toast.info {
-            border-left-color: #3b82f6;
-        }
+        .toast.success { border-left-color: #10b981; }
+        .toast.error { border-left-color: #ef4444; }
+        .toast.info { border-left-color: #3b82f6; }
 
         .toast-icon {
             flex-shrink: 0;
@@ -467,46 +501,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             justify-content: center;
         }
 
-        .toast.success .toast-icon {
-            background: #d1fae5;
-            color: #10b981;
-        }
+        .toast.success .toast-icon { background: #d1fae5; color: #10b981; }
+        .toast.error .toast-icon { background: #fee2e2; color: #ef4444; }
+        .toast.info .toast-icon { background: #dbeafe; color: #3b82f6; }
 
-        .toast.error .toast-icon {
-            background: #fee2e2;
-            color: #ef4444;
-        }
-
-        .toast.info .toast-icon {
-            background: #dbeafe;
-            color: #3b82f6;
-        }
-
-        .toast-content {
-            flex: 1;
-        }
-
-        .toast-title {
-            font-weight: 600;
-            color: #111827;
-            margin-bottom: 0.25rem;
-        }
-
-        .toast-message {
-            font-size: 0.875rem;
-            color: #6b7280;
-        }
-
-        .toast-close {
-            flex-shrink: 0;
-            color: #9ca3af;
-            cursor: pointer;
-            transition: color 0.2s;
-        }
-
-        .toast-close:hover {
-            color: #4b5563;
-        }
+        .toast-content { flex: 1; }
+        .toast-title { font-weight: 600; color: #111827; margin-bottom: 0.25rem; }
+        .toast-message { font-size: 0.875rem; color: #6b7280; }
+        .toast-close { flex-shrink: 0; color: #9ca3af; cursor: pointer; transition: color 0.2s; }
+        .toast-close:hover { color: #4b5563; }
 
         /* File upload indicator */
         .file-selected {
@@ -529,7 +532,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             justify-content: space-between;
         }
 
-        /* Responsive adjustments */
+        /* Subject dropdown with add new option */
+        .subject-dropdown-container {
+            position: relative;
+        }
+
+        .add-subject-inline {
+            display: none;
+            margin-top: 0.75rem;
+            padding: 1rem;
+            background: #f8fafc;
+            border: 2px dashed #cbd5e1;
+            border-radius: 0.5rem;
+        }
+
+        .add-subject-inline.show {
+            display: block;
+        }
+
         @media (max-width: 1024px) {
             #main-content {
                 margin-left: 0 !important;
@@ -558,7 +578,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
         }
 
-        /* Prevent horizontal overflow */
         body {
             overflow-x: hidden;
         }
@@ -750,11 +769,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                             <p class="text-xs text-gray-500 sm:hidden truncate max-w-xs">
                                                 <?php if (!empty($module['subject'])): ?>
                                                     <span class="font-medium"><?= htmlspecialchars($module['subject']) ?></span>
-                                                    <?php if (!empty($module['description'])): ?>
-                                                        - <?= htmlspecialchars($module['description']) ?>
-                                                    <?php endif; ?>
-                                                <?php else: ?>
-                                                    <?= htmlspecialchars($module['description']) ?>
                                                 <?php endif; ?>
                                             </p>
                                         </div>
@@ -771,11 +785,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                     <?php endif; ?>
                                 </td>
                                 <td class="px-6 py-4 text-sm text-gray-600 hidden md:table-cell">
-                                    <p class="truncate max-w-xs"><?= htmlspecialchars($module['description']) ?></p>
+                                    <p class="truncate max-w-xs"><?= htmlspecialchars($module['description'] ?? '') ?></p>
                                 </td>
                                 <td class="px-6 py-4">
                                     <?php
-                                        // Handle empty or null status
                                         $statusValue = !empty($module['status']) ? $module['status'] : 'draft';
                                         $status = strtolower(trim($statusValue));
                                         
@@ -800,7 +813,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                                 class="inline-flex items-center px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 font-medium transition-colors text-sm">
                                             <i class="fas fa-edit"></i>
                                         </button>
-                                        <button onclick="deleteModule(<?= $module['id'] ?>, '<?= htmlspecialchars(addslashes($module['title'])) ?>', '<?= htmlspecialchars($module['content']) ?>')" 
+                                        <button onclick="deleteModule(<?= $module['id'] ?>, '<?= htmlspecialchars(addslashes($module['title'])) ?>', '<?= htmlspecialchars($module['content'] ?? '') ?>')" 
                                                 class="inline-flex items-center px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 font-medium transition-colors text-sm">
                                             <i class="fas fa-trash-alt"></i>
                                         </button>
@@ -851,14 +864,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                            placeholder="e.g., Introduction to Anatomy">
                 </div>
 
-                <div>
+                <div class="subject-dropdown-container">
                     <label class="block text-sm font-semibold text-gray-700 mb-2">
                         <i class="fas fa-book-open text-primary-500 mr-1"></i>
                         Subject *
                     </label>
-                    <input type="text" name="subject" required 
-                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                           placeholder="e.g., Anatomy, Physiology, Pharmacology">
+                    <div class="flex gap-2">
+                        <select name="subject" id="addSubjectSelect" required 
+                                class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all">
+                            <option value="">-- Select Subject --</option>
+                            <?php foreach ($subjects as $subject): ?>
+                                <option value="<?= htmlspecialchars($subject['name']) ?>" 
+                                        data-icon="<?= htmlspecialchars($subject['icon'] ?? '') ?>"
+                                        data-color="<?= htmlspecialchars($subject['color'] ?? '') ?>">
+                                    <?= htmlspecialchars($subject['name']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                            <option value="__add_new__">+ Add New Subject</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Add New Subject Inline Form -->
+                    <div id="addNewSubjectForm" class="add-subject-inline">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">
+                            <i class="fas fa-plus-circle text-green-500 mr-1"></i>
+                            Add New Subject
+                        </h4>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">Subject Name *</label>
+                                <input type="text" id="newSubjectName" 
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                                       placeholder="e.g., Medical-Surgical Nursing">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">Description (Optional)</label>
+                                <input type="text" id="newSubjectDescription" 
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                                       placeholder="e.g., Care of adult patients with medical conditions">
+                            </div>
+                            <div class="flex gap-2">
+                                <button type="button" onclick="saveNewSubject('add')" 
+                                        class="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-semibold text-sm">
+                                    <i class="fas fa-check mr-1"></i> Save Subject
+                                </button>
+                                <button type="button" onclick="cancelNewSubject('add')" 
+                                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-semibold text-sm">
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
                 <div>
@@ -946,14 +1002,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all">
                 </div>
 
-                <div>
+                <div class="subject-dropdown-container">
                     <label class="block text-sm font-semibold text-gray-700 mb-2">
                         <i class="fas fa-book-open text-primary-500 mr-1"></i>
                         Subject *
                     </label>
-                    <input type="text" name="subject" id="edit_subject" required 
-                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                           placeholder="e.g., Anatomy, Physiology, Pharmacology">
+                    <div class="flex gap-2">
+                        <select name="subject" id="editSubjectSelect" required 
+                                class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all">
+                            <option value="">-- Select Subject --</option>
+                            <?php foreach ($subjects as $subject): ?>
+                                <option value="<?= htmlspecialchars($subject['name']) ?>"
+                                        data-icon="<?= htmlspecialchars($subject['icon'] ?? '') ?>"
+                                        data-color="<?= htmlspecialchars($subject['color'] ?? '') ?>">
+                                    <?= htmlspecialchars($subject['name']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                            <option value="__add_new__">+ Add New Subject</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Add New Subject Inline Form for Edit -->
+                    <div id="editNewSubjectForm" class="add-subject-inline">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">
+                            <i class="fas fa-plus-circle text-green-500 mr-1"></i>
+                            Add New Subject
+                        </h4>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">Subject Name *</label>
+                                <input type="text" id="editNewSubjectName" 
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                                       placeholder="e.g., Medical-Surgical Nursing">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">Description (Optional)</label>
+                                <input type="text" id="editNewSubjectDescription" 
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                                       placeholder="e.g., Care of adult patients with medical conditions">
+                            </div>
+                            <div class="flex gap-2">
+                                <button type="button" onclick="saveNewSubject('edit')" 
+                                        class="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-semibold text-sm">
+                                    <i class="fas fa-check mr-1"></i> Save Subject
+                                </button>
+                                <button type="button" onclick="cancelNewSubject('edit')" 
+                                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-semibold text-sm">
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
                 <div>
@@ -1083,15 +1182,106 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         `;
         
         document.body.appendChild(toast);
-        
-        // Trigger animation
         setTimeout(() => toast.classList.add('show'), 10);
-        
-        // Auto remove
         setTimeout(() => {
             toast.classList.remove('show');
             setTimeout(() => toast.remove(), 300);
         }, duration);
+    }
+
+    // Subject Dropdown Handlers
+    document.getElementById('addSubjectSelect').addEventListener('change', function() {
+        if (this.value === '__add_new__') {
+            document.getElementById('addNewSubjectForm').classList.add('show');
+            document.getElementById('newSubjectName').focus();
+        } else {
+            document.getElementById('addNewSubjectForm').classList.remove('show');
+        }
+    });
+
+    document.getElementById('editSubjectSelect').addEventListener('change', function() {
+        if (this.value === '__add_new__') {
+            document.getElementById('editNewSubjectForm').classList.add('show');
+            document.getElementById('editNewSubjectName').focus();
+        } else {
+            document.getElementById('editNewSubjectForm').classList.remove('show');
+        }
+    });
+
+    function cancelNewSubject(formType) {
+        if (formType === 'add') {
+            document.getElementById('addNewSubjectForm').classList.remove('show');
+            document.getElementById('addSubjectSelect').value = '';
+            document.getElementById('newSubjectName').value = '';
+            document.getElementById('newSubjectDescription').value = '';
+        } else {
+            document.getElementById('editNewSubjectForm').classList.remove('show');
+            document.getElementById('editSubjectSelect').value = '';
+            document.getElementById('editNewSubjectName').value = '';
+            document.getElementById('editNewSubjectDescription').value = '';
+        }
+    }
+
+    async function saveNewSubject(formType) {
+        const nameInput = formType === 'add' ? document.getElementById('newSubjectName') : document.getElementById('editNewSubjectName');
+        const descInput = formType === 'add' ? document.getElementById('newSubjectDescription') : document.getElementById('editNewSubjectDescription');
+        const selectEl = formType === 'add' ? document.getElementById('addSubjectSelect') : document.getElementById('editSubjectSelect');
+        const formEl = formType === 'add' ? document.getElementById('addNewSubjectForm') : document.getElementById('editNewSubjectForm');
+        
+        const subjectName = nameInput.value.trim();
+        const subjectDescription = descInput.value.trim();
+        
+        if (!subjectName) {
+            showToast('error', 'Error', 'Subject name is required');
+            nameInput.focus();
+            return;
+        }
+        
+        try {
+            const formData = new FormData();
+            formData.append('action', 'add_subject');
+            formData.append('subject_name', subjectName);
+            formData.append('subject_description', subjectDescription);
+            
+            const response = await fetch(window.location.href, {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Add new option to both selects
+                const newOption = new Option(subjectName, subjectName);
+                
+                // Add to both dropdowns (before the "Add New" option)
+                const addSelect = document.getElementById('addSubjectSelect');
+                const editSelect = document.getElementById('editSubjectSelect');
+                
+                const addNewOptionAdd = addSelect.querySelector('option[value="__add_new__"]');
+                const addNewOptionEdit = editSelect.querySelector('option[value="__add_new__"]');
+                
+                addSelect.insertBefore(newOption.cloneNode(true), addNewOptionAdd);
+                editSelect.insertBefore(newOption.cloneNode(true), addNewOptionEdit);
+                
+                // Select the new subject
+                selectEl.value = subjectName;
+                
+                // Hide the form
+                formEl.classList.remove('show');
+                
+                // Clear inputs
+                nameInput.value = '';
+                descInput.value = '';
+                
+                showToast('success', 'Subject Added', `"${subjectName}" has been added successfully`);
+            } else {
+                showToast('error', 'Error', data.error || 'Failed to add subject');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showToast('error', 'Error', 'Failed to add subject. Please try again.');
+        }
     }
 
     // File Upload Handlers
@@ -1127,7 +1317,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         document.getElementById('editFileUploadArea').classList.remove('file-selected');
     }
 
-    // Form submission handlers with upload notifications
+    // Form submission handlers
     document.getElementById('addModuleForm').addEventListener('submit', function(e) {
         const fileInput = document.getElementById('addModuleFile');
         if (fileInput.files.length > 0) {
@@ -1152,32 +1342,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         
         sidebarExpanded = !sidebarExpanded;
         
-        // Toggle hamburger animation
         hamburgerBtn.classList.toggle('active');
         mobileHamburgerBtn.classList.toggle('active');
         
         if (window.innerWidth < 1024) {
-            // Mobile behavior
             sidebar.classList.toggle('sidebar-expanded');
             sidebar.classList.toggle('sidebar-collapsed');
             overlay.classList.toggle('hidden');
             overlay.classList.toggle('show');
             
-            if (sidebarExpanded) {
-                document.body.style.overflow = 'hidden';
-            } else {
-                document.body.style.overflow = 'auto';
-            }
+            document.body.style.overflow = sidebarExpanded ? 'hidden' : 'auto';
         } else {
-            // Desktop behavior
             sidebar.classList.toggle('sidebar-expanded');
             sidebar.classList.toggle('sidebar-collapsed');
-            
-            if (sidebarExpanded) {
-                mainContent.style.marginLeft = '18rem';
-            } else {
-                mainContent.style.marginLeft = '5rem';
-            }
+            mainContent.style.marginLeft = sidebarExpanded ? '18rem' : '5rem';
         }
     }
 
@@ -1199,7 +1377,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             btn.classList.add('bg-primary-600', 'text-white');
             btn.classList.remove('bg-gray-100', 'text-gray-700');
             
-            // Initialize SortableJS
             sortable = new Sortable(tbody, {
                 handle: '.drag-handle',
                 animation: 150,
@@ -1226,16 +1403,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         try {
             const response = await fetch(window.location.href, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: `action=reorder&order=${JSON.stringify(order)}`
             });
             
             const data = await response.json();
             
             if (data.success) {
-                // Update row numbers
                 rows.forEach((row, index) => {
                     row.querySelector('td:nth-child(2)').textContent = index + 1;
                 });
@@ -1263,36 +1437,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         document.getElementById('addModuleModal').classList.remove('show');
         document.body.style.overflow = 'auto';
         clearAddFile();
+        cancelNewSubject('add');
     }
 
     function openEditModal(module) {
-        console.log('Opening edit modal for module:', module); // Debug
-        
         document.getElementById('edit_module_id').value = module.id;
         document.getElementById('edit_title').value = module.title;
-        document.getElementById('edit_subject').value = module.subject || '';
         document.getElementById('edit_description').value = module.description || '';
         
-        // Normalize status value
-        let statusValue = module.status ? module.status.toLowerCase().trim() : 'draft';
-        // Map 'active' to 'published' if it exists
-        if (statusValue === 'active') {
-            statusValue = 'published';
+        // Set subject dropdown
+        const subjectSelect = document.getElementById('editSubjectSelect');
+        const subjectValue = module.subject || '';
+        
+        // Check if the subject exists in the dropdown
+        let subjectFound = false;
+        for (let option of subjectSelect.options) {
+            if (option.value === subjectValue) {
+                subjectFound = true;
+                break;
+            }
         }
         
-        console.log('Setting status to:', statusValue); // Debug
+        if (subjectFound) {
+            subjectSelect.value = subjectValue;
+        } else if (subjectValue) {
+            // Add the subject as a new option if it doesn't exist
+            const newOption = new Option(subjectValue, subjectValue);
+            const addNewOption = subjectSelect.querySelector('option[value="__add_new__"]');
+            subjectSelect.insertBefore(newOption, addNewOption);
+            subjectSelect.value = subjectValue;
+        } else {
+            subjectSelect.value = '';
+        }
         
-        // Set the status dropdown value
-        const statusDropdown = document.getElementById('edit_status');
-        statusDropdown.value = statusValue;
-        
-        // Verify it was set correctly
-        console.log('Status dropdown value after setting:', statusDropdown.value); // Debug
+        // Set status
+        let statusValue = module.status ? module.status.toLowerCase().trim() : 'draft';
+        if (statusValue === 'active') statusValue = 'published';
+        document.getElementById('edit_status').value = statusValue;
         
         const fileName = module.content ? module.content.split('/').pop() : 'No file uploaded';
         document.getElementById('current_file_name').textContent = fileName;
         
         clearEditFile();
+        cancelNewSubject('edit');
         document.getElementById('editModuleModal').classList.add('show');
         document.body.style.overflow = 'hidden';
     }
@@ -1301,6 +1488,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         document.getElementById('editModuleModal').classList.remove('show');
         document.body.style.overflow = 'auto';
         clearEditFile();
+        cancelNewSubject('edit');
     }
 
     // Delete Module
@@ -1351,7 +1539,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         const rows = document.querySelectorAll('#moduleTableBody tr');
         
         rows.forEach(row => {
-            const title = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
+            const title = row.querySelector('td:nth-child(3)')?.textContent.toLowerCase() || '';
             const subject = row.querySelector('td:nth-child(4)')?.textContent.toLowerCase() || '';
             const description = row.querySelector('td:nth-child(5)')?.textContent.toLowerCase() || '';
             
@@ -1365,24 +1553,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
-        // Show success notification if file was uploaded
-        <?php if (isset($_SESSION['file_uploaded']) && $_SESSION['file_uploaded']): ?>
-        showToast('success', 'File Uploaded Successfully', 'Your module file has been uploaded and saved');
-        <?php unset($_SESSION['file_uploaded']); ?>
-        <?php endif; ?>
-
-        // Initialize sidebar state based on screen size
         const sidebar = document.getElementById('sidebar');
         const mainContent = document.getElementById('main-content');
         
         if (window.innerWidth >= 1024) {
-            // Desktop: Start collapsed
             sidebar.classList.add('sidebar-collapsed');
             sidebar.classList.remove('sidebar-expanded');
             mainContent.style.marginLeft = '5rem';
             sidebarExpanded = false;
         } else {
-            // Mobile: Start hidden (collapsed off-screen)
             sidebar.classList.add('sidebar-collapsed');
             sidebar.classList.remove('sidebar-expanded');
             mainContent.style.marginLeft = '0';
@@ -1401,27 +1580,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 const mobileHamburgerBtn = document.getElementById('mobileHamburgerBtn');
                 
                 if (window.innerWidth >= 1024) {
-                    // Desktop mode
                     overlay.classList.add('hidden');
                     overlay.classList.remove('show');
                     document.body.style.overflow = 'auto';
                     
-                    // Reset sidebar to proper desktop state
                     if (!sidebar.classList.contains('sidebar-collapsed') && !sidebar.classList.contains('sidebar-expanded')) {
                         sidebar.classList.add('sidebar-collapsed');
                         sidebarExpanded = false;
                     }
                     
-                    if (sidebarExpanded) {
-                        mainContent.style.marginLeft = '18rem';
-                    } else {
-                        mainContent.style.marginLeft = '5rem';
-                    }
+                    mainContent.style.marginLeft = sidebarExpanded ? '18rem' : '5rem';
                 } else {
-                    // Mobile mode
                     mainContent.style.marginLeft = '0';
                     
-                    // Reset sidebar to proper mobile state
                     if (sidebarExpanded) {
                         sidebar.classList.remove('sidebar-collapsed');
                         sidebar.classList.add('sidebar-expanded');
@@ -1463,7 +1634,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         });
     });
 
-    // Touch swipe support for mobile sidebar
+    // Touch swipe support
     let touchStartX = 0;
     let touchEndX = 0;
     
@@ -1478,11 +1649,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     
     function handleSwipe() {
         if (window.innerWidth < 1024) {
-            // Swipe right to open
             if (touchEndX - touchStartX > 50 && !sidebarExpanded) {
                 toggleSidebar();
             }
-            // Swipe left to close
             if (touchStartX - touchEndX > 50 && sidebarExpanded) {
                 toggleSidebar();
             }

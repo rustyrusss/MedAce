@@ -1,7 +1,7 @@
 <?php
 /**
- * Chatbot Component - Fixed Version
- * Works with chatbot_endpoint.php
+ * Chatbot Component - Fixed Version (No Conflicts)
+ * Works with dashboard.php without function/variable conflicts
  * Include this file in dashboard.php or other pages
  */
 
@@ -19,11 +19,11 @@ if (isset($student) && !empty($student['firstname'])) {
     
     <!-- Quick Action Buttons (shown when chatbot is closed) -->
     <div id="quickActions" class="hidden mb-3 space-y-2">
-        <button onclick="quickQuestion('Give me a study tip for nursing')" 
+        <button onclick="chatQuickQuestion('Give me a study tip for nursing')" 
                 class="block w-full bg-white text-gray-700 px-4 py-2 rounded-lg shadow-lg text-sm hover:bg-gray-50 transition-all border border-gray-200 text-left">
             💡 Study Tips
         </button>
-        <button onclick="openProgressChat()" 
+        <button onclick="chatOpenProgress()" 
                 class="block w-full bg-white text-gray-700 px-4 py-2 rounded-lg shadow-lg text-sm hover:bg-gray-50 transition-all border border-gray-200 text-left">
             📊 Check Progress
         </button>
@@ -60,15 +60,15 @@ if (isset($student) && !empty($student['firstname'])) {
     
     <!-- Action Buttons -->
     <div class="px-3 py-2 bg-gray-50 border-b border-gray-200 flex gap-2 overflow-x-auto">
-        <button onclick="openProgressChat()" class="flex-shrink-0 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium hover:bg-blue-200 transition-colors flex items-center gap-1">
+        <button onclick="chatOpenProgress()" class="flex-shrink-0 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium hover:bg-blue-200 transition-colors flex items-center gap-1">
             <i class="fas fa-chart-line"></i>
             My Progress
         </button>
-        <button onclick="requestFlashcards()" class="flex-shrink-0 px-3 py-1.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium hover:bg-purple-200 transition-colors flex items-center gap-1">
+        <button onclick="chatRequestFlashcards()" class="flex-shrink-0 px-3 py-1.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium hover:bg-purple-200 transition-colors flex items-center gap-1">
             <i class="fas fa-layer-group"></i>
             Flashcards
         </button>
-        <button onclick="quickQuestion('Give me a nursing study tip')" class="flex-shrink-0 px-3 py-1.5 bg-green-100 text-green-700 rounded-full text-xs font-medium hover:bg-green-200 transition-colors flex items-center gap-1">
+        <button onclick="chatQuickQuestion('Give me a nursing study tip')" class="flex-shrink-0 px-3 py-1.5 bg-green-100 text-green-700 rounded-full text-xs font-medium hover:bg-green-200 transition-colors flex items-center gap-1">
             <i class="fas fa-lightbulb"></i>
             Study Tips
         </button>
@@ -119,14 +119,14 @@ if (isset($student) && !empty($student['firstname'])) {
     
     <!-- Input Area -->
     <div class="p-3 bg-white border-t border-gray-200">
-        <form id="chatForm" onsubmit="sendChatMessage(event)" class="flex items-end gap-2">
+        <form id="chatForm" onsubmit="chatSendMessage(event)" class="flex items-end gap-2">
             <div class="flex-1 relative">
                 <textarea id="chatInput" 
                           placeholder="Type your message..." 
                           rows="1"
                           class="w-full px-4 py-3 bg-gray-100 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all"
-                          onkeydown="handleChatKeydown(event)"
-                          oninput="autoResizeChat(this)"></textarea>
+                          onkeydown="chatHandleKeydown(event)"
+                          oninput="chatAutoResize(this)"></textarea>
             </div>
             <button type="submit" 
                     class="w-11 h-11 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors flex items-center justify-center flex-shrink-0 shadow-sm">
@@ -137,61 +137,37 @@ if (isset($student) && !empty($student['firstname'])) {
 </div>
 
 <script>
-// Chatbot State
-let chatbotOpen = false;
-let isProcessing = false;
-let availableModules = [];
+// ============================================
+// CHATBOT-SPECIFIC STATE (Separate from dashboard)
+// ============================================
+let chatIsProcessing = false;
+let chatAvailableModules = [];
+let chatMessageHistory = [];
 
-// API Endpoint - Use chatbot_endpoint.php
+// API Endpoint
 const CHATBOT_API_URL = '../config/chatbot_endpoint.php';
 
-// Toggle chatbot window
-function toggleChatbot() {
-    const chatWindow = document.getElementById('chatbotWindow');
-    const icon = document.getElementById('chatbotIcon');
-    const quickActions = document.getElementById('quickActions');
-    
-    chatbotOpen = !chatbotOpen;
-    
-    if (chatbotOpen) {
-        chatWindow.classList.remove('hidden');
-        chatWindow.classList.add('animate-scale-in');
-        icon.classList.remove('fa-robot');
-        icon.classList.add('fa-times');
-        quickActions?.classList.add('hidden');
-        
-        setTimeout(() => {
-            document.getElementById('chatInput')?.focus();
-        }, 300);
-        
-        // Load modules if not loaded
-        if (availableModules.length === 0) {
-            loadModulesForChat();
-        }
-    } else {
-        chatWindow.classList.add('hidden');
-        chatWindow.classList.remove('animate-scale-in');
-        icon.classList.remove('fa-times');
-        icon.classList.add('fa-robot');
-    }
-}
+// ============================================
+// NOTE: toggleChatbot() is defined in dashboard.php
+// We use the same function from the main dashboard
+// ============================================
 
 // Auto-resize textarea
-function autoResizeChat(textarea) {
+function chatAutoResize(textarea) {
     textarea.style.height = 'auto';
     textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
 }
 
 // Handle input keydown
-function handleChatKeydown(event) {
+function chatHandleKeydown(event) {
     if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
-        sendChatMessage(event);
+        chatSendMessage(event);
     }
 }
 
 // Load modules for flashcard selection
-async function loadModulesForChat() {
+async function chatLoadModules() {
     try {
         const response = await fetch(CHATBOT_API_URL, {
             method: 'POST',
@@ -202,8 +178,8 @@ async function loadModulesForChat() {
         const data = await response.json();
         
         if (data.success && data.modules) {
-            availableModules = data.modules;
-            console.log('✅ Loaded', availableModules.length, 'modules');
+            chatAvailableModules = data.modules;
+            console.log('✅ Loaded', chatAvailableModules.length, 'modules');
         }
     } catch (error) {
         console.error('Error loading modules:', error);
@@ -211,10 +187,10 @@ async function loadModulesForChat() {
 }
 
 // Send chat message
-async function sendChatMessage(event) {
+async function chatSendMessage(event) {
     event?.preventDefault();
     
-    if (isProcessing) return;
+    if (chatIsProcessing) return;
     
     const input = document.getElementById('chatInput');
     const message = input.value.trim();
@@ -224,11 +200,11 @@ async function sendChatMessage(event) {
     // Clear input and add user message
     input.value = '';
     input.style.height = 'auto';
-    addChatMessage(message, 'user');
+    chatAddMessage(message, 'user');
     
     // Show typing indicator
-    isProcessing = true;
-    showTypingIndicator(true);
+    chatIsProcessing = true;
+    chatShowTyping(true);
     
     try {
         const response = await fetch(CHATBOT_API_URL, {
@@ -243,39 +219,40 @@ async function sendChatMessage(event) {
         
         const data = await response.json();
         
-        showTypingIndicator(false);
-        isProcessing = false;
+        chatShowTyping(false);
+        chatIsProcessing = false;
         
         if (data.error) {
-            addChatMessage('Sorry, I encountered an error: ' + data.error, 'bot', true);
+            chatAddMessage('Sorry, I encountered an error: ' + data.error, 'bot', true);
         } else if (data.reply) {
-            addChatMessage(data.reply, 'bot');
+            chatAddMessage(data.reply, 'bot');
         } else {
-            addChatMessage('Sorry, I couldn\'t process your request. Please try again.', 'bot', true);
+            chatAddMessage('Sorry, I couldn\'t process your request. Please try again.', 'bot', true);
         }
         
     } catch (error) {
         console.error('Chat error:', error);
-        showTypingIndicator(false);
-        isProcessing = false;
-        addChatMessage('Sorry, I\'m having trouble connecting. Please check your connection and try again.', 'bot', true);
+        chatShowTyping(false);
+        chatIsProcessing = false;
+        chatAddMessage('Sorry, I\'m having trouble connecting. Please check your connection and try again.', 'bot', true);
     }
 }
 
 // Open progress chat - Get real progress data
-async function openProgressChat() {
+async function chatOpenProgress() {
+    // Use the dashboard's toggleChatbot if needed
     if (!chatbotOpen) {
         toggleChatbot();
         await new Promise(resolve => setTimeout(resolve, 300));
     }
     
-    if (isProcessing) return;
+    if (chatIsProcessing) return;
     
     // Add user message
-    addChatMessage('Show me my learning progress', 'user');
+    chatAddMessage('Show me my learning progress', 'user');
     
-    isProcessing = true;
-    showTypingIndicator(true);
+    chatIsProcessing = true;
+    chatShowTyping(true);
     
     try {
         // First get progress data
@@ -289,7 +266,7 @@ async function openProgressChat() {
         
         // Show progress card if data available
         if (progressData.success && progressData.progress) {
-            addProgressCard(progressData.progress);
+            chatAddProgressCard(progressData.progress);
         }
         
         // Now get AI analysis
@@ -305,25 +282,25 @@ async function openProgressChat() {
         
         const aiData = await aiResponse.json();
         
-        showTypingIndicator(false);
-        isProcessing = false;
+        chatShowTyping(false);
+        chatIsProcessing = false;
         
         if (aiData.error) {
-            addChatMessage('I couldn\'t analyze your progress right now: ' + aiData.error, 'bot', true);
+            chatAddMessage('I couldn\'t analyze your progress right now: ' + aiData.error, 'bot', true);
         } else if (aiData.reply) {
-            addChatMessage(aiData.reply, 'bot');
+            chatAddMessage(aiData.reply, 'bot');
         }
         
     } catch (error) {
         console.error('Progress error:', error);
-        showTypingIndicator(false);
-        isProcessing = false;
-        addChatMessage('Sorry, I couldn\'t fetch your progress. Please try again later.', 'bot', true);
+        chatShowTyping(false);
+        chatIsProcessing = false;
+        chatAddMessage('Sorry, I couldn\'t fetch your progress. Please try again later.', 'bot', true);
     }
 }
 
 // Add progress card to chat
-function addProgressCard(progressData) {
+function chatAddProgressCard(progressData) {
     const container = document.getElementById('chatMessages');
     const modules = progressData.modules || {};
     const quizzes = progressData.quizzes || {};
@@ -382,46 +359,47 @@ function addProgressCard(progressData) {
                         </div>
                     </div>
                 </div>
-                <span class="text-xs text-gray-400 mt-1 block">${formatChatTime(new Date())}</span>
+                <span class="text-xs text-gray-400 mt-1 block">${chatFormatTime(new Date())}</span>
             </div>
         </div>
     `;
     
     container.insertAdjacentHTML('beforeend', cardHtml);
-    scrollChatToBottom();
+    chatScrollToBottom();
 }
 
 // Request flashcards - shows module selection
-function requestFlashcards() {
+function chatRequestFlashcards() {
+    // Use dashboard's toggle if needed
     if (!chatbotOpen) {
         toggleChatbot();
     }
     
-    if (availableModules.length === 0) {
-        addChatMessage('Loading modules...', 'bot');
-        loadModulesForChat().then(() => {
-            if (availableModules.length > 0) {
-                showModuleSelection();
+    if (chatAvailableModules.length === 0) {
+        chatAddMessage('Loading modules...', 'bot');
+        chatLoadModules().then(() => {
+            if (chatAvailableModules.length > 0) {
+                chatShowModuleSelection();
             } else {
-                addChatMessage('❌ No modules available. Please try again later.', 'bot', true);
+                chatAddMessage('❌ No modules available. Please try again later.', 'bot', true);
             }
         });
     } else {
-        showModuleSelection();
+        chatShowModuleSelection();
     }
 }
 
 // Show module selection for flashcards
-function showModuleSelection() {
+function chatShowModuleSelection() {
     const container = document.getElementById('chatMessages');
     
-    if (availableModules.length === 0) {
-        addChatMessage('❌ No modules available.', 'bot', true);
+    if (chatAvailableModules.length === 0) {
+        chatAddMessage('❌ No modules available.', 'bot', true);
         return;
     }
     
     let modulesHTML = '';
-    availableModules.forEach(module => {
+    chatAvailableModules.forEach(module => {
         const status = (module.status || 'Pending').toLowerCase();
         const gradient = status === 'completed' ? 'from-green-50 to-emerald-50' : 
                         status === 'in progress' ? 'from-yellow-50 to-orange-50' : 
@@ -432,12 +410,12 @@ function showModuleSelection() {
         const icon = status === 'completed' ? '✅' : 
                     status === 'in progress' ? '📖' : '📘';
         
-        const moduleTitle = escapeHtmlChat(module.title || 'Untitled');
+        const moduleTitle = chatEscapeHtml(module.title || 'Untitled');
         
         modulesHTML += `
             <button 
                 class="w-full flex items-center gap-3 p-3 bg-gradient-to-r ${gradient} hover:shadow-md rounded-lg transition-all text-left border-2 ${border} mb-2"
-                onclick="startFlashcardQuiz(${module.id}, '${moduleTitle.replace(/'/g, "\\'")}')">
+                onclick="chatStartFlashcard(${module.id}, '${moduleTitle.replace(/'/g, "\\'")}')">
                 <span class="text-2xl">${icon}</span>
                 <div class="flex-1">
                     <span class="font-medium text-gray-900 text-sm block">${moduleTitle}</span>
@@ -460,18 +438,18 @@ function showModuleSelection() {
                         ${modulesHTML}
                     </div>
                 </div>
-                <span class="text-xs text-gray-400 mt-1 block">${formatChatTime(new Date())}</span>
+                <span class="text-xs text-gray-400 mt-1 block">${chatFormatTime(new Date())}</span>
             </div>
         </div>
     `;
     
     container.insertAdjacentHTML('beforeend', selectionHtml);
-    scrollChatToBottom();
+    chatScrollToBottom();
 }
 
 // Start flashcard quiz
-function startFlashcardQuiz(moduleId, moduleTitle) {
-    addChatMessage(`🚀 Starting flashcard quiz for: ${moduleTitle}`, 'bot');
+function chatStartFlashcard(moduleId, moduleTitle) {
+    chatAddMessage(`🚀 Starting flashcard quiz for: ${moduleTitle}`, 'bot');
     
     setTimeout(() => {
         window.location.href = `flashcard_quiz.php?module_id=${moduleId}`;
@@ -479,20 +457,20 @@ function startFlashcardQuiz(moduleId, moduleTitle) {
 }
 
 // Quick question shortcut
-async function quickQuestion(question) {
+async function chatQuickQuestion(question) {
     if (!chatbotOpen) {
         toggleChatbot();
         await new Promise(resolve => setTimeout(resolve, 300));
     }
     
     document.getElementById('chatInput').value = question;
-    sendChatMessage(new Event('submit'));
+    chatSendMessage(new Event('submit'));
 }
 
 // Add message to chat
-function addChatMessage(text, sender, isError = false) {
+function chatAddMessage(text, sender, isError = false) {
     const container = document.getElementById('chatMessages');
-    const time = formatChatTime(new Date());
+    const time = chatFormatTime(new Date());
     
     let messageHtml = '';
     
@@ -501,7 +479,7 @@ function addChatMessage(text, sender, isError = false) {
             <div class="flex items-start space-x-2 justify-end message-slide-in">
                 <div class="flex-1 flex flex-col items-end">
                     <div class="bg-primary-600 text-white rounded-2xl rounded-tr-none px-4 py-3 shadow-sm max-w-[85%]">
-                        <p class="text-sm break-words">${escapeHtmlChat(text)}</p>
+                        <p class="text-sm break-words">${chatEscapeHtml(text)}</p>
                     </div>
                     <span class="text-xs text-gray-400 mt-1">${time}</span>
                 </div>
@@ -518,7 +496,7 @@ function addChatMessage(text, sender, isError = false) {
                 </div>
                 <div class="flex-1">
                     <div class="bg-white ${isError ? 'border-2 border-red-200' : ''} rounded-2xl rounded-tl-none px-4 py-3 shadow-sm">
-                        <p class="text-gray-800 text-sm break-words whitespace-pre-wrap">${isError ? escapeHtmlChat(text) : formatBotMessage(text)}</p>
+                        <p class="text-gray-800 text-sm break-words whitespace-pre-wrap">${isError ? chatEscapeHtml(text) : chatFormatMessage(text)}</p>
                     </div>
                     <span class="text-xs text-gray-400 mt-1 block">${time}</span>
                 </div>
@@ -527,24 +505,29 @@ function addChatMessage(text, sender, isError = false) {
     }
     
     container.insertAdjacentHTML('beforeend', messageHtml);
-    scrollChatToBottom();
+    chatScrollToBottom();
+    
+    // Store in history
+    chatMessageHistory.push({ role: sender === 'user' ? 'user' : 'assistant', content: text });
 }
 
 // Show/hide typing indicator
-function showTypingIndicator(show) {
+function chatShowTyping(show) {
     const indicator = document.getElementById('typingIndicator');
     const container = document.getElementById('chatMessages');
     
     if (show) {
         indicator.classList.remove('hidden');
-        container.scrollTop = container.scrollHeight;
+        if (container) {
+            container.scrollTop = container.scrollHeight;
+        }
     } else {
         indicator.classList.add('hidden');
     }
 }
 
 // Format bot message
-function formatBotMessage(text) {
+function chatFormatMessage(text) {
     return text
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
@@ -554,7 +537,7 @@ function formatBotMessage(text) {
 }
 
 // Escape HTML
-function escapeHtmlChat(text) {
+function chatEscapeHtml(text) {
     if (!text) return '';
     const div = document.createElement('div');
     div.textContent = text;
@@ -562,38 +545,25 @@ function escapeHtmlChat(text) {
 }
 
 // Format time
-function formatChatTime(date) {
+function chatFormatTime(date) {
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
 // Scroll to bottom
-function scrollChatToBottom() {
+function chatScrollToBottom() {
     const container = document.getElementById('chatMessages');
     if (container) {
         container.scrollTop = container.scrollHeight;
     }
 }
 
-// Initialize on DOM load
+// Initialize chatbot-specific features on DOM load
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🤖 Chatbot initialized');
+    console.log('🤖 Chatbot component initialized');
     
-    // Show quick actions after 3 seconds if chatbot is closed
+    // Load modules in background
     setTimeout(() => {
-        if (!chatbotOpen) {
-            const quickActions = document.getElementById('quickActions');
-            if (quickActions) {
-                quickActions.classList.remove('hidden');
-                quickActions.classList.add('animate-fade-in-up');
-            }
-        }
-    }, 3000);
-    
-    // Close chatbot on Escape
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && chatbotOpen) {
-            toggleChatbot();
-        }
-    });
+        chatLoadModules();
+    }, 1000);
 });
 </script>
