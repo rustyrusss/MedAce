@@ -108,6 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
         body {
             font-family: 'Inter', sans-serif;
             background: #f8fafc;
+            overflow-x: hidden;
         }
 
         /* Scrollbar */
@@ -226,30 +227,166 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        /* Sidebar Collapsed State */
-        .sidebar-collapsed {
-            width: 5rem;
+        /* Desktop Sidebar States */
+        @media (min-width: 1024px) {
+            .sidebar-collapsed {
+                width: 5rem;
+                transform: translateX(0);
+            }
+
+            .sidebar-collapsed .nav-text,
+            .sidebar-collapsed .profile-info,
+            .sidebar-collapsed .logo-text,
+            .sidebar-collapsed .sidebar-setting-btn {
+                opacity: 0;
+                width: 0;
+                overflow: hidden;
+            }
+
+            .sidebar-expanded {
+                width: 18rem;
+                transform: translateX(0);
+            }
+
+            .sidebar-expanded .nav-text,
+            .sidebar-expanded .profile-info,
+            .sidebar-expanded .logo-text,
+            .sidebar-expanded .sidebar-setting-btn {
+                opacity: 1;
+                width: auto;
+            }
         }
 
-        .sidebar-collapsed .nav-text,
-        .sidebar-collapsed .profile-info,
-        .sidebar-collapsed .logo-text,
-        .sidebar-collapsed .sidebar-setting-btn {
-            opacity: 0;
-            width: 0;
-            overflow: hidden;
+        /* Mobile Sidebar States */
+        @media (max-width: 1023px) {
+            .sidebar-collapsed {
+                width: 18rem;
+                transform: translateX(-100%);
+            }
+
+            .sidebar-collapsed .nav-text,
+            .sidebar-collapsed .profile-info,
+            .sidebar-collapsed .logo-text,
+            .sidebar-collapsed .sidebar-setting-btn {
+                opacity: 1;
+                width: auto;
+            }
+            
+            .sidebar-expanded {
+                width: 18rem;
+                transform: translateX(0);
+            }
+
+            .sidebar-expanded .nav-text,
+            .sidebar-expanded .profile-info,
+            .sidebar-expanded .logo-text,
+            .sidebar-expanded .sidebar-setting-btn {
+                opacity: 1;
+                width: auto;
+            }
         }
 
-        .sidebar-expanded {
-            width: 18rem;
+        /* Sidebar Toggle Icon */
+        .sidebar-toggle-btn {
+            width: 40px;
+            height: 40px;
+            position: relative;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: 2px solid #cbd5e1;
+            border-radius: 8px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            padding: 0;
+            flex-shrink: 0;
         }
 
-        .sidebar-expanded .nav-text,
-        .sidebar-expanded .profile-info,
-        .sidebar-expanded .logo-text,
-        .sidebar-expanded .sidebar-setting-btn {
-            opacity: 1;
-            width: auto;
+        .sidebar-toggle-btn:hover {
+            border-color: #0ea5e9;
+            background: #f0f9ff;
+        }
+
+        .sidebar-toggle-btn:active {
+            transform: scale(0.95);
+        }
+
+        .sidebar-toggle-btn .toggle-icon {
+            width: 24px;
+            height: 24px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Panel icon (left bar) */
+        .sidebar-toggle-btn .toggle-icon::before {
+            content: '';
+            position: absolute;
+            left: 2px;
+            width: 3px;
+            height: 16px;
+            background-color: #64748b;
+            border-radius: 2px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Chevron icon */
+        .sidebar-toggle-btn .toggle-icon::after {
+            content: '';
+            position: absolute;
+            right: 2px;
+            width: 6px;
+            height: 6px;
+            border-right: 2px solid #64748b;
+            border-bottom: 2px solid #64748b;
+            transform: rotate(-45deg);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .sidebar-toggle-btn:hover .toggle-icon::before,
+        .sidebar-toggle-btn:hover .toggle-icon::after {
+            border-color: #0ea5e9;
+            background-color: #0ea5e9;
+        }
+
+        /* Active state - chevron points left when sidebar is expanded */
+        .sidebar-toggle-btn.active .toggle-icon::after {
+            transform: rotate(135deg);
+            right: 4px;
+        }
+
+        .sidebar-toggle-btn.active .toggle-icon::before {
+            background-color: #0ea5e9;
+        }
+
+        .sidebar-toggle-btn.active {
+            border-color: #0ea5e9;
+            background: #f0f9ff;
+        }
+
+        /* Mobile-specific toggle button styling */
+        @media (max-width: 1023px) {
+            .sidebar-toggle-btn {
+                width: 36px;
+                height: 36px;
+            }
+
+            .sidebar-toggle-btn .toggle-icon {
+                width: 20px;
+                height: 20px;
+            }
+
+            .sidebar-toggle-btn .toggle-icon::before {
+                height: 14px;
+            }
+
+            .sidebar-toggle-btn .toggle-icon::after {
+                width: 5px;
+                height: 5px;
+            }
         }
 
         /* Badge */
@@ -307,6 +444,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
             animation: fadeIn 0.3s;
         }
 
+        /* Overlay fade effect */
+        #sidebar-overlay {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease-in-out;
+        }
+
+        #sidebar-overlay.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
         .modal-content {
             background-color: white;
             border-radius: 1rem;
@@ -316,15 +465,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
             overflow-y: auto;
             animation: slideUp 0.3s ease-out;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            margin: 1rem;
         }
 
         .modal-content-small {
             background-color: white;
-            padding: 2rem;
+            padding: 1.5rem;
             border-radius: 1rem;
             max-width: 500px;
             width: 90%;
             animation: scaleIn 0.3s;
+            margin: 1rem;
         }
 
         @keyframes fadeIn {
@@ -345,11 +496,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
 
         .tab-button {
             position: relative;
-            padding: 0.75rem 1.5rem;
+            padding: 0.75rem 1rem;
             font-weight: 500;
             color: #64748b;
             border-bottom: 2px solid transparent;
             transition: all 0.3s;
+            font-size: 0.875rem;
         }
 
         .tab-button.active {
@@ -367,15 +519,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
         }
 
         /* Responsive adjustments */
-        @media (max-width: 1024px) {
-            .sidebar-collapsed {
-                width: 0;
-                transform: translateX(-100%);
+        @media (max-width: 1023px) {
+            /* Ensure main content takes full width on mobile */
+            #main-content {
+                margin-left: 0 !important;
             }
-            
-            .sidebar-expanded {
-                width: 18rem;
-                transform: translateX(0);
+
+            /* Sidebar overlay styling */
+            #sidebar-overlay {
+                display: none;
+            }
+
+            #sidebar-overlay.show {
+                display: block;
             }
         }
 
@@ -383,6 +539,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
             .stat-card {
                 min-width: 100%;
             }
+
+            .modal-content-small {
+                padding: 1rem;
+            }
+
+            .tab-button {
+                padding: 0.75rem 0.5rem;
+                font-size: 0.8125rem;
+            }
+
+            .tab-button i {
+                display: none;
+            }
+
+            /* Improve mobile spacing */
+            .gradient-bg {
+                padding: 1.25rem 1rem !important;
+            }
+
+            /* Better mobile stats grid */
+            .stats-grid {
+                gap: 1rem;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .gradient-bg {
+                padding: 1.5rem 1rem !important;
+            }
+
+            .modal-content,
+            .modal-content-small {
+                width: 95%;
+                max-width: none;
+                margin: 0.5rem;
+            }
+
+            /* Reduce padding on small screens */
+            .px-4 {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+
+            /* Make buttons stack on very small screens */
+            .button-group-mobile {
+                flex-direction: column;
+            }
+        }
+
+        /* Ensure tables are scrollable on mobile */
+        .table-container {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .table-container::-webkit-scrollbar {
+            height: 6px;
+        }
+
+        .table-container::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 3px;
+        }
+
+        .table-container::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+
+        /* Prevent horizontal overflow */
+        body {
+            overflow-x: hidden;
+        }
+
+        #main-content {
+            max-width: 100vw;
+            overflow-x: hidden;
         }
     </style>
 </head>
@@ -415,8 +648,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
 
             <!-- Toggle Button -->
             <div class="px-4 py-3 border-b border-gray-200">
-                <button onclick="toggleSidebar()" class="w-full flex items-center justify-center p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600">
-                    <i class="fas fa-bars text-lg"></i>
+                <button onclick="toggleSidebar()" class="sidebar-toggle-btn w-full" id="hamburgerBtn" aria-label="Toggle sidebar">
+                    <div class="toggle-icon"></div>
                 </button>
             </div>
 
@@ -451,13 +684,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
     </aside>
 
     <!-- Sidebar Overlay (Mobile) -->
-    <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden" onclick="closeSidebar()"></div>
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden transition-opacity duration-300" onclick="closeSidebar()"></div>
 
     <!-- Profile Picture Upload Modal -->
     <div id="uploadModal" class="modal">
         <div class="modal-content-small">
             <div class="flex items-center justify-between mb-6">
-                <h2 class="text-2xl font-bold text-gray-900">Update Profile Picture</h2>
+                <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Update Profile Picture</h2>
                 <button onclick="closeUploadModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
                     <i class="fas fa-times text-xl"></i>
                 </button>
@@ -467,7 +700,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
                 <div class="mb-6">
                     <div class="flex justify-center mb-4">
                         <div class="relative">
-                            <img id="previewImage" src="<?= htmlspecialchars($profilePic) ?>" alt="Preview" class="w-32 h-32 rounded-full object-cover ring-4 ring-primary-500">
+                            <img id="previewImage" src="<?= htmlspecialchars($profilePic) ?>" alt="Preview" class="w-24 h-24 sm:w-32 sm:h-32 rounded-full object-cover ring-4 ring-primary-500">
                         </div>
                     </div>
                     
@@ -478,7 +711,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
                     <p class="mt-2 text-xs text-gray-500">Supported formats: JPG, PNG, GIF (Max 5MB)</p>
                 </div>
                 
-                <div class="flex gap-3">
+                <div class="flex flex-col sm:flex-row gap-3">
                     <button type="submit" class="flex-1 bg-primary-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition-colors">
                         <i class="fas fa-upload mr-2"></i>
                         Upload Picture
@@ -495,11 +728,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
     <div id="profileSettingsModal" class="modal">
         <div class="modal-content">
             <!-- Modal Header -->
-            <div class="gradient-bg px-6 py-5 rounded-t-xl">
+            <div class="gradient-bg px-4 sm:px-6 py-4 sm:py-5 rounded-t-xl">
                 <div class="flex items-center justify-between">
-                    <h2 class="text-2xl font-bold text-white flex items-center">
-                        <i class="fas fa-user-circle mr-3"></i>
-                        Profile Settings
+                    <h2 class="text-xl sm:text-2xl font-bold text-white flex items-center">
+                        <i class="fas fa-user-circle mr-2 sm:mr-3"></i>
+                        <span class="hidden sm:inline">Profile Settings</span>
+                        <span class="sm:hidden">Profile</span>
                     </h2>
                     <button onclick="closeProfileSettingsModal()" class="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2 transition-colors">
                         <i class="fas fa-times text-xl"></i>
@@ -508,83 +742,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
             </div>
 
             <!-- Tabs -->
-            <div class="flex border-b border-gray-200 px-6">
-                <button class="tab-button active" onclick="switchTab(event, 'account')">
-                    <i class="fas fa-user mr-2"></i>Account Details
+            <div class="flex border-b border-gray-200 px-4 sm:px-6 overflow-x-auto">
+                <button class="tab-button active whitespace-nowrap" onclick="switchTab(event, 'account')">
+                    <i class="fas fa-user mr-2"></i><span>Account Details</span>
                 </button>
-                <button class="tab-button" onclick="switchTab(event, 'password')">
-                    <i class="fas fa-lock mr-2"></i>Change Password
+                <button class="tab-button whitespace-nowrap" onclick="switchTab(event, 'password')">
+                    <i class="fas fa-lock mr-2"></i><span>Change Password</span>
                 </button>
             </div>
 
             <!-- Tab Contents -->
-            <div class="p-6">
+            <div class="p-4 sm:p-6">
                 <!-- Account Details Tab -->
                 <div id="account-tab" class="tab-content active">
-                    <div class="space-y-6">
+                    <div class="space-y-4 sm:space-y-6">
                         <!-- Profile Picture Section -->
-                        <div class="text-center pb-6 border-b border-gray-200">
+                        <div class="text-center pb-4 sm:pb-6 border-b border-gray-200">
                             <div class="relative inline-block">
-                                <img src="<?= htmlspecialchars($profilePic) ?>" alt="Profile" class="w-32 h-32 rounded-full object-cover ring-4 ring-primary-500 mx-auto mb-4">
-                                <button type="button" onclick="openUploadModal()" class="absolute bottom-4 right-0 bg-primary-600 hover:bg-primary-700 text-white rounded-full p-3 shadow-lg transition-colors">
-                                    <i class="fas fa-camera"></i>
+                                <img src="<?= htmlspecialchars($profilePic) ?>" alt="Profile" class="w-24 h-24 sm:w-32 sm:h-32 rounded-full object-cover ring-4 ring-primary-500 mx-auto mb-3 sm:mb-4">
+                                <button type="button" onclick="openUploadModal()" class="absolute bottom-3 sm:bottom-4 right-0 bg-primary-600 hover:bg-primary-700 text-white rounded-full p-2 sm:p-3 shadow-lg transition-colors">
+                                    <i class="fas fa-camera text-sm"></i>
                                 </button>
                             </div>
-                            <h3 class="text-xl font-semibold text-gray-900 mt-2"><?= htmlspecialchars(ucwords(strtolower($profName))) ?></h3>
-                            <p class="text-gray-600">Professor Account</p>
+                            <h3 class="text-lg sm:text-xl font-semibold text-gray-900 mt-2"><?= htmlspecialchars(ucwords(strtolower($profName))) ?></h3>
+                            <p class="text-sm text-gray-600">Professor Account</p>
                         </div>
 
                         <!-- Account Information -->
-                        <div class="space-y-4">
+                        <div class="space-y-3 sm:space-y-4">
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-2">
                                     <i class="fas fa-user text-primary-500 mr-2"></i>First Name
                                 </label>
-                                <input type="text" value="<?= htmlspecialchars($prof['firstname']) ?>" readonly class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed">
+                                <input type="text" value="<?= htmlspecialchars($prof['firstname']) ?>" readonly class="w-full px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed text-sm sm:text-base">
                             </div>
 
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-2">
                                     <i class="fas fa-user text-primary-500 mr-2"></i>Last Name
                                 </label>
-                                <input type="text" value="<?= htmlspecialchars($prof['lastname']) ?>" readonly class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed">
+                                <input type="text" value="<?= htmlspecialchars($prof['lastname']) ?>" readonly class="w-full px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed text-sm sm:text-base">
                             </div>
 
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-2">
                                     <i class="fas fa-envelope text-primary-500 mr-2"></i>Email Address
                                 </label>
-                                <input type="email" value="<?= htmlspecialchars($prof['email']) ?>" readonly class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed">
+                                <input type="email" value="<?= htmlspecialchars($prof['email']) ?>" readonly class="w-full px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed text-sm sm:text-base">
                             </div>
 
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-2">
                                     <i class="fas fa-venus-mars text-primary-500 mr-2"></i>Gender
                                 </label>
-                                <input type="text" value="<?= htmlspecialchars(ucfirst($prof['gender'] ?? 'Not specified')) ?>" readonly class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed">
+                                <input type="text" value="<?= htmlspecialchars(ucfirst($prof['gender'] ?? 'Not specified')) ?>" readonly class="w-full px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed text-sm sm:text-base">
                             </div>
 
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-2">
                                     <i class="fas fa-id-badge text-primary-500 mr-2"></i>User ID
                                 </label>
-                                <input type="text" value="<?= htmlspecialchars($professorId) ?>" readonly class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed">
+                                <input type="text" value="<?= htmlspecialchars($professorId) ?>" readonly class="w-full px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed text-sm sm:text-base">
                             </div>
 
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-2">
                                     <i class="fas fa-user-tie text-primary-500 mr-2"></i>Role
                                 </label>
-                                <input type="text" value="Professor" readonly class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed">
+                                <input type="text" value="Professor" readonly class="w-full px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed text-sm sm:text-base">
                             </div>
                         </div>
 
-                        <div class="bg-blue-50 border-l-4 border-primary-500 p-4 rounded-r-lg">
+                        <div class="bg-blue-50 border-l-4 border-primary-500 p-3 sm:p-4 rounded-r-lg">
                             <div class="flex">
-                                <i class="fas fa-info-circle text-primary-500 mt-0.5 mr-3"></i>
+                                <i class="fas fa-info-circle text-primary-500 mt-0.5 mr-2 sm:mr-3 flex-shrink-0"></i>
                                 <div>
                                     <p class="text-sm font-semibold text-primary-900 mb-1">Account Information</p>
-                                    <p class="text-sm text-primary-700">To update your account details, please contact your administrator.</p>
+                                    <p class="text-xs sm:text-sm text-primary-700">To update your account details, please contact your administrator.</p>
                                 </div>
                             </div>
                         </div>
@@ -593,13 +827,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
 
                 <!-- Change Password Tab -->
                 <div id="password-tab" class="tab-content">
-                    <form id="changePasswordForm" class="space-y-6">
-                        <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-lg mb-6">
+                    <form id="changePasswordForm" class="space-y-4 sm:space-y-6">
+                        <div class="bg-yellow-50 border-l-4 border-yellow-500 p-3 sm:p-4 rounded-r-lg mb-4 sm:mb-6">
                             <div class="flex">
-                                <i class="fas fa-shield-alt text-yellow-500 mt-0.5 mr-3"></i>
+                                <i class="fas fa-shield-alt text-yellow-500 mt-0.5 mr-2 sm:mr-3 flex-shrink-0"></i>
                                 <div>
                                     <p class="text-sm font-semibold text-yellow-900 mb-1">Password Security</p>
-                                    <p class="text-sm text-yellow-700">Choose a strong password with at least 8 characters, including uppercase, lowercase, numbers, and symbols.</p>
+                                    <p class="text-xs sm:text-sm text-yellow-700">Choose a strong password with at least 8 characters, including uppercase, lowercase, numbers, and symbols.</p>
                                 </div>
                             </div>
                         </div>
@@ -610,7 +844,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
                             </label>
                             <div class="relative">
                                 <input type="password" id="currentPassword" name="currentPassword" required 
-                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                                       class="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm sm:text-base"
                                        placeholder="Enter your current password">
                                 <button type="button" onclick="togglePasswordVisibility('currentPassword')" 
                                         class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700">
@@ -625,7 +859,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
                             </label>
                             <div class="relative">
                                 <input type="password" id="newPassword" name="newPassword" required 
-                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                                       class="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm sm:text-base"
                                        placeholder="Enter your new password">
                                 <button type="button" onclick="togglePasswordVisibility('newPassword')" 
                                         class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700">
@@ -637,7 +871,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
                                     <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                                         <div id="strengthBar" class="h-full transition-all duration-300"></div>
                                     </div>
-                                    <span id="strengthText" class="text-sm font-medium"></span>
+                                    <span id="strengthText" class="text-xs sm:text-sm font-medium"></span>
                                 </div>
                             </div>
                         </div>
@@ -648,35 +882,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
                             </label>
                             <div class="relative">
                                 <input type="password" id="confirmPassword" name="confirmPassword" required 
-                                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                                       class="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm sm:text-base"
                                        placeholder="Confirm your new password">
                                 <button type="button" onclick="togglePasswordVisibility('confirmPassword')" 
                                         class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700">
                                     <i class="fas fa-eye"></i>
                                 </button>
                             </div>
-                            <p id="passwordMatch" class="mt-2 text-sm hidden"></p>
+                            <p id="passwordMatch" class="mt-2 text-xs sm:text-sm hidden"></p>
                         </div>
 
-                        <div id="passwordError" class="hidden bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg">
+                        <div id="passwordError" class="hidden bg-red-50 border-l-4 border-red-500 p-3 sm:p-4 rounded-r-lg">
                             <div class="flex">
-                                <i class="fas fa-exclamation-circle text-red-500 mt-0.5 mr-3"></i>
-                                <p class="text-sm text-red-700" id="passwordErrorText"></p>
+                                <i class="fas fa-exclamation-circle text-red-500 mt-0.5 mr-2 sm:mr-3 flex-shrink-0"></i>
+                                <p class="text-xs sm:text-sm text-red-700" id="passwordErrorText"></p>
                             </div>
                         </div>
 
-                        <div id="passwordSuccess" class="hidden bg-green-50 border-l-4 border-green-500 p-4 rounded-r-lg">
+                        <div id="passwordSuccess" class="hidden bg-green-50 border-l-4 border-green-500 p-3 sm:p-4 rounded-r-lg">
                             <div class="flex">
-                                <i class="fas fa-check-circle text-green-500 mt-0.5 mr-3"></i>
-                                <p class="text-sm text-green-700">Password changed successfully!</p>
+                                <i class="fas fa-check-circle text-green-500 mt-0.5 mr-2 sm:mr-3 flex-shrink-0"></i>
+                                <p class="text-xs sm:text-sm text-green-700">Password changed successfully!</p>
                             </div>
                         </div>
 
-                        <div class="flex gap-3 pt-4">
-                            <button type="submit" class="flex-1 bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors shadow-sm">
+                        <div class="flex flex-col sm:flex-row gap-3 pt-4">
+                            <button type="submit" class="flex-1 bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors shadow-sm text-sm sm:text-base">
                                 <i class="fas fa-save mr-2"></i>Update Password
                             </button>
-                            <button type="button" onclick="resetPasswordForm()" class="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors">
+                            <button type="button" onclick="resetPasswordForm()" class="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors text-sm sm:text-base">
                                 <i class="fas fa-undo mr-2"></i>Reset
                             </button>
                         </div>
@@ -687,121 +921,123 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
     </div>
 
     <!-- Main Content -->
-    <main id="main-content" class="flex-1 transition-all duration-300" style="margin-left: 5rem;">
+    <main id="main-content" class="flex-1 w-full transition-all duration-300 lg:ml-20">
         <!-- Top Bar -->
-        <header class="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-4">
-            <div class="flex items-center justify-between">
-                <button onclick="toggleSidebar()" class="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors">
-                    <i class="fas fa-bars text-gray-600 text-xl"></i>
+        <header class="sticky top-0 z-30 bg-white border-b border-gray-200 px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
+            <div class="flex items-center justify-between gap-3">
+                <button onclick="toggleSidebar()" class="sidebar-toggle-btn lg:hidden" id="mobileHamburgerBtn" aria-label="Toggle sidebar">
+                    <div class="toggle-icon"></div>
                 </button>
-                <div class="flex items-center space-x-4">
-                    <div class="hidden sm:block">
-                        <p class="text-sm text-gray-500">Today</p>
-                        <p class="text-sm font-semibold text-gray-900" id="currentDate"></p>
+                <div class="flex items-center space-x-3 sm:space-x-4 ml-auto">
+                    <div class="text-right">
+                        <p class="text-xs text-gray-500 hidden sm:block">Today</p>
+                        <p class="text-xs sm:text-sm font-semibold text-gray-900" id="currentDate"></p>
                     </div>
                 </div>
             </div>
         </header>
 
         <!-- Content -->
-        <div class="px-4 sm:px-6 lg:px-8 py-8">
+        <div class="px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 max-w-full">
             <?php if(isset($_GET['upload']) && $_GET['upload'] === 'success'): ?>
-            <div class="mb-6 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg animate-fade-in-up">
+            <div class="mb-4 sm:mb-6 bg-green-50 border border-green-200 text-green-800 px-3 sm:px-4 py-2 sm:py-3 rounded-lg animate-fade-in-up">
                 <div class="flex items-center">
-                    <i class="fas fa-check-circle mr-2"></i>
-                    <span>Profile picture updated successfully!</span>
+                    <i class="fas fa-check-circle mr-2 text-sm"></i>
+                    <span class="text-xs sm:text-sm">Profile picture updated successfully!</span>
                 </div>
             </div>
             <?php endif; ?>
 
             <!-- Welcome Section -->
-            <div class="gradient-bg rounded-2xl p-6 sm:p-8 mb-8 text-white shadow-custom-lg animate-fade-in-up">
-                <h1 class="text-2xl sm:text-3xl font-bold mb-2">Welcome back, <?= htmlspecialchars($prof['firstname']) ?>! 👋</h1>
-                <p class="text-blue-100 text-sm sm:text-base">Here's an overview of your teaching resources and recent activity.</p>
+            <div class="gradient-bg rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8 text-white shadow-custom-lg animate-fade-in-up">
+                <h1 class="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-bold mb-1 sm:mb-2">Welcome back, <?= htmlspecialchars($prof['firstname']) ?>! 👋</h1>
+                <p class="text-blue-100 text-xs sm:text-sm lg:text-base">Here's an overview of your teaching resources and recent activity.</p>
             </div>
 
             <!-- Stats Grid -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8 stats-grid">
                 <!-- Total Modules -->
-                <div class="bg-white rounded-2xl p-6 shadow-custom card-hover animate-scale-in border border-gray-100">
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="stat-icon-1 w-14 h-14 rounded-xl flex items-center justify-center text-white shadow-lg">
-                            <i class="fas fa-book text-2xl"></i>
+                <div class="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-custom card-hover animate-scale-in border border-gray-100">
+                    <div class="flex items-center justify-between mb-3 sm:mb-4">
+                        <div class="stat-icon-1 w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center text-white shadow-lg">
+                            <i class="fas fa-book text-xl sm:text-2xl"></i>
                         </div>
                     </div>
-                    <h3 class="text-gray-500 text-sm font-medium mb-1">Total Modules</h3>
+                    <h3 class="text-gray-500 text-xs sm:text-sm font-medium mb-1">Total Modules</h3>
                     <div class="flex items-baseline space-x-2">
-                        <p class="text-4xl font-bold text-gray-900" id="modulesCount">0</p>
+                        <p class="text-3xl sm:text-4xl font-bold text-gray-900" id="modulesCount">0</p>
                     </div>
                 </div>
 
                 <!-- Total Quizzes -->
-                <div class="bg-white rounded-2xl p-6 shadow-custom card-hover animate-scale-in border border-gray-100" style="animation-delay: 0.1s;">
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="stat-icon-2 w-14 h-14 rounded-xl flex items-center justify-center text-white shadow-lg">
-                            <i class="fas fa-clipboard-list text-2xl"></i>
+                <div class="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-custom card-hover animate-scale-in border border-gray-100" style="animation-delay: 0.1s;">
+                    <div class="flex items-center justify-between mb-3 sm:mb-4">
+                        <div class="stat-icon-2 w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center text-white shadow-lg">
+                            <i class="fas fa-clipboard-list text-xl sm:text-2xl"></i>
                         </div>
                     </div>
-                    <h3 class="text-gray-500 text-sm font-medium mb-1">Total Quizzes</h3>
+                    <h3 class="text-gray-500 text-xs sm:text-sm font-medium mb-1">Total Quizzes</h3>
                     <div class="flex items-baseline space-x-2">
-                        <p class="text-4xl font-bold text-gray-900" id="quizzesCount">0</p>
+                        <p class="text-3xl sm:text-4xl font-bold text-gray-900" id="quizzesCount">0</p>
                     </div>
                 </div>
 
                 <!-- Total Students -->
-                <div class="bg-white rounded-2xl p-6 shadow-custom card-hover animate-scale-in border border-gray-100 sm:col-span-2 lg:col-span-1" style="animation-delay: 0.2s;">
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="stat-icon-3 w-14 h-14 rounded-xl flex items-center justify-center text-white shadow-lg">
-                            <i class="fas fa-user-graduate text-2xl"></i>
+                <div class="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-custom card-hover animate-scale-in border border-gray-100 sm:col-span-2 lg:col-span-1" style="animation-delay: 0.2s;">
+                    <div class="flex items-center justify-between mb-3 sm:mb-4">
+                        <div class="stat-icon-3 w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center text-white shadow-lg">
+                            <i class="fas fa-user-graduate text-xl sm:text-2xl"></i>
                         </div>
                     </div>
-                    <h3 class="text-gray-500 text-sm font-medium mb-1">Total Students</h3>
+                    <h3 class="text-gray-500 text-xs sm:text-sm font-medium mb-1">Total Students</h3>
                     <div class="flex items-baseline space-x-2">
-                        <p class="text-4xl font-bold text-gray-900" id="studentsCount">0</p>
+                        <p class="text-3xl sm:text-4xl font-bold text-gray-900" id="studentsCount">0</p>
                     </div>
                 </div>
             </div>
 
             <!-- Content Grid -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
                 <!-- Recent Modules -->
-                <div class="bg-white rounded-2xl shadow-custom border border-gray-100 animate-fade-in-up">
-                    <div class="px-6 py-5 border-b border-gray-200">
+                <div class="bg-white rounded-xl sm:rounded-2xl shadow-custom border border-gray-100 animate-fade-in-up overflow-hidden">
+                    <div class="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-200">
                         <div class="flex items-center justify-between">
-                            <h2 class="text-lg font-semibold text-gray-900 flex items-center">
+                            <h2 class="text-base sm:text-lg font-semibold text-gray-900 flex items-center">
                                 <i class="fas fa-book text-primary-500 mr-2"></i>
-                                Recent Modules
+                                <span class="hidden sm:inline">Recent Modules</span>
+                                <span class="sm:hidden">Modules</span>
                             </h2>
-                            <a href="manage_modules.php" class="text-sm font-semibold text-primary-600 hover:text-primary-700 flex items-center transition-colors">
+                            <a href="manage_modules.php" class="text-xs sm:text-sm font-semibold text-primary-600 hover:text-primary-700 flex items-center transition-colors">
                                 View All
-                                <i class="fas fa-arrow-right ml-2 text-xs"></i>
+                                <i class="fas fa-arrow-right ml-1 sm:ml-2 text-xs"></i>
                             </a>
                         </div>
                     </div>
-                    <div class="p-6">
+                    <div class="p-4 sm:p-6">
                         <?php if(empty($modules)): ?>
-                            <div class="text-center py-12">
-                                <i class="fas fa-book-open text-5xl text-gray-300 mb-4"></i>
-                                <p class="text-gray-500 text-sm">No modules created yet.</p>
+                            <div class="text-center py-8 sm:py-12">
+                                <i class="fas fa-book-open text-4xl sm:text-5xl text-gray-300 mb-3 sm:mb-4"></i>
+                                <p class="text-gray-500 text-xs sm:text-sm">No modules created yet.</p>
                             </div>
                         <?php else: ?>
-                            <div class="overflow-x-auto -mx-6">
-                                <table class="w-full">
+                            <div class="table-container -mx-4 sm:-mx-6">
+                                <table class="w-full min-w-full">
                                     <thead>
                                         <tr class="bg-gray-50">
-                                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Title</th>
-                                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Created</th>
+                                            <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Title</th>
+                                            <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">Created</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-gray-200">
                                         <?php foreach($modules as $m): ?>
                                             <tr class="table-row-hover">
-                                                <td class="px-6 py-4">
-                                                    <p class="text-sm font-medium text-gray-900"><?= htmlspecialchars($m['title']) ?></p>
+                                                <td class="px-4 sm:px-6 py-3 sm:py-4">
+                                                    <p class="text-xs sm:text-sm font-medium text-gray-900 line-clamp-2"><?= htmlspecialchars($m['title']) ?></p>
                                                 </td>
-                                                <td class="px-6 py-4">
-                                                    <span class="badge bg-gray-100 text-gray-700">
-                                                        <?= date("M j, Y", strtotime($m['created_at'])) ?>
+                                                <td class="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                                                    <span class="badge bg-gray-100 text-gray-700 text-xs">
+                                                        <span class="hidden sm:inline"><?= date("M j, Y", strtotime($m['created_at'])) ?></span>
+                                                        <span class="sm:hidden"><?= date("M j", strtotime($m['created_at'])) ?></span>
                                                     </span>
                                                 </td>
                                             </tr>
@@ -814,59 +1050,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
                 </div>
 
                 <!-- Recent Quizzes -->
-                <div class="bg-white rounded-2xl shadow-custom border border-gray-100 animate-fade-in-up" style="animation-delay: 0.1s;">
-                    <div class="px-6 py-5 border-b border-gray-200">
+                <div class="bg-white rounded-xl sm:rounded-2xl shadow-custom border border-gray-100 animate-fade-in-up overflow-hidden" style="animation-delay: 0.1s;">
+                    <div class="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-200">
                         <div class="flex items-center justify-between">
-                            <h2 class="text-lg font-semibold text-gray-900 flex items-center">
+                            <h2 class="text-base sm:text-lg font-semibold text-gray-900 flex items-center">
                                 <i class="fas fa-clipboard-list text-primary-500 mr-2"></i>
-                                Recent Quizzes
+                                <span class="hidden sm:inline">Recent Quizzes</span>
+                                <span class="sm:hidden">Quizzes</span>
                             </h2>
-                            <a href="manage_quizzes.php" class="text-sm font-semibold text-primary-600 hover:text-primary-700 flex items-center transition-colors">
+                            <a href="manage_quizzes.php" class="text-xs sm:text-sm font-semibold text-primary-600 hover:text-primary-700 flex items-center transition-colors">
                                 View All
-                                <i class="fas fa-arrow-right ml-2 text-xs"></i>
+                                <i class="fas fa-arrow-right ml-1 sm:ml-2 text-xs"></i>
                             </a>
                         </div>
                     </div>
-                    <div class="p-6">
+                    <div class="p-4 sm:p-6">
                         <?php if(empty($quizzes)): ?>
-                            <div class="text-center py-12">
-                                <i class="fas fa-clipboard-question text-5xl text-gray-300 mb-4"></i>
-                                <p class="text-gray-500 text-sm">No quizzes available yet.</p>
+                            <div class="text-center py-8 sm:py-12">
+                                <i class="fas fa-clipboard-question text-4xl sm:text-5xl text-gray-300 mb-3 sm:mb-4"></i>
+                                <p class="text-gray-500 text-xs sm:text-sm">No quizzes available yet.</p>
                             </div>
                         <?php else: ?>
-                            <div class="overflow-x-auto -mx-6">
-                                <table class="w-full">
+                            <div class="table-container -mx-4 sm:-mx-6">
+                                <table class="w-full min-w-full">
                                     <thead>
                                         <tr class="bg-gray-50">
-                                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Title</th>
-                                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden sm:table-cell">Publish</th>
-                                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden sm:table-cell">Deadline</th>
+                                            <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Title</th>
+                                            <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden md:table-cell whitespace-nowrap">Publish</th>
+                                            <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider hidden md:table-cell whitespace-nowrap">Deadline</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-gray-200">
                                         <?php foreach($quizzes as $q): ?>
                                             <tr class="table-row-hover">
-                                                <td class="px-6 py-4">
-                                                    <p class="text-sm font-medium text-gray-900"><?= htmlspecialchars($q['title']) ?></p>
+                                                <td class="px-4 sm:px-6 py-3 sm:py-4">
+                                                    <p class="text-xs sm:text-sm font-medium text-gray-900 line-clamp-2 mb-2"><?= htmlspecialchars($q['title']) ?></p>
                                                     <!-- Mobile-only dates -->
-                                                    <div class="sm:hidden mt-2 space-y-1">
-                                                        <p class="text-xs text-gray-500">
-                                                            <i class="fas fa-calendar-plus mr-1"></i>
-                                                            <?= $q['publish_time'] ? date("M j, Y", strtotime($q['publish_time'])) : '-' ?>
+                                                    <div class="md:hidden space-y-1">
+                                                        <p class="text-xs text-gray-500 flex items-center">
+                                                            <i class="fas fa-calendar-plus mr-1 w-4 flex-shrink-0"></i>
+                                                            <span><?= $q['publish_time'] ? date("M j, Y", strtotime($q['publish_time'])) : '-' ?></span>
                                                         </p>
-                                                        <p class="text-xs text-gray-500">
-                                                            <i class="fas fa-calendar-xmark mr-1"></i>
-                                                            <?= $q['deadline_time'] ? date("M j, Y", strtotime($q['deadline_time'])) : '-' ?>
+                                                        <p class="text-xs text-gray-500 flex items-center">
+                                                            <i class="fas fa-calendar-xmark mr-1 w-4 flex-shrink-0"></i>
+                                                            <span><?= $q['deadline_time'] ? date("M j, Y", strtotime($q['deadline_time'])) : '-' ?></span>
                                                         </p>
                                                     </div>
                                                 </td>
-                                                <td class="px-6 py-4 hidden sm:table-cell">
-                                                    <span class="badge bg-blue-50 text-blue-700">
+                                                <td class="px-4 sm:px-6 py-3 sm:py-4 hidden md:table-cell whitespace-nowrap">
+                                                    <span class="badge bg-blue-50 text-blue-700 text-xs">
                                                         <?= $q['publish_time'] ? date("M j", strtotime($q['publish_time'])) : '-' ?>
                                                     </span>
                                                 </td>
-                                                <td class="px-6 py-4 hidden sm:table-cell">
-                                                    <span class="badge bg-orange-50 text-orange-700">
+                                                <td class="px-4 sm:px-6 py-3 sm:py-4 hidden md:table-cell whitespace-nowrap">
+                                                    <span class="badge bg-orange-50 text-orange-700 text-xs">
                                                         <?= $q['deadline_time'] ? date("M j", strtotime($q['deadline_time'])) : '-' ?>
                                                     </span>
                                                 </td>
@@ -891,17 +1128,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
         const sidebar = document.getElementById('sidebar');
         const mainContent = document.getElementById('main-content');
         const overlay = document.getElementById('sidebar-overlay');
+        const hamburgerBtn = document.getElementById('hamburgerBtn');
+        const mobileHamburgerBtn = document.getElementById('mobileHamburgerBtn');
         
         sidebarExpanded = !sidebarExpanded;
         
+        // Toggle hamburger animation
+        hamburgerBtn.classList.toggle('active');
+        mobileHamburgerBtn.classList.toggle('active');
+        
         if (window.innerWidth < 1024) {
+            // Mobile behavior
             sidebar.classList.toggle('sidebar-expanded');
             sidebar.classList.toggle('sidebar-collapsed');
             overlay.classList.toggle('hidden');
+            overlay.classList.toggle('show');
+            
             if (sidebarExpanded) {
-                mainContent.style.marginLeft = '0';
+                document.body.style.overflow = 'hidden';
+            } else {
+                document.body.style.overflow = 'auto';
             }
         } else {
+            // Desktop behavior
             sidebar.classList.toggle('sidebar-expanded');
             sidebar.classList.toggle('sidebar-collapsed');
             
@@ -963,7 +1212,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
         });
 
         // Add active class to selected tab
-        event.target.classList.add('active');
+        event.currentTarget.classList.add('active');
         document.getElementById(tabName + '-tab').classList.add('active');
     }
 
@@ -1015,7 +1264,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
         strengthBar.style.width = level.width;
         strengthBar.className = 'h-full transition-all duration-300 ' + level.color;
         strengthText.textContent = level.text;
-        strengthText.className = 'text-sm font-medium ' + level.textColor;
+        strengthText.className = 'text-xs sm:text-sm font-medium ' + level.textColor;
     });
 
     // Password match checker
@@ -1033,10 +1282,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
         
         if (newPassword === confirmPassword) {
             matchIndicator.textContent = '✓ Passwords match';
-            matchIndicator.className = 'mt-2 text-sm text-green-600 font-medium';
+            matchIndicator.className = 'mt-2 text-xs sm:text-sm text-green-600 font-medium';
         } else {
             matchIndicator.textContent = '✗ Passwords do not match';
-            matchIndicator.className = 'mt-2 text-sm text-red-600 font-medium';
+            matchIndicator.className = 'mt-2 text-xs sm:text-sm text-red-600 font-medium';
         }
     });
 
@@ -1115,9 +1364,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
     // Display current date
     function displayCurrentDate() {
         const dateElement = document.getElementById('currentDate');
-        const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
         const today = new Date();
-        dateElement.textContent = today.toLocaleDateString('en-US', options);
+        
+        // Different format for mobile vs desktop
+        if (window.innerWidth < 640) {
+            const options = { month: 'short', day: 'numeric' };
+            dateElement.textContent = today.toLocaleDateString('en-US', options);
+        } else {
+            const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
+            dateElement.textContent = today.toLocaleDateString('en-US', options);
+        }
     }
 
     // Animated counter
@@ -1142,6 +1398,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
     document.addEventListener('DOMContentLoaded', function() {
         displayCurrentDate();
         
+        // Initialize sidebar state based on screen size
+        const sidebar = document.getElementById('sidebar');
+        const mainContent = document.getElementById('main-content');
+        
+        if (window.innerWidth >= 1024) {
+            // Desktop: Start collapsed
+            sidebar.classList.add('sidebar-collapsed');
+            sidebar.classList.remove('sidebar-expanded');
+            mainContent.style.marginLeft = '5rem';
+            sidebarExpanded = false;
+        } else {
+            // Mobile: Start hidden (collapsed off-screen)
+            sidebar.classList.add('sidebar-collapsed');
+            sidebar.classList.remove('sidebar-expanded');
+            mainContent.style.marginLeft = '0';
+            sidebarExpanded = false;
+        }
+        
         // Animate counters
         setTimeout(() => {
             animateCounter('modulesCount', <?= (int)$totalModules ?>, 1200);
@@ -1157,19 +1431,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
                 const sidebar = document.getElementById('sidebar');
                 const mainContent = document.getElementById('main-content');
                 const overlay = document.getElementById('sidebar-overlay');
+                const hamburgerBtn = document.getElementById('hamburgerBtn');
+                const mobileHamburgerBtn = document.getElementById('mobileHamburgerBtn');
+                
+                // Update date format based on screen size
+                displayCurrentDate();
                 
                 if (window.innerWidth >= 1024) {
+                    // Desktop mode
                     overlay.classList.add('hidden');
+                    overlay.classList.remove('show');
+                    document.body.style.overflow = 'auto';
+                    
+                    // Reset sidebar to proper desktop state
+                    if (!sidebar.classList.contains('sidebar-collapsed') && !sidebar.classList.contains('sidebar-expanded')) {
+                        sidebar.classList.add('sidebar-collapsed');
+                        sidebarExpanded = false;
+                    }
+                    
                     if (sidebarExpanded) {
                         mainContent.style.marginLeft = '18rem';
                     } else {
                         mainContent.style.marginLeft = '5rem';
                     }
                 } else {
+                    // Mobile mode
                     mainContent.style.marginLeft = '0';
-                    if (!sidebarExpanded) {
+                    
+                    // Reset sidebar to proper mobile state
+                    if (sidebarExpanded) {
+                        sidebar.classList.remove('sidebar-collapsed');
+                        sidebar.classList.add('sidebar-expanded');
+                        overlay.classList.remove('hidden');
+                        overlay.classList.add('show');
+                    } else {
                         sidebar.classList.add('sidebar-collapsed');
                         sidebar.classList.remove('sidebar-expanded');
+                        overlay.classList.add('hidden');
+                        overlay.classList.remove('show');
+                        hamburgerBtn.classList.remove('active');
+                        mobileHamburgerBtn.classList.remove('active');
+                        document.body.style.overflow = 'auto';
                     }
                 }
             }, 250);
@@ -1180,6 +1482,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
             if (e.key === 'Escape') {
                 closeUploadModal();
                 closeProfileSettingsModal();
+                if (sidebarExpanded && window.innerWidth < 1024) {
+                    closeSidebar();
+                }
             }
         });
 
@@ -1195,7 +1500,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
                 closeProfileSettingsModal();
             }
         });
+
+        // Prevent horizontal scroll
+        document.body.style.overflowX = 'hidden';
     });
+
+    // Touch swipe support for mobile sidebar
+    let touchStartX = 0;
+    let touchEndX = 0;
+    
+    document.addEventListener('touchstart', function(e) {
+        touchStartX = e.changedTouches[0].screenX;
+    }, false);
+    
+    document.addEventListener('touchend', function(e) {
+        touchEndX = e.changedTouches[0].screenX;
+        handleSwipe();
+    }, false);
+    
+    function handleSwipe() {
+        if (window.innerWidth < 1024) {
+            // Swipe right to open
+            if (touchEndX - touchStartX > 50 && !sidebarExpanded) {
+                toggleSidebar();
+            }
+            // Swipe left to close
+            if (touchStartX - touchEndX > 50 && sidebarExpanded) {
+                toggleSidebar();
+            }
+        }
+    }
 </script>
 
 </body>
