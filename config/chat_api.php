@@ -1,51 +1,217 @@
 <?php
 /**
- * Chatbot Endpoint - Handles all chatbot requests
- * FIXED: Chat functionality and progress tracking now working
+ * Enhanced ChatAPI with Lesson-Based Flashcard Generation & Progress Tracking
+ * UPDATED: Fixed getModulesForStudent to use correct table structure
  */
 
-ini_set('display_errors', 0);
-error_reporting(0);
-ob_start();
+class ChatAPI
+{
+    private $apiKey;
+    private $apiUrl = "https://api.openai.com/v1/chat/completions";
+    private $model = "gpt-3.5-turbo";
 
-if (session_status() === PHP_SESSION_NONE) {
-    @session_start();
-}
+    public function __construct()
+    {
+        // Try multiple sources for API key
+        $this->apiKey = getenv("API_KEY") ?: ($_ENV["API_KEY"] ?? ($_SERVER["API_KEY"] ?? null));
+        
+        if (!$this->apiKey) {
+            $this->apiKey = getenv("OPENAI_API_KEY") ?: ($_ENV["OPENAI_API_KEY"] ?? ($_SERVER["OPENAI_API_KEY"] ?? null));
+        }
 
-function sendJson($data, $code = 200) {
-    ob_clean();
-    header('Content-Type: application/json');
-    http_response_code($code);
-    die(json_encode($data));
-}
+        // Manual .env load if still not found
+        if (!$this->apiKey && file_exists(__DIR__ . '/../.env')) {
+            $lines = file(__DIR__ . '/../.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if (empty($line) || $line[0] === '#') continue;
+                if (strpos($line, '=') !== false) {
+                    list($k, $v) = explode('=', $line, 2);
+                    $k = trim($k);
+                    $v = trim($v, " \t\n\r\0\x0B\"'");
+                    if ($k === 'API_KEY' || $k === 'OPENAI_API_KEY') {
+                        $this->apiKey = $v;
+                        break;
+                    }
+                }
+            }
+        }
 
-// Security check
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
-    sendJson(['error' => 'Unauthorized'], 403);
-}
+        if (!$this->apiKey) {
+            throw new Exception("API_KEY is missing from environment variables.");
+        }
+    }
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    sendJson(['error' => 'Method not allowed'], 405);
-}
+    /**
+     * Send message to OpenAI with proper formatting
+     */
+    public function sendMessage($userMessage, $systemMessage = "You are a helpful assistant.", $maxTokens = 500)
+    {
+        $payload = [
+            "model" => $this->model,
+            "messages" => [
+                ["role" => "system", "content" => $systemMessage],
+                ["role" => "user", "content" => $userMessage]
+            ],
+            "max_tokens" => $maxTokens,
+            "temperature" => 0.8
+        ];
 
-// Get input
-$input = json_decode(file_get_contents("php://input"), true);
+        $ch = curl_init($this->apiUrl);
 
-$studentId = $_SESSION['user_id'];
-$action = $input["action"] ?? "chat";
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => [
+                "Content-Type: application/json",
+                "Authorization: Bearer " . $this->apiKey
+            ],
+            CURLOPT_POSTFIELDS => json_encode($payload),
+            CURLOPT_TIMEOUT => 30
+        ]);
 
-try {
-    // Load dependencies
-    require_once __DIR__ . '/db_conn.php';
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
 
-    // Handle different actions
-    switch ($action) {
-        case "get_modules":
-            // Return list of available modules (matching resources.php structure)
+        if ($error) {
+            return ["error" => "Connection failed: " . $error];
+        }
+
+        if (!$response) {
+            return ["error" => "No response from OpenAI API"];
+        }
+
+        $json = json_decode($response, true);
+
+        if (!$json) {
+            return ["error" => "Invalid JSON response"];
+        }
+
+        // API error
+        if (isset($json["error"])) {
+            return ["error" => $json["error"]["message"] ?? "OpenAI API error"];
+        }
+
+        // SUCCESS - Return in expected format
+        if (isset($json["choices"]) && isset($json["choices"][0]["message"]["content"])) {
+            return [
+                "success" => true,
+                "content" => trim($json["choices"][0]["message"]["content"]),
+                "raw" => $json
+            ];
+        }
+
+        // Fallback
+        return [
+            "error" => "Invalid OpenAI API response format.",
+            "raw" => $json,
+            "http_code" => $httpCode
+        ];
+    }
+
+    /**
+     * Get student progress data from database
+     */
+    private function getStudentProgress($conn, $studentId)
+    {
+        $data = [
+            'total_modules' => 0,
+            'completed_modules' => 0,
+            'active_modules' => 0,
+            'total_quizzes' => 0,
+            'completed_quizzes' => 0,
+            'passed_quizzes' => 0,
+            'failed_quizzes' => 0,
+            'average_score' => 0,
+            'weak_areas' => [],
+            'strong_areas' => []
+        ];
+
+        try {
+            // FIXED: Use correct table name 'student_progress' instead of 'student_module_progress'
             $stmt = $conn->prepare("
                 SELECT 
-                    m.id, 
-                    m.title, 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) as completed,
+                    SUM(CASE WHEN status = 'In Progress' THEN 1 ELSE 0 END) as active
+                FROM student_progress 
+                WHERE student_id = ?
+            ");
+            $stmt->execute([$studentId]);
+            $moduleStats = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            $data['total_modules'] = (int)$moduleStats['total'];
+            $data['completed_modules'] = (int)$moduleStats['completed'];
+            $data['active_modules'] = (int)$moduleStats['active'];
+
+            // Get quiz stats
+            $stmt = $conn->prepare("
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+                    SUM(CASE WHEN status = 'passed' THEN 1 ELSE 0 END) as passed,
+                    SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+                    AVG(CASE WHEN score IS NOT NULL THEN score ELSE 0 END) as avg_score
+                FROM quiz_participation 
+                WHERE student_id = ?
+            ");
+            $stmt->execute([$studentId]);
+            $quizStats = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            $data['total_quizzes'] = (int)$quizStats['total'];
+            $data['completed_quizzes'] = (int)$quizStats['completed'];
+            $data['passed_quizzes'] = (int)$quizStats['passed'];
+            $data['failed_quizzes'] = (int)$quizStats['failed'];
+            $data['average_score'] = round((float)$quizStats['avg_score'], 1);
+
+            // Identify weak areas (subjects with low average scores)
+            $stmt = $conn->prepare("
+                SELECT q.subject, AVG(qp.score) as avg_score
+                FROM quiz_participation qp
+                JOIN quizzes q ON q.id = qp.quiz_id
+                WHERE qp.student_id = ? AND qp.score IS NOT NULL
+                GROUP BY q.subject
+                HAVING avg_score < 70
+                ORDER BY avg_score ASC
+                LIMIT 3
+            ");
+            $stmt->execute([$studentId]);
+            $data['weak_areas'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Identify strong areas
+            $stmt = $conn->prepare("
+                SELECT q.subject, AVG(qp.score) as avg_score
+                FROM quiz_participation qp
+                JOIN quizzes q ON q.id = qp.quiz_id
+                WHERE qp.student_id = ? AND qp.score IS NOT NULL
+                GROUP BY q.subject
+                HAVING avg_score >= 80
+                ORDER BY avg_score DESC
+                LIMIT 3
+            ");
+            $stmt->execute([$studentId]);
+            $data['strong_areas'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        } catch (Exception $e) {
+            // Return default data if queries fail
+        }
+
+        return $data;
+    }
+
+    /**
+     * Get available modules for student
+     * FIXED: Match resources.php structure exactly
+     */
+    private function getStudentModules($conn, $studentId)
+    {
+        try {
+            $stmt = $conn->prepare("
+                SELECT 
+                    m.id,
+                    m.title,
                     m.description,
                     COALESCE(sp.status, 'Pending') AS status
                 FROM modules m
@@ -54,245 +220,240 @@ try {
                 ORDER BY m.display_order ASC, m.created_at DESC
             ");
             $stmt->execute([$studentId]);
-            $modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
-            sendJson([
-                'success' => true,
-                'modules' => $modules
-            ]);
-            break;
-
-        case "get_flashcard_questions":
-            // Get questions from quizzes for flashcard mode
-            $quizId = isset($input["quiz_id"]) ? intval($input["quiz_id"]) : 0;
-            $moduleId = isset($input["module_id"]) ? intval($input["module_id"]) : 0;
-            $limit = isset($input["limit"]) ? intval($input["limit"]) : 20;
-            
-            if (!$quizId && !$moduleId) {
-                sendJson(['error' => 'Missing quiz_id or module_id'], 400);
-            }
-            
-            $limit = max(1, min(50, intval($limit)));
-            
-            if ($quizId > 0) {
-                $stmt = $conn->prepare("SELECT id, title, description, module_id FROM quizzes WHERE id = ?");
-                $stmt->execute([$quizId]);
-                $quiz = $stmt->fetch(PDO::FETCH_ASSOC);
-                
-                if (!$quiz) {
-                    sendJson(['error' => 'Quiz not found'], 404);
-                }
-                
-                $stmt = $conn->prepare("
-                    SELECT q.id, q.question_text, q.question_type, q.points
-                    FROM questions q
-                    WHERE q.quiz_id = ?
-                    AND q.question_type IN ('multiple_choice', 'true_false')
-                    ORDER BY RAND()
-                    LIMIT {$limit}
-                ");
-                $stmt->execute([$quizId]);
-                $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                
-                $sourceInfo = [
-                    'type' => 'quiz',
-                    'id' => $quiz['id'],
-                    'title' => $quiz['title'],
-                    'description' => $quiz['description']
-                ];
-            } else {
-                $stmt = $conn->prepare("SELECT id, title, description FROM modules WHERE id = ?");
-                $stmt->execute([$moduleId]);
-                $module = $stmt->fetch(PDO::FETCH_ASSOC);
-                
-                if (!$module) {
-                    sendJson(['error' => 'Module not found'], 404);
-                }
-                
-                $stmt = $conn->prepare("
-                    SELECT q.id, q.question_text, q.question_type, q.points, qz.title AS quiz_title
-                    FROM questions q
-                    JOIN quizzes qz ON q.quiz_id = qz.id
-                    WHERE qz.module_id = ?
-                    AND q.question_type IN ('multiple_choice', 'true_false')
-                    ORDER BY RAND()
-                    LIMIT {$limit}
-                ");
-                $stmt->execute([$moduleId]);
-                $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                
-                $sourceInfo = [
-                    'type' => 'module',
-                    'id' => $module['id'],
-                    'title' => $module['title'],
-                    'description' => $module['description']
-                ];
-            }
-            
-            if (empty($questions)) {
-                sendJson([
-                    'success' => true,
-                    'source' => $sourceInfo,
-                    'flashcards' => [],
-                    'total_questions' => 0,
-                    'message' => 'No questions available.'
-                ]);
-            }
-            
-            $flashcards = [];
-            foreach ($questions as $question) {
-                $stmt = $conn->prepare("SELECT answer_text, is_correct FROM answers WHERE question_id = ? ORDER BY RAND()");
-                $stmt->execute([$question['id']]);
-                $answers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                
-                $correctAnswers = [];
-                $allChoices = [];
-                
-                foreach ($answers as $answer) {
-                    $allChoices[] = $answer['answer_text'];
-                    if ($answer['is_correct']) {
-                        $correctAnswers[] = $answer['answer_text'];
-                    }
-                }
-                
-                $flashcard = [
-                    'id' => $question['id'],
-                    'question' => $question['question_text'],
-                    'question_type' => $question['question_type'],
-                    'points' => $question['points'] ?? 1,
-                    'choices' => $allChoices,
-                    'answer' => count($correctAnswers) === 1 ? $correctAnswers[0] : implode(", ", $correctAnswers),
-                    'correct_answers' => $correctAnswers
-                ];
-                
-                if (isset($question['quiz_title'])) {
-                    $flashcard['quiz_title'] = $question['quiz_title'];
-                }
-                
-                $flashcards[] = $flashcard;
-            }
-            
-            sendJson([
-                'success' => true,
-                'source' => $sourceInfo,
-                'flashcards' => $flashcards,
-                'total_questions' => count($flashcards)
-            ]);
-            break;
-
-        case "get_progress":
-            // Get student progress data - FIXED to match progress.php structure
-            
-            // Get module stats from student_progress table
-            $stmt = $conn->prepare("
-                SELECT 
-                    COUNT(*) as total_modules,
-                    SUM(CASE WHEN LOWER(status) = 'completed' THEN 1 ELSE 0 END) as completed_modules,
-                    SUM(CASE WHEN LOWER(status) = 'in progress' THEN 1 ELSE 0 END) as active_modules
-                FROM student_progress 
-                WHERE student_id = ?
-            ");
-            $stmt->execute([$studentId]);
-            $moduleStats = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            // Get quiz stats from quiz_attempts table (matching progress.php)
-            $stmt = $conn->prepare("
-                SELECT 
-                    COUNT(DISTINCT quiz_id) as total_quizzes,
-                    SUM(CASE WHEN LOWER(status) IN ('completed', 'passed') THEN 1 ELSE 0 END) as completed_quizzes,
-                    SUM(CASE WHEN LOWER(status) = 'passed' THEN 1 ELSE 0 END) as passed_quizzes,
-                    SUM(CASE WHEN LOWER(status) = 'failed' THEN 1 ELSE 0 END) as failed_quizzes,
-                    AVG(score) as avg_score
-                FROM quiz_attempts 
-                WHERE student_id = ?
-            ");
-            $stmt->execute([$studentId]);
-            $quizStats = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            sendJson([
-                'success' => true,
-                'progress' => [
-                    'modules' => [
-                        'total_modules' => (int)($moduleStats['total_modules'] ?? 0),
-                        'completed_modules' => (int)($moduleStats['completed_modules'] ?? 0),
-                        'active_modules' => (int)($moduleStats['active_modules'] ?? 0)
-                    ],
-                    'quizzes' => [
-                        'total_quizzes' => (int)($quizStats['total_quizzes'] ?? 0),
-                        'completed_quizzes' => (int)($quizStats['completed_quizzes'] ?? 0),
-                        'passed_quizzes' => (int)($quizStats['passed_quizzes'] ?? 0),
-                        'failed_quizzes' => (int)($quizStats['failed_quizzes'] ?? 0),
-                        'avg_score' => round((float)($quizStats['avg_score'] ?? 0), 1)
-                    ]
-                ]
-            ]);
-            break;
-
-        case "chat":
-        case "progress":
-        case "flashcard":
-            // Load ChatAPI for AI-powered responses
-            $chatApiFile = __DIR__ . '/ChatAPI.php';
-            
-            // Also check for chatbot_api.php (alternate name)
-            if (!file_exists($chatApiFile)) {
-                $chatApiFile = __DIR__ . '/chatbot_api.php';
-            }
-            
-            if (!file_exists($chatApiFile)) {
-                sendJson(['error' => 'Chat API file not found'], 500);
-            }
-            
-            require_once $chatApiFile;
-            
-            // Load dotenv if available
-            if (file_exists(__DIR__ . "/../vendor/autoload.php")) {
-                require_once __DIR__ . "/../vendor/autoload.php";
-                if (class_exists('Dotenv\Dotenv')) {
-                    $dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . "/../");
-                    $dotenv->safeLoad();
-                }
-            }
-            
-            try {
-                $chatAPI = new ChatAPI();
-            } catch (Exception $e) {
-                sendJson(['error' => 'API configuration error: ' . $e->getMessage()], 500);
-            }
-            
-            // Get message
-            $userMessage = trim($input["message"] ?? '');
-            
-            if (empty($userMessage)) {
-                // Default messages for different tasks
-                if ($action === 'progress') {
-                    $userMessage = 'Analyze my learning progress and give me personalized recommendations.';
-                } else {
-                    sendJson(['error' => 'Message is required'], 400);
-                }
-            }
-
-            $task = $input["task"] ?? $action;
-            $moduleId = $input["module_id"] ?? null;
-
-            // Handle request through ChatAPI
-            $result = $chatAPI->handleChatRequest($conn, $studentId, $userMessage, $task, $moduleId);
-
-            if (isset($result['error'])) {
-                sendJson(['error' => $result['error']], 500);
-            }
-
-            sendJson($result);
-            break;
-
-        default:
-            sendJson(['error' => 'Invalid action: ' . $action], 400);
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {
+            return [];
+        }
     }
 
-} catch (PDOException $e) {
-    error_log("Database error: " . $e->getMessage());
-    sendJson(['error' => 'Database error occurred'], 500);
-} catch (Exception $e) {
-    error_log("Server error: " . $e->getMessage());
-    sendJson(['error' => 'Server error: ' . $e->getMessage()], 500);
+    /**
+     * Get module content for flashcard generation
+     */
+    private function getModuleContent($conn, $moduleId)
+    {
+        try {
+            $stmt = $conn->prepare("
+                SELECT title, description, content, file_path
+                FROM modules
+                WHERE id = ?
+            ");
+            $stmt->execute([$moduleId]);
+            $module = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$module) {
+                return null;
+            }
+
+            // Build content string
+            $content = "MODULE: " . $module['title'] . "\n\n";
+            
+            if (!empty($module['description'])) {
+                $content .= "DESCRIPTION:\n" . $module['description'] . "\n\n";
+            }
+
+            if (!empty($module['content'])) {
+                $content .= "CONTENT:\n" . $module['content'] . "\n\n";
+            }
+
+            // If there's a PDF file, extract text from it
+            if (!empty($module['file_path']) && file_exists($module['file_path'])) {
+                $extracted = $this->extractTextFromPDF($module['file_path']);
+                if ($extracted) {
+                    $content .= "ADDITIONAL CONTENT:\n" . $extracted;
+                }
+            }
+
+            return $content;
+        } catch (Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Extract text from PDF (basic implementation)
+     */
+    private function extractTextFromPDF($filePath)
+    {
+        try {
+            // Try using pdftotext if available
+            if (function_exists('shell_exec')) {
+                $output = shell_exec("pdftotext " . escapeshellarg($filePath) . " -");
+                if ($output) {
+                    return substr($output, 0, 5000); // Limit to 5000 chars
+                }
+            }
+            return null;
+        } catch (Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Build system prompt based on task
+     */
+    private function buildSystemPrompt($task, $studentName)
+    {
+        $baseName = $studentName ? " Student's name is $studentName." : "";
+
+        switch ($task) {
+            case "progress":
+                return "You are MedAce AI Assistant, a helpful nursing tutor with access to the student's learning progress data.$baseName Your role is to provide personalized insights about their progress, identify strengths and areas for improvement, suggest next steps, and motivate them. Be encouraging and specific. Keep responses under 200 words.";
+
+            case "flashcard":
+                return "You are MedAce AI Assistant, a nursing education expert specialized in creating effective study flashcards.$baseName Create exactly 5 flashcards for the requested nursing topic. Format each flashcard as:
+
+CARD [number]
+Q: [Question - clear, specific, testing key concept]
+A: [Answer - concise, accurate, includes key details]
+---
+
+Make questions challenging but fair. Focus on clinical application, not just memorization. Use proper nursing terminology.";
+
+            default: // chat
+                return "You are MedAce AI Assistant, a helpful nursing tutor.$baseName Be encouraging, concise (under 150 words), and use nursing terminology appropriately. If asked about progress, suggest they use the 'Check My Progress' button. If asked for flashcards, suggest they use the 'Generate Flashcards' button.";
+        }
+    }
+
+    /**
+     * Build user prompt with context
+     */
+    private function buildUserPrompt($task, $userMessage, $progressData, $lessonContent = null)
+    {
+        switch ($task) {
+            case "progress":
+                $context = "Current Progress Data:\n";
+                $context .= "- Modules: {$progressData['completed_modules']}/{$progressData['total_modules']} completed\n";
+                $context .= "- Quizzes: {$progressData['completed_quizzes']} completed ({$progressData['passed_quizzes']} passed, {$progressData['failed_quizzes']} failed)\n";
+                $context .= "- Average Score: {$progressData['average_score']}%\n";
+
+                if (!empty($progressData['weak_areas'])) {
+                    $context .= "\nAreas needing improvement:\n";
+                    foreach ($progressData['weak_areas'] as $area) {
+                        $context .= "- {$area['subject']}: " . round($area['avg_score'], 1) . "% avg\n";
+                    }
+                }
+
+                if (!empty($progressData['strong_areas'])) {
+                    $context .= "\nStrong areas:\n";
+                    foreach ($progressData['strong_areas'] as $area) {
+                        $context .= "- {$area['subject']}: " . round($area['avg_score'], 1) . "% avg\n";
+                    }
+                }
+
+                return $context . "\n" . $userMessage;
+
+            case "flashcard":
+                if ($lessonContent && !empty($lessonContent)) {
+                    // Generate flashcards from lesson content
+                    $prompt = "Based on the following lesson content, generate 5 nursing flashcards:\n\n";
+                    $prompt .= "LESSON CONTENT:\n" . substr($lessonContent, 0, 3000) . "\n\n";
+                    $prompt .= "Generate flashcards that test key concepts, clinical applications, and important facts from this lesson.";
+                    return $prompt;
+                } else {
+                    return "Generate 5 nursing flashcards for: " . $userMessage;
+                }
+
+            default:
+                return $userMessage;
+        }
+    }
+
+    /**
+     * Parse flashcards from AI response
+     */
+    private function parseFlashcards($content)
+    {
+        $flashcards = [];
+        $cards = preg_split('/CARD\s+\d+/i', $content);
+
+        foreach ($cards as $card) {
+            $card = trim($card);
+            if (empty($card)) continue;
+
+            // Extract Q and A
+            if (preg_match('/Q:\s*(.+?)(?=A:)/s', $card, $qMatch) &&
+                preg_match('/A:\s*(.+?)(?=---|$)/s', $card, $aMatch)) {
+
+                $flashcards[] = [
+                    'question' => trim($qMatch[1]),
+                    'answer' => trim($aMatch[1])
+                ];
+            }
+        }
+
+        return $flashcards;
+    }
+
+    /**
+     * Handle chat request with task-specific logic
+     */
+    public function handleChatRequest($conn, $studentId, $userMessage, $task = "chat", $moduleId = null)
+    {
+        // Get student info
+        $stmt = $conn->prepare("SELECT firstname, lastname FROM users WHERE id = ?");
+        $stmt->execute([$studentId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        $studentName = $user ? $user['firstname'] : "";
+
+        // Get progress data
+        $progressData = $this->getStudentProgress($conn, $studentId);
+
+        // Special handling for flashcard task
+        if ($task === "flashcard") {
+            $lessonContent = null;
+            
+            // If module ID provided, get its content
+            if ($moduleId) {
+                $lessonContent = $this->getModuleContent($conn, $moduleId);
+            }
+
+            // Build prompts with lesson content
+            $systemPrompt = $this->buildSystemPrompt($task, $studentName);
+            $userPrompt = $this->buildUserPrompt($task, $userMessage, $progressData, $lessonContent);
+            
+            // Send to OpenAI
+            $response = $this->sendMessage($userPrompt, $systemPrompt, 1000);
+
+            if (isset($response['error'])) {
+                return ['error' => $response['error']];
+            }
+
+            $content = $response['content'];
+            $flashcards = $this->parseFlashcards($content);
+            
+            return [
+                'reply' => $content,
+                'flashcards' => $flashcards,
+                'task' => 'flashcard',
+                'module_id' => $moduleId
+            ];
+        }
+
+        // For progress or chat tasks
+        $systemPrompt = $this->buildSystemPrompt($task, $studentName);
+        $userPrompt = $this->buildUserPrompt($task, $userMessage, $progressData);
+        
+        // Set token limit
+        $maxTokens = 500;
+
+        // Send to OpenAI
+        $response = $this->sendMessage($userPrompt, $systemPrompt, $maxTokens);
+
+        if (isset($response['error'])) {
+            return ['error' => $response['error']];
+        }
+
+        return [
+            'reply' => $response['content'],
+            'task' => $task
+        ];
+    }
+
+    /**
+     * Get student modules list for selection
+     */
+    public function getModulesForStudent($conn, $studentId)
+    {
+        return $this->getStudentModules($conn, $studentId);
+    }
 }

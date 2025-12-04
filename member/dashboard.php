@@ -1639,19 +1639,10 @@ async function callChatAPI(userMessage) {
         }
     });
 
-        document.getElementById('profileSettingsModal')?.addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeProfileSettingsModal();
-            }
-        });
-
-        // Prevent body scroll when modal is open
-        const modals = document.querySelectorAll('.modal');
-        modals.forEach(modal => {
-            modal.addEventListener('scroll', function(e) {
-                e.stopPropagation();
-            });
-        });
+    document.getElementById('profileSettingsModal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeProfileSettingsModal();
+        }
     });
     
     // Prevent zoom on double tap for iOS
