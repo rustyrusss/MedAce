@@ -32,33 +32,14 @@ $profilePic = !empty($student['profile_pic']) ? "../" . $student['profile_pic'] 
 
 // ✅ FIXED: Get quizzes with case-insensitive status check
 $stmt = $conn->prepare("
-  SELECT q.id, q.title, q.publish_time, q.deadline_time, q.subject, q.prerequisite_module_id,
-         pm.title AS prerequisite_module_title,
-         LOWER(TRIM(COALESCE(sp.status, ''))) AS prerequisite_status,
-         sp.completed_at AS prerequisite_completed_at,
-         qa.id AS attempt_id, 
-         COALESCE(qa.status, 'Pending') AS status,
-         qa.score AS latest_score_raw,
-         (SELECT MAX(score) FROM quiz_attempts WHERE quiz_id = q.id AND student_id = ?) AS highest_score_raw,
-         (SELECT COALESCE(SUM(points), 0) FROM questions WHERE quiz_id = q.id) AS total_points,
-         (SELECT COUNT(*) FROM quiz_attempts WHERE quiz_id = q.id AND student_id = ?) AS attempt_count
+  SELECT q.id, q.title, q.publish_time, q.deadline_time,
+         qa.id AS attempt_id,
+         COALESCE(qa.status, 'Pending') AS status
   FROM quizzes q
-  LEFT JOIN modules pm ON q.prerequisite_module_id = pm.id
-  LEFT JOIN student_progress sp ON sp.module_id = q.prerequisite_module_id AND sp.student_id = ?
-  LEFT JOIN (
-      SELECT qa1.*
-      FROM quiz_attempts qa1
-      INNER JOIN (
-          SELECT quiz_id, MAX(attempted_at) AS latest_attempt
-          FROM quiz_attempts
-          WHERE student_id = ?
-          GROUP BY quiz_id
-      ) latest ON qa1.quiz_id = latest.quiz_id AND qa1.attempted_at = latest.latest_attempt
-  ) qa ON q.id = qa.quiz_id
-  WHERE q.status = 'active'
+  LEFT JOIN quiz_attempts qa ON qa.quiz_id = q.id AND qa.student_id = ?
   ORDER BY q.publish_time DESC
 ");
-$stmt->execute([$studentId, $studentId, $studentId, $studentId]);
+$stmt->execute([$studentId]);
 $quizzes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Helper function to calculate percentage
@@ -731,6 +712,62 @@ function calculatePercentage($score, $total) {
             </div>
             <?php endif; ?>
         </div>
+        <input type="text" placeholder="Search quizzes..." x-model="search"
+               class="w-full sm:w-64 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-400" />
+      </div>
+
+      <!-- Quiz Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <?php if (empty($quizzes)): ?>
+          <p class="text-gray-500 col-span-full text-center">No quizzes available yet.</p>
+        <?php else: ?>
+          <?php foreach ($quizzes as $quiz): 
+            $status = strtolower($quiz['status']);
+            $statusClass = match ($status) {
+              'completed' => 'bg-green-100 text-green-700',
+              'failed' => 'bg-red-100 text-red-700',
+              'pending' => 'bg-yellow-100 text-yellow-700',
+              default => 'bg-gray-100 text-gray-700'
+            };
+          ?>
+          <div class="bg-white/90 backdrop-blur-xl rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all flex flex-col"
+               x-show="(filter==='all' || filter==='<?= $status ?>') && ('<?= strtolower(htmlspecialchars($quiz['title'])) ?>'.includes(search.toLowerCase()))">
+            <div class="h-44 bg-gradient-to-br from-teal-200 to-blue-200 flex items-center justify-center text-5xl">
+              📝
+            </div>
+            <div class="flex flex-col flex-grow justify-between p-5">
+              <div>
+                <h3 class="text-lg font-semibold text-gray-800 mb-2"><?= htmlspecialchars($quiz['title']) ?></h3>
+                <p class="text-sm text-gray-600 mb-2">📅 <?= htmlspecialchars($quiz['publish_time']) ?></p>
+                <p class="text-sm text-red-600 mb-4">⏰ <?= htmlspecialchars($quiz['deadline_time']) ?></p>
+              </div>
+
+              <div class="flex items-center justify-between mt-3">
+                <span class="px-3 py-1 rounded-full text-sm font-medium <?= $statusClass ?>">
+                  <?= htmlspecialchars(ucfirst($quiz['status'])) ?>
+                </span>
+                <?php if ($status === 'pending'): ?>
+                  <a href="take_quiz.php?id=<?= $quiz['id'] ?>"
+                     class="bg-gradient-to-r from-teal-600 to-blue-600 text-white px-4 py-2 rounded-lg shadow hover:from-teal-700 hover:to-blue-700 transition text-sm font-medium">
+                    Start Quiz
+                  </a>
+                <?php elseif ($status === 'failed'): ?>
+                  <a href="take_quiz.php?id=<?= $quiz['id'] ?>"
+                     class="bg-gradient-to-r from-orange-500 to-red-500 text-white px-4 py-2 rounded-lg shadow hover:from-orange-600 hover:to-red-600 transition text-sm font-medium">
+                    Retry Quiz
+                  </a>
+                <?php elseif ($status === 'completed' && $quiz['attempt_id']): ?>
+                  <a href="quiz_result.php?attempt_id=<?= $quiz['attempt_id'] ?>"
+                     class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg shadow hover:bg-gray-300 transition text-sm font-medium">
+                    View Results
+                  </a>
+                <?php endif; ?>
+              </div>
+            </div>
+          </div>
+          <?php endforeach; ?>
+        <?php endif; ?>
+      </div>
     </main>
 </div>
 

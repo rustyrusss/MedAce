@@ -2,6 +2,7 @@
 session_start();
 require_once '../config/db_conn.php';
 
+// Check if user is logged in and is a student
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
     header("Location: ../public/index.php");
     exit();
