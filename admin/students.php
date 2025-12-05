@@ -51,29 +51,102 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_student'])) {
     exit();
 }
 
-// Get all students with their details
-$students = $conn->query("
-    SELECT id, firstname, lastname, email, section, student_id, year, created_at
+// Handle approve request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve_student'])) {
+    $studentId = intval($_POST['student_id']);
+    
+    $approveStmt = $conn->prepare("UPDATE users SET status = 'approved' WHERE id = ? AND role = 'student'");
+    if ($approveStmt->execute([$studentId])) {
+        $_SESSION['success_message'] = "Student approved successfully!";
+    } else {
+        $_SESSION['error_message'] = "Failed to approve student.";
+    }
+    header("Location: students.php");
+    exit();
+}
+
+// Handle reject request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reject_student'])) {
+    $studentId = intval($_POST['student_id']);
+    
+    $rejectStmt = $conn->prepare("UPDATE users SET status = 'rejected' WHERE id = ? AND role = 'student'");
+    if ($rejectStmt->execute([$studentId])) {
+        $_SESSION['success_message'] = "Student rejected.";
+    } else {
+        $_SESSION['error_message'] = "Failed to reject student.";
+    }
+    header("Location: students.php");
+    exit();
+}
+
+// Handle bulk approve
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_approve'])) {
+    $studentIds = $_POST['student_ids'] ?? [];
+    if (!empty($studentIds)) {
+        $placeholders = implode(',', array_fill(0, count($studentIds), '?'));
+        $bulkStmt = $conn->prepare("UPDATE users SET status = 'approved' WHERE id IN ($placeholders) AND role = 'student'");
+        if ($bulkStmt->execute($studentIds)) {
+            $_SESSION['success_message'] = count($studentIds) . " student(s) approved successfully!";
+        } else {
+            $_SESSION['error_message'] = "Failed to approve students.";
+        }
+    }
+    header("Location: students.php");
+    exit();
+}
+
+// Handle bulk reject
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_reject'])) {
+    $studentIds = $_POST['student_ids'] ?? [];
+    if (!empty($studentIds)) {
+        $placeholders = implode(',', array_fill(0, count($studentIds), '?'));
+        $bulkStmt = $conn->prepare("UPDATE users SET status = 'rejected' WHERE id IN ($placeholders) AND role = 'student'");
+        if ($bulkStmt->execute($studentIds)) {
+            $_SESSION['success_message'] = count($studentIds) . " student(s) rejected.";
+        } else {
+            $_SESSION['error_message'] = "Failed to reject students.";
+        }
+    }
+    header("Location: students.php");
+    exit();
+}
+
+// Get pending students
+$pendingStudents = $conn->query("
+    SELECT id, firstname, lastname, email, section, student_id, year, created_at, status
     FROM users 
-    WHERE role='student' 
+    WHERE role='student' AND status='pending'
+    ORDER BY created_at DESC
+")->fetchAll(PDO::FETCH_ASSOC);
+
+$pendingCount = count($pendingStudents);
+
+// Get all approved students with their details
+$students = $conn->query("
+    SELECT id, firstname, lastname, email, section, student_id, year, created_at, status
+    FROM users 
+    WHERE role='student' AND status='approved'
     ORDER BY section ASC, lastname ASC, firstname ASC
 ")->fetchAll(PDO::FETCH_ASSOC);
 
 $totalStudents = count($students);
 
-// Get unique sections
+// Get rejected students count
+$rejectedCount = $conn->query("SELECT COUNT(*) FROM users WHERE role='student' AND status='rejected'")->fetchColumn();
+
+// Get unique sections (from approved students)
 $sections = $conn->query("
     SELECT DISTINCT section 
     FROM users 
-    WHERE role='student' AND section IS NOT NULL AND section != ''
+    WHERE role='student' AND status='approved' AND section IS NOT NULL AND section != ''
     ORDER BY section ASC
 ")->fetchAll(PDO::FETCH_COLUMN);
 
-// Get unique years
+// Get unique years (from approved students)
 $years = $conn->query("
     SELECT DISTINCT year 
     FROM users 
-    WHERE role='student' AND year IS NOT NULL AND year != ''
+    WHERE role='student' AND status='approved' AND year IS NOT NULL AND year != ''
     ORDER BY year ASC
 ")->fetchAll(PDO::FETCH_COLUMN);
 
@@ -192,6 +265,26 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
             animation: slideDown 0.4s ease-out;
         }
 
+        @keyframes pulse-ring {
+            0% {
+                transform: scale(0.8);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1.5);
+                opacity: 0;
+            }
+        }
+
+        .pulse-badge::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 9999px;
+            background: inherit;
+            animation: pulse-ring 1.5s ease-out infinite;
+        }
+
         .shadow-custom {
             box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
         }
@@ -223,6 +316,14 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
 
         .stat-icon-3 {
             background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%);
+        }
+
+        .stat-icon-4 {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        }
+
+        .stat-icon-5 {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
         }
 
         .table-row-hover {
@@ -495,6 +596,29 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                 opacity: 1;
             }
         }
+
+        /* Pending card styles */
+        .pending-card {
+            transition: all 0.3s ease;
+        }
+
+        .pending-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Checkbox styling */
+        .custom-checkbox {
+            width: 1.25rem;
+            height: 1.25rem;
+            border-radius: 0.375rem;
+            cursor: pointer;
+        }
+
+        .custom-checkbox:checked {
+            background-color: #9333ea;
+            border-color: #9333ea;
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 antialiased">
@@ -537,6 +661,9 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                 <a href="students.php" class="flex items-center space-x-3 px-3 py-3 text-gray-700 bg-primary-50 border-l-4 border-primary-500 rounded-r-lg font-medium transition-all">
                     <i class="fas fa-user-graduate text-primary-600 w-5 text-center flex-shrink-0"></i>
                     <span class="nav-text sidebar-transition whitespace-nowrap">Students</span>
+                    <?php if($pendingCount > 0): ?>
+                    <span class="nav-text sidebar-transition ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full"><?= $pendingCount ?></span>
+                    <?php endif; ?>
                 </a>
                 <a href="quizzes.php" class="flex items-center space-x-3 px-3 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg font-medium transition-all">
                     <i class="fas fa-clipboard-list text-gray-400 w-5 text-center flex-shrink-0"></i>
@@ -684,24 +811,39 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
             <!-- Title -->
             <div class="mb-6 sm:mb-8 animate-fade-in-up">
                 <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Students Management</h1>
-                <p class="text-gray-600 text-sm sm:text-base">Total Students: <span class="font-semibold text-primary-600"><?= $totalStudents ?></span></p>
+                <p class="text-gray-600 text-sm sm:text-base">Manage student registrations and approvals</p>
             </div>
 
             <!-- Stats Summary -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
                 <div class="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-custom card-hover animate-scale-in border border-gray-100">
                     <div class="flex items-center justify-between mb-3 sm:mb-4">
                         <div class="stat-icon-1 w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center text-white shadow-lg">
                             <i class="fas fa-user-graduate text-xl sm:text-2xl"></i>
                         </div>
                     </div>
-                    <h3 class="text-gray-500 text-xs sm:text-sm font-medium mb-1">Total Students</h3>
+                    <h3 class="text-gray-500 text-xs sm:text-sm font-medium mb-1">Approved</h3>
                     <div class="flex items-baseline space-x-2">
                         <p class="text-3xl sm:text-4xl font-bold text-gray-900"><?= $totalStudents ?></p>
                     </div>
                 </div>
 
-                <div class="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-custom card-hover animate-scale-in border border-gray-100" style="animation-delay: 0.1s;">
+                <div class="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-custom card-hover animate-scale-in border border-gray-100 <?= $pendingCount > 0 ? 'ring-2 ring-amber-400' : '' ?>" style="animation-delay: 0.1s;">
+                    <div class="flex items-center justify-between mb-3 sm:mb-4">
+                        <div class="stat-icon-4 w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center text-white shadow-lg relative">
+                            <i class="fas fa-clock text-xl sm:text-2xl"></i>
+                            <?php if($pendingCount > 0): ?>
+                            <span class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-xs font-bold text-white pulse-badge"><?= $pendingCount ?></span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <h3 class="text-gray-500 text-xs sm:text-sm font-medium mb-1">Pending</h3>
+                    <div class="flex items-baseline space-x-2">
+                        <p class="text-3xl sm:text-4xl font-bold <?= $pendingCount > 0 ? 'text-amber-600' : 'text-gray-900' ?>"><?= $pendingCount ?></p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-custom card-hover animate-scale-in border border-gray-100" style="animation-delay: 0.2s;">
                     <div class="flex items-center justify-between mb-3 sm:mb-4">
                         <div class="stat-icon-2 w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center text-white shadow-lg">
                             <i class="fas fa-users text-xl sm:text-2xl"></i>
@@ -713,18 +855,100 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                     </div>
                 </div>
 
-                <div class="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-custom card-hover animate-scale-in border border-gray-100" style="animation-delay: 0.2s;">
+                <div class="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-custom card-hover animate-scale-in border border-gray-100" style="animation-delay: 0.3s;">
                     <div class="flex items-center justify-between mb-3 sm:mb-4">
-                        <div class="stat-icon-3 w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center text-white shadow-lg">
-                            <i class="fas fa-calendar-alt text-xl sm:text-2xl"></i>
+                        <div class="stat-icon-5 w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center text-white shadow-lg">
+                            <i class="fas fa-times-circle text-xl sm:text-2xl"></i>
                         </div>
                     </div>
-                    <h3 class="text-gray-500 text-xs sm:text-sm font-medium mb-1">Year Levels</h3>
+                    <h3 class="text-gray-500 text-xs sm:text-sm font-medium mb-1">Rejected</h3>
                     <div class="flex items-baseline space-x-2">
-                        <p class="text-3xl sm:text-4xl font-bold text-gray-900"><?= count($years) ?></p>
+                        <p class="text-3xl sm:text-4xl font-bold text-gray-900"><?= $rejectedCount ?></p>
                     </div>
                 </div>
             </div>
+
+            <!-- Pending Approvals Section -->
+            <?php if($pendingCount > 0): ?>
+            <div class="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl sm:rounded-2xl shadow-custom p-4 sm:p-6 mb-6 sm:mb-8 border border-amber-200 animate-fade-in-up">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 bg-amber-500 rounded-lg flex items-center justify-center mr-3">
+                            <i class="fas fa-user-clock text-white text-lg"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-lg sm:text-xl font-bold text-gray-900">Pending Approvals</h2>
+                            <p class="text-sm text-gray-600"><?= $pendingCount ?> student(s) waiting for approval</p>
+                        </div>
+                    </div>
+                    <form method="POST" id="bulkApprovalForm" class="flex gap-2">
+                        <button type="submit" name="bulk_approve" onclick="return confirmBulkAction('approve')" 
+                                class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" 
+                                id="bulkApproveBtn" disabled>
+                            <i class="fas fa-check-double mr-1"></i> Approve Selected
+                        </button>
+                        <button type="submit" name="bulk_reject" onclick="return confirmBulkAction('reject')" 
+                                class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" 
+                                id="bulkRejectBtn" disabled>
+                            <i class="fas fa-times mr-1"></i> Reject Selected
+                        </button>
+                    </form>
+                </div>
+
+                <div class="grid gap-3 sm:gap-4">
+                    <?php foreach($pendingStudents as $pending): ?>
+                    <div class="pending-card bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                        <div class="flex items-start gap-3">
+                            <input type="checkbox" name="student_ids[]" value="<?= $pending['id'] ?>" form="bulkApprovalForm"
+                                   class="custom-checkbox mt-1" onchange="updateBulkButtons()">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                    <div>
+                                        <h3 class="font-semibold text-gray-900"><?= htmlspecialchars($pending['firstname'] . ' ' . $pending['lastname']) ?></h3>
+                                        <p class="text-sm text-gray-500"><?= htmlspecialchars($pending['email']) ?></p>
+                                    </div>
+                                    <div class="flex flex-wrap gap-2 text-xs">
+                                        <span class="bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-medium">
+                                            <i class="fas fa-id-card mr-1"></i><?= htmlspecialchars($pending['student_id'] ?? 'N/A') ?>
+                                        </span>
+                                        <span class="bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-medium">
+                                            <i class="fas fa-layer-group mr-1"></i><?= htmlspecialchars($pending['section'] ?? 'N/A') ?>
+                                        </span>
+                                        <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded-full font-medium">
+                                            <i class="fas fa-calendar mr-1"></i>Year <?= htmlspecialchars($pending['year'] ?? 'N/A') ?>
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center justify-between mt-3">
+                                    <span class="text-xs text-gray-400">
+                                        <i class="fas fa-clock mr-1"></i>Registered <?= date('M d, Y h:i A', strtotime($pending['created_at'])) ?>
+                                    </span>
+                                    <div class="flex gap-2">
+                                        <form method="POST" class="inline">
+                                            <input type="hidden" name="student_id" value="<?= $pending['id'] ?>">
+                                            <button type="submit" name="approve_student" 
+                                                    onclick="return confirm('Approve this student?')"
+                                                    class="bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">
+                                                <i class="fas fa-check mr-1"></i>Approve
+                                            </button>
+                                        </form>
+                                        <form method="POST" class="inline">
+                                            <input type="hidden" name="student_id" value="<?= $pending['id'] ?>">
+                                            <button type="submit" name="reject_student" 
+                                                    onclick="return confirm('Reject this student? They will not be able to access the system.')"
+                                                    class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">
+                                                <i class="fas fa-times mr-1"></i>Reject
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
 
             <!-- Search and Filter Section -->
             <div class="bg-white rounded-xl sm:rounded-2xl shadow-custom p-4 sm:p-6 mb-6 sm:mb-8 border border-gray-100 animate-fade-in-up">
@@ -767,7 +991,10 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
             <!-- Students Table -->
             <div class="bg-white rounded-xl sm:rounded-2xl shadow-custom border border-gray-100 animate-fade-in-up overflow-hidden">
                 <div class="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-200">
-                    <h2 class="text-lg sm:text-xl font-semibold text-gray-900">All Students</h2>
+                    <h2 class="text-lg sm:text-xl font-semibold text-gray-900">
+                        <i class="fas fa-check-circle text-green-500 mr-2"></i>Approved Students
+                        <span class="text-sm font-normal text-gray-500 ml-2">(<?= $totalStudents ?>)</span>
+                    </h2>
                 </div>
                 
                 <?php if($totalStudents > 0): ?>
@@ -785,35 +1012,44 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                         </thead>
                         <tbody class="divide-y divide-gray-100">
                             <?php foreach($students as $student): ?>
-                            <tr class="table-row-hover" data-student='<?= json_encode($student) ?>'>
-                                <td class="p-3 sm:p-4 text-gray-800 font-medium text-sm sm:text-base">
-                                    <?= htmlspecialchars($student['student_id'] ?? 'N/A') ?>
-                                </td>
-                                <td class="p-3 sm:p-4 text-gray-900 font-medium text-sm sm:text-base">
-                                    <?= htmlspecialchars($student['firstname'].' '.$student['lastname']) ?>
-                                </td>
-                                <td class="p-3 sm:p-4 text-gray-600 text-sm sm:text-base hidden md:table-cell">
-                                    <a href="mailto:<?= htmlspecialchars($student['email']) ?>" class="hover:text-primary-600 hover:underline">
-                                        <?= htmlspecialchars($student['email']) ?>
-                                    </a>
-                                </td>
-                                <td class="p-3 sm:p-4">
-                                    <span class="badge bg-blue-100 text-blue-700 text-xs">
-                                        <?= htmlspecialchars($student['section'] ?? 'N/A') ?>
-                                    </span>
-                                </td>
-                                <td class="p-3 sm:p-4 text-gray-700 text-sm sm:text-base hidden sm:table-cell">
-                                    <?= htmlspecialchars($student['year'] ?? 'N/A') ?>
-                                </td>
-                                <td class="p-3 sm:p-4">
-                                    <button onclick='openEditModal(<?= json_encode($student) ?>)' 
-                                            class="bg-primary-500 text-white px-3 py-1.5 rounded-lg hover:bg-primary-600 transition text-xs font-medium">
-                                        <i class="fas fa-edit"></i>
-                                        <span class="hidden sm:inline ml-1">Edit</span>
-                                    </button>
-                                </td>
-                            </tr>
-                            <?php endforeach; ?>
+<tr class="table-row-hover"
+    data-student="<?= htmlspecialchars(json_encode($student), ENT_QUOTES, 'UTF-8') ?>">
+    
+    <td class="p-3 sm:p-4 text-gray-800 font-medium text-sm sm:text-base">
+        <?= htmlspecialchars($student['student_id'] ?? 'N/A') ?>
+    </td>
+
+    <td class="p-3 sm:p-4 text-gray-900 font-medium text-sm sm:text-base">
+        <?= htmlspecialchars($student['firstname'].' '.$student['lastname']) ?>
+    </td>
+
+    <td class="p-3 sm:p-4 text-gray-600 text-sm sm:text-base hidden md:table-cell">
+        <a href="mailto:<?= htmlspecialchars($student['email']) ?>" 
+           class="hover:text-primary-600 hover:underline">
+           <?= htmlspecialchars($student['email']) ?>
+        </a>
+    </td>
+
+    <td class="p-3 sm:p-4">
+        <span class="badge bg-blue-100 text-blue-700 text-xs">
+            <?= htmlspecialchars($student['section'] ?? 'N/A') ?>
+        </span>
+    </td>
+
+    <td class="p-3 sm:p-4 text-gray-700 text-sm sm:text-base hidden sm:table-cell">
+        <?= htmlspecialchars($student['year'] ?? 'N/A') ?>
+    </td>
+
+    <td class="p-3 sm:p-4">
+        <button onclick='openEditModal(<?= htmlspecialchars(json_encode($student), ENT_QUOTES, "UTF-8") ?>)'
+                class="bg-primary-500 text-white px-3 py-1.5 rounded-lg hover:bg-primary-600 transition text-xs font-medium">
+            <i class="fas fa-edit"></i>
+            <span class="hidden sm:inline ml-1">Edit</span>
+        </button>
+    </td>
+</tr>
+<?php endforeach; ?>
+
                         </tbody>
                     </table>
                 </div>
@@ -822,8 +1058,14 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                     <div class="text-gray-400 mb-4">
                         <i class="fas fa-user-graduate text-5xl sm:text-6xl"></i>
                     </div>
-                    <h3 class="text-lg sm:text-xl font-semibold text-gray-700 mb-2">No Students Found</h3>
-                    <p class="text-sm sm:text-base text-gray-500">There are currently no enrolled students in the system.</p>
+                    <h3 class="text-lg sm:text-xl font-semibold text-gray-700 mb-2">No Approved Students</h3>
+                    <p class="text-sm sm:text-base text-gray-500">
+                        <?php if($pendingCount > 0): ?>
+                        There are <?= $pendingCount ?> student(s) waiting for approval above.
+                        <?php else: ?>
+                        There are currently no enrolled students in the system.
+                        <?php endif; ?>
+                    </p>
                 </div>
                 <?php endif; ?>
             </div>
@@ -907,6 +1149,32 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
             closeEditModal();
         }
     });
+
+    // Bulk action functions
+    function updateBulkButtons() {
+        const checkboxes = document.querySelectorAll('input[name="student_ids[]"]:checked');
+        const bulkApproveBtn = document.getElementById('bulkApproveBtn');
+        const bulkRejectBtn = document.getElementById('bulkRejectBtn');
+        
+        if (bulkApproveBtn && bulkRejectBtn) {
+            const hasSelected = checkboxes.length > 0;
+            bulkApproveBtn.disabled = !hasSelected;
+            bulkRejectBtn.disabled = !hasSelected;
+        }
+    }
+
+    function confirmBulkAction(action) {
+        const checkboxes = document.querySelectorAll('input[name="student_ids[]"]:checked');
+        const count = checkboxes.length;
+        
+        if (count === 0) {
+            alert('Please select at least one student.');
+            return false;
+        }
+        
+        const actionText = action === 'approve' ? 'approve' : 'reject';
+        return confirm(`Are you sure you want to ${actionText} ${count} student(s)?`);
+    }
 
     // Search and filter functionality
     const searchInput = document.getElementById('searchInput');

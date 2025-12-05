@@ -13,7 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     try {
-        $stmt = $conn->prepare("SELECT id, firstname, lastname, role, password 
+        $stmt = $conn->prepare("SELECT id, firstname, lastname, role, password, status 
                                 FROM users 
                                 WHERE email = ? OR username = ? 
                                 LIMIT 1");
@@ -21,6 +21,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($user && password_verify($password, $user['password'])) {
+            
+            // Status check for students
+            if ($user['role'] === 'student') {
+                if ($user['status'] === 'pending') {
+                    $_SESSION['error'] = "Your account is pending approval. Please wait for the dean to approve your registration.";
+                    header("Location: ../public/index.php");
+                    exit;
+                }
+                
+                if ($user['status'] === 'rejected') {
+                    $_SESSION['error'] = "Your account registration was rejected. Please contact the administration.";
+                    header("Location: ../public/index.php");
+                    exit;
+                }
+            }
+            
+            // Status check for professors
+            if ($user['role'] === 'professor') {
+                if ($user['status'] === 'pending') {
+                    $_SESSION['error'] = "Your professor account is pending approval. Please wait for the dean to approve your registration.";
+                    header("Location: ../public/index.php");
+                    exit;
+                }
+                
+                if ($user['status'] === 'rejected') {
+                    $_SESSION['error'] = "Your account registration was rejected. Please contact the administration.";
+                    header("Location: ../public/index.php");
+                    exit;
+                }
+            }
+            
             session_regenerate_id(true);
 
             $_SESSION['user_id']   = $user['id'];
@@ -56,3 +87,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 }
+?>

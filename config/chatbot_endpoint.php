@@ -1,7 +1,7 @@
 <?php
 /**
  * Chatbot Endpoint - Handles all chatbot requests
- * FIXED: ChatAPI class now included directly - no external file needed
+ * Enhanced with accurate progress calculations and comprehensive graphs
  */
 
 ini_set('display_errors', 0);
@@ -306,38 +306,262 @@ try {
             break;
 
         case "get_progress":
+            // ACCURATE Progress Calculation
+            
+            // 1. Get ALL available modules (not just enrolled ones)
             $stmt = $conn->prepare("
-                SELECT COUNT(*) as total_modules,
+                SELECT COUNT(*) as total_available_modules
+                FROM modules 
+                WHERE status IN ('active', 'published')
+            ");
+            $stmt->execute();
+            $availableModules = $stmt->fetch(PDO::FETCH_ASSOC);
+            $totalAvailableModules = (int)($availableModules['total_available_modules'] ?? 0);
+
+            // 2. Get student's module progress
+            $stmt = $conn->prepare("
+                SELECT 
+                    COUNT(*) as enrolled_modules,
                     SUM(CASE WHEN LOWER(status) = 'completed' THEN 1 ELSE 0 END) as completed_modules,
-                    SUM(CASE WHEN LOWER(status) = 'in progress' THEN 1 ELSE 0 END) as active_modules
-                FROM student_progress WHERE student_id = ?
+                    SUM(CASE WHEN LOWER(status) = 'in progress' THEN 1 ELSE 0 END) as in_progress_modules,
+                    SUM(CASE WHEN LOWER(status) = 'pending' THEN 1 ELSE 0 END) as pending_modules
+                FROM student_progress 
+                WHERE student_id = ?
             ");
             $stmt->execute([$studentId]);
             $moduleStats = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            $enrolledModules = (int)($moduleStats['enrolled_modules'] ?? 0);
+            $completedModules = (int)($moduleStats['completed_modules'] ?? 0);
+            $inProgressModules = (int)($moduleStats['in_progress_modules'] ?? 0);
+            $pendingModules = (int)($moduleStats['pending_modules'] ?? 0);
+            
+            // Calculate not started modules
+            $notStartedModules = $totalAvailableModules - $enrolledModules;
 
+            // 3. Get ALL quizzes from enrolled modules
             $stmt = $conn->prepare("
-                SELECT COUNT(DISTINCT quiz_id) as total_quizzes,
-                    SUM(CASE WHEN LOWER(status) = 'passed' THEN 1 ELSE 0 END) as passed_quizzes,
-                    SUM(CASE WHEN LOWER(status) = 'failed' THEN 1 ELSE 0 END) as failed_quizzes,
-                    AVG(score) as avg_score
-                FROM quiz_attempts WHERE student_id = ?
+                SELECT COUNT(DISTINCT q.id) as total_available_quizzes
+                FROM quizzes q
+                JOIN student_progress sp ON q.module_id = sp.module_id
+                WHERE sp.student_id = ?
             ");
             $stmt->execute([$studentId]);
-            $quizStats = $stmt->fetch(PDO::FETCH_ASSOC);
+            $availableQuizzes = $stmt->fetch(PDO::FETCH_ASSOC);
+            $totalAvailableQuizzes = (int)($availableQuizzes['total_available_quizzes'] ?? 0);
 
+            // 4. Get quiz attempts (count each quiz once - get latest attempt)
+            $stmt = $conn->prepare("
+                SELECT 
+                    quiz_id,
+                    MAX(id) as latest_attempt_id,
+                    MAX(score) as best_score
+                FROM quiz_attempts 
+                WHERE student_id = ?
+                GROUP BY quiz_id
+            ");
+            $stmt->execute([$studentId]);
+            $latestAttempts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $attemptedQuizIds = array_column($latestAttempts, 'quiz_id');
+
+            // 5. Get detailed quiz statistics (only latest attempts)
+            if (!empty($attemptedQuizIds)) {
+                $placeholders = implode(',', array_fill(0, count($attemptedQuizIds), '?'));
+                $stmt = $conn->prepare("
+                    SELECT 
+                        qa.quiz_id,
+                        qa.score,
+                        qa.status,
+                        qa.completed_at
+                    FROM quiz_attempts qa
+                    INNER JOIN (
+                        SELECT quiz_id, MAX(id) as max_id
+                        FROM quiz_attempts
+                        WHERE student_id = ?
+                        GROUP BY quiz_id
+                    ) latest ON qa.id = latest.max_id
+                    WHERE qa.quiz_id IN ($placeholders)
+                ");
+                $params = array_merge([$studentId], $attemptedQuizIds);
+                $stmt->execute($params);
+                $quizDetails = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            } else {
+                $quizDetails = [];
+            }
+
+            // Calculate quiz stats
+            $passedQuizzes = 0;
+            $failedQuizzes = 0;
+            $totalScore = 0;
+            $scoreCount = 0;
+            
+            foreach ($quizDetails as $quiz) {
+                if (strtolower($quiz['status']) === 'passed') {
+                    $passedQuizzes++;
+                } elseif (strtolower($quiz['status']) === 'failed') {
+                    $failedQuizzes++;
+                }
+                
+                if ($quiz['score'] !== null) {
+                    $totalScore += (float)$quiz['score'];
+                    $scoreCount++;
+                }
+            }
+            
+            $attemptedQuizzes = count($quizDetails);
+            $notAttemptedQuizzes = $totalAvailableQuizzes - $attemptedQuizzes;
+            $avgScore = $scoreCount > 0 ? round($totalScore / $scoreCount, 1) : 0;
+
+            // 6. Calculate overall completion rate
+            $totalItems = $totalAvailableModules + $totalAvailableQuizzes;
+            $completedItems = $completedModules + $passedQuizzes;
+            $completionRate = $totalItems > 0 ? round(($completedItems / $totalItems) * 100, 1) : 0;
+
+            // 7. Graph Data: Daily Activity (Last 30 days)
+            $stmt = $conn->prepare("
+                SELECT DATE(completed_at) as date, 
+                       COUNT(*) as quiz_count,
+                       AVG(score) as avg_score
+                FROM quiz_attempts
+                WHERE student_id = ? 
+                  AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                GROUP BY DATE(completed_at)
+                ORDER BY date ASC
+            ");
+            $stmt->execute([$studentId]);
+            $dailyActivity = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // 8. Graph Data: Weekly Progress (Last 12 weeks)
+            $stmt = $conn->prepare("
+                SELECT YEARWEEK(completed_at, 1) as week,
+                       DATE(DATE_SUB(completed_at, INTERVAL WEEKDAY(completed_at) DAY)) as week_start,
+                       COUNT(*) as quiz_count,
+                       AVG(score) as avg_score,
+                       SUM(CASE WHEN LOWER(status) = 'passed' THEN 1 ELSE 0 END) as passed_count
+                FROM quiz_attempts
+                WHERE student_id = ? 
+                  AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 12 WEEK)
+                GROUP BY YEARWEEK(completed_at, 1), week_start
+                ORDER BY week ASC
+            ");
+            $stmt->execute([$studentId]);
+            $weeklyProgress = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // 9. Graph Data: Monthly Performance (Last 6 months)
+            $stmt = $conn->prepare("
+                SELECT DATE_FORMAT(completed_at, '%Y-%m') as month,
+                       DATE_FORMAT(completed_at, '%b %Y') as month_label,
+                       COUNT(*) as quiz_count,
+                       AVG(score) as avg_score,
+                       SUM(CASE WHEN LOWER(status) = 'passed' THEN 1 ELSE 0 END) as passed_count,
+                       SUM(CASE WHEN LOWER(status) = 'failed' THEN 1 ELSE 0 END) as failed_count
+                FROM quiz_attempts
+                WHERE student_id = ? 
+                  AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+                GROUP BY DATE_FORMAT(completed_at, '%Y-%m'), month_label
+                ORDER BY month ASC
+            ");
+            $stmt->execute([$studentId]);
+            $monthlyPerformance = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // 10. Graph Data: Score Distribution
+            $stmt = $conn->prepare("
+                SELECT 
+                    CASE 
+                        WHEN score >= 90 THEN '90-100'
+                        WHEN score >= 80 THEN '80-89'
+                        WHEN score >= 70 THEN '70-79'
+                        WHEN score >= 60 THEN '60-69'
+                        ELSE 'Below 60'
+                    END as score_range,
+                    COUNT(*) as count
+                FROM quiz_attempts
+                WHERE student_id = ?
+                GROUP BY score_range
+                ORDER BY score_range DESC
+            ");
+            $stmt->execute([$studentId]);
+            $scoreDistribution = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // 11. Performance by Module
+            $stmt = $conn->prepare("
+                SELECT m.title as module_title, 
+                       COUNT(DISTINCT qa.quiz_id) as quizzes_taken,
+                       AVG(qa.score) as avg_score,
+                       SUM(CASE WHEN LOWER(qa.status) = 'passed' THEN 1 ELSE 0 END) as passed_count
+                FROM quiz_attempts qa
+                JOIN quizzes q ON qa.quiz_id = q.id
+                JOIN modules m ON q.module_id = m.id
+                WHERE qa.student_id = ?
+                GROUP BY m.id, m.title
+                ORDER BY avg_score DESC
+            ");
+            $stmt->execute([$studentId]);
+            $performanceByModule = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // 12. Recent Activity
+            $stmt = $conn->prepare("
+                SELECT qa.quiz_id, q.title as quiz_title, qa.score, qa.status, 
+                       qa.completed_at, m.title as module_title
+                FROM quiz_attempts qa
+                JOIN quizzes q ON qa.quiz_id = q.id
+                LEFT JOIN modules m ON q.module_id = m.id
+                WHERE qa.student_id = ?
+                ORDER BY qa.completed_at DESC
+                LIMIT 10
+            ");
+            $stmt->execute([$studentId]);
+            $recentActivity = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // 13. Module Details
+            $stmt = $conn->prepare("
+                SELECT m.id, m.title, COALESCE(sp.status, 'Not Started') as status, 
+                       sp.progress_percentage, sp.started_at, sp.completed_at
+                FROM modules m
+                LEFT JOIN student_progress sp ON sp.module_id = m.id AND sp.student_id = ?
+                WHERE m.status IN ('active', 'published')
+                ORDER BY m.display_order ASC
+            ");
+            $stmt->execute([$studentId]);
+            $moduleDetails = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Build response with accurate calculations
             sendJson([
                 'success' => true,
                 'progress' => [
+                    'overview' => [
+                        'completion_rate' => $completionRate,
+                        'total_items' => $totalItems,
+                        'completed_items' => $completedItems
+                    ],
                     'modules' => [
-                        'total_modules' => (int)($moduleStats['total_modules'] ?? 0),
-                        'completed_modules' => (int)($moduleStats['completed_modules'] ?? 0),
-                        'active_modules' => (int)($moduleStats['active_modules'] ?? 0)
+                        'total_available' => $totalAvailableModules,
+                        'enrolled' => $enrolledModules,
+                        'completed' => $completedModules,
+                        'in_progress' => $inProgressModules,
+                        'pending' => $pendingModules,
+                        'not_started' => $notStartedModules,
+                        'completion_percentage' => $totalAvailableModules > 0 ? round(($completedModules / $totalAvailableModules) * 100, 1) : 0,
+                        'details' => $moduleDetails
                     ],
                     'quizzes' => [
-                        'total_quizzes' => (int)($quizStats['total_quizzes'] ?? 0),
-                        'passed_quizzes' => (int)($quizStats['passed_quizzes'] ?? 0),
-                        'failed_quizzes' => (int)($quizStats['failed_quizzes'] ?? 0),
-                        'avg_score' => round((float)($quizStats['avg_score'] ?? 0), 1)
+                        'total_available' => $totalAvailableQuizzes,
+                        'attempted' => $attemptedQuizzes,
+                        'not_attempted' => $notAttemptedQuizzes,
+                        'passed' => $passedQuizzes,
+                        'failed' => $failedQuizzes,
+                        'avg_score' => $avgScore,
+                        'pass_rate' => $attemptedQuizzes > 0 ? round(($passedQuizzes / $attemptedQuizzes) * 100, 1) : 0
+                    ],
+                    'performance_by_module' => $performanceByModule,
+                    'recent_activity' => $recentActivity,
+                    'strengths' => array_slice($performanceByModule, 0, 3),
+                    'needs_improvement' => array_slice(array_reverse($performanceByModule), 0, 3),
+                    'graphs' => [
+                        'daily_activity' => $dailyActivity,
+                        'weekly_progress' => $weeklyProgress,
+                        'monthly_performance' => $monthlyPerformance,
+                        'score_distribution' => $scoreDistribution
                     ]
                 ]
             ]);

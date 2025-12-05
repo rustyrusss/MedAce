@@ -18,105 +18,108 @@ if (!$quizId) {
 
 try {
     $conn->beginTransaction();
-    
-    // Fetch questions to calculate score
+
+    // Fetch questions
     $stmt = $conn->prepare("SELECT id, question_type, points FROM questions WHERE quiz_id = ? ORDER BY id");
     $stmt->execute([$quizId]);
     $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
+
     $score = 0;
-    $totalPoints = 0;
-    
-    // Calculate score for multiple choice and true/false questions only
+    $totalQuestions = 0; // total possible points
+
     foreach ($questions as $q) {
         $questionId = $q['id'];
-        $questionType = $q['question_type'];
-        $points = isset($q['points']) && $q['points'] > 0 ? intval($q['points']) : 1;
-        
-        // Only count points for questions that can be auto-graded
-        if (in_array($questionType, ['multiple_choice', 'true_false'])) {
-            $totalPoints += $points;
-            
-            // Check if answer is correct
+        $type = $q['question_type'];
+        $points = (!empty($q['points']) && $q['points'] > 0) ? intval($q['points']) : 1;
+
+        // Count question points
+        $totalQuestions += $points;
+
+        // Auto-grade MCQ + T/F only
+        if (in_array($type, ['multiple_choice', 'true_false'])) {
+
             if (isset($_POST['answers'][$questionId])) {
-                $chosenAnswerId = intval($_POST['answers'][$questionId]);
-                
+                $chosenAnswer = intval($_POST['answers'][$questionId]);
+
                 $stmt = $conn->prepare("SELECT is_correct FROM answers WHERE id = ? AND question_id = ?");
-                $stmt->execute([$chosenAnswerId, $questionId]);
-                $answer = $stmt->fetch(PDO::FETCH_ASSOC);
-                
-                if ($answer && $answer['is_correct'] == 1) {
+                $stmt->execute([$chosenAnswer, $questionId]);
+                $ans = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($ans && $ans['is_correct'] == 1) {
                     $score += $points;
                 }
             }
         }
+        // Essay/short answer → stored later (not auto-graded)
     }
-    
-    // Determine final status based on score (60% passing grade)
-    $percentage = $totalPoints > 0 ? ($score / $totalPoints) * 100 : 0;
-    
-    if ($autoSubmitted === 1) {
-        // Auto-submitted (time ran out)
-        $finalStatus = ($percentage >= 60) ? 'completed' : 'failed';
-    } else {
-        // Manual submission: determine if passed or failed
-        $finalStatus = ($percentage >= 60) ? 'completed' : 'failed';
+
+    if ($totalQuestions <= 0) {
+        $totalQuestions = 1; // avoid division by zero
     }
-    
-    // Create quiz attempt record with proper status
+
+    // Percentage
+    $percentage = ($score / $totalQuestions) * 100;
+
+    // *** FIXED: Only PASSED or FAILED ***
+    $finalStatus = ($percentage >= 75) ? 'passed' : 'failed';
+
+    // Save quiz attempt (no more "completed")
     $stmt = $conn->prepare("
-        INSERT INTO quiz_attempts (quiz_id, student_id, score, attempt_number, attempted_at, status) 
-        VALUES (?, ?, ?, ?, NOW(), ?)
+        INSERT INTO quiz_attempts
+        (quiz_id, student_id, score, total_questions, attempt_number, attempted_at, status)
+        VALUES (?, ?, ?, ?, ?, NOW(), ?)
     ");
-    $stmt->execute([$quizId, $studentId, $score, $attemptNumber, $finalStatus]);
+    $stmt->execute([$quizId, $studentId, $score, $totalQuestions, $attemptNumber, $finalStatus]);
+
     $attemptId = $conn->lastInsertId();
-    
+
     // Save student answers
     foreach ($questions as $q) {
         $questionId = $q['id'];
-        $questionType = $q['question_type'];
-        
-        if (in_array($questionType, ['multiple_choice', 'true_false'])) {
-            // Save multiple choice / true-false answers
+        $type = $q['question_type'];
+
+        if (in_array($type, ['multiple_choice', 'true_false'])) {
+
             if (isset($_POST['answers'][$questionId])) {
                 $answerId = intval($_POST['answers'][$questionId]);
-                
+
                 $stmt = $conn->prepare("
-                    INSERT INTO student_answers (attempt_id, question_id, answer_id, created_at, answered_at) 
+                    INSERT INTO student_answers
+                    (attempt_id, question_id, answer_id, created_at, answered_at)
                     VALUES (?, ?, ?, NOW(), NOW())
                 ");
                 $stmt->execute([$attemptId, $questionId, $answerId]);
             }
-        } elseif (in_array($questionType, ['short_answer', 'essay'])) {
-            // Save text-based answers (essay and short answer)
+
+        } else {
+            // Store essay / short answer text
             if (isset($_POST['text_answers'][$questionId])) {
-                $textAnswer = trim($_POST['text_answers'][$questionId]);
-                
-                // Insert with student_answer column and explicitly NULL answer_id
+                $text = trim($_POST['text_answers'][$questionId]);
+
                 $stmt = $conn->prepare("
-                    INSERT INTO student_answers (attempt_id, question_id, answer_id, student_answer, created_at, answered_at) 
-                    VALUES (?, ?, NULL, ?, NOW(), NOW())
+                    INSERT INTO student_answers
+                    (attempt_id, question_id, student_answer, created_at, answered_at)
+                    VALUES (?, ?, ?, NOW(), NOW())
                 ");
-                $stmt->execute([$attemptId, $questionId, $textAnswer]);
+                $stmt->execute([$attemptId, $questionId, $text]);
             }
         }
     }
-    
+
     $conn->commit();
-    
-    // Clear quiz timer session
-    unset($_SESSION['quiz_start_'.$quizId]);
-    unset($_SESSION['quiz_end_'.$quizId]);
-    
-    // Redirect to results
+
+    // Clear timer
+    unset($_SESSION['quiz_start_' . $quizId]);
+    unset($_SESSION['quiz_end_' . $quizId]);
+
     header("Location: ../member/quiz_result.php?attempt_id=" . $attemptId);
     exit();
-    
+
 } catch (Exception $e) {
     if ($conn->inTransaction()) {
         $conn->rollBack();
     }
-    
+
     error_log("Quiz submission error: " . $e->getMessage());
     die("Error submitting quiz: " . $e->getMessage());
 }

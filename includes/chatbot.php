@@ -15,126 +15,134 @@ if (isset($student) && !empty($student['firstname'])) {
 ?>
 
 <!-- Chatbot Container -->
-<div id="chatbotContainer" class="fixed bottom-4 right-4 z-50 sm:bottom-6 sm:right-6">
-    
-    <!-- Quick Action Buttons (shown when chatbot is closed) -->
-    <div id="quickActions" class="hidden mb-3 space-y-2">
+<div id="chatbotContainer" class="fixed bottom-3 right-3 z-50 sm:bottom-6 sm:right-6">
+
+    <!-- Quick Action Buttons -->
+    <div id="quickActions" class="hidden mb-2 sm:mb-3 space-y-2 w-40 sm:w-48">
         <button onclick="chatQuickQuestion('Give me a study tip for nursing')" 
-                class="block w-full bg-white text-gray-700 px-4 py-2 rounded-lg shadow-lg text-sm hover:bg-gray-50 transition-all border border-gray-200 text-left">
+                class="block w-full bg-white text-gray-700 px-3 py-2 rounded-lg shadow-lg text-xs sm:text-sm hover:bg-gray-50 transition-all border border-gray-200 text-left">
             💡 Study Tips
         </button>
         <button onclick="chatOpenProgress()" 
-                class="block w-full bg-white text-gray-700 px-4 py-2 rounded-lg shadow-lg text-sm hover:bg-gray-50 transition-all border border-gray-200 text-left">
+                class="block w-full bg-white text-gray-700 px-3 py-2 rounded-lg shadow-lg text-xs sm:text-sm hover:bg-gray-50 transition-all border border-gray-200 text-left">
             📊 Check Progress
         </button>
     </div>
-    
+
     <!-- Toggle Button -->
-    <button id="chatbotToggle" onclick="toggleChatbot()" 
-            class="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-r from-primary-600 to-primary-500 rounded-full shadow-lg flex items-center justify-center hover:from-primary-700 hover:to-primary-600 transition-all transform hover:scale-105">
-        <i id="chatbotIcon" class="fas fa-robot text-white text-xl sm:text-2xl"></i>
+    <button id="chatbotToggle" onclick="toggleChatbot()"
+            class="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-r from-primary-600 to-primary-500 rounded-full shadow-xl flex items-center justify-center hover:scale-110 active:scale-95 transition transform">
+        <i id="chatbotIcon" class="fas fa-robot text-white text-lg sm:text-2xl"></i>
     </button>
 </div>
 
 <!-- Chatbot Window -->
-<div id="chatbotWindow" class="hidden fixed bottom-20 right-4 sm:bottom-24 sm:right-6 w-[calc(100vw-2rem)] sm:w-96 max-w-md bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden z-50">
-    
+<div id="chatbotWindow"
+     class="hidden fixed bottom-20 right-3 sm:bottom-24 sm:right-6 
+            w-[90vw] sm:w-80 md:w-96 max-w-full 
+            bg-white rounded-2xl shadow-2xl border border-gray-200 
+            overflow-hidden z-50 
+            max-h-[80vh] sm:max-h-[75vh] flex flex-col">
+
     <!-- Header -->
-    <div class="gradient-bg px-4 py-3 flex items-center justify-between">
+    <div class="gradient-bg px-3 sm:px-4 py-3 flex items-center justify-between">
         <div class="flex items-center space-x-3">
-            <div class="w-10 h-10 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
-                <i class="fas fa-robot text-white text-lg"></i>
+            <div class="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-full flex items-center justify-center">
+                <i class="fas fa-robot text-white text-sm sm:text-lg"></i>
             </div>
             <div>
-                <h3 class="text-white font-semibold text-sm">MedAce AI Assistant</h3>
-                <p class="text-blue-100 text-xs flex items-center">
+                <h3 class="text-white font-semibold text-xs sm:text-sm">MedAce AI Assistant</h3>
+                <p class="text-blue-100 text-[10px] sm:text-xs flex items-center">
                     <span class="w-2 h-2 bg-green-400 rounded-full mr-1 animate-pulse"></span>
                     Online
                 </p>
             </div>
         </div>
-        <button onclick="toggleChatbot()" class="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2 transition-colors">
-            <i class="fas fa-times"></i>
+        <button onclick="toggleChatbot()" class="text-white hover:bg-white/20 rounded-lg p-1 sm:p-2 transition">
+            <i class="fas fa-times text-sm sm:text-base"></i>
         </button>
     </div>
-    
+
     <!-- Action Buttons -->
-    <div class="px-3 py-2 bg-gray-50 border-b border-gray-200 flex gap-2 overflow-x-auto">
-        <button onclick="chatOpenProgress()" class="flex-shrink-0 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium hover:bg-blue-200 transition-colors flex items-center gap-1">
-            <i class="fas fa-chart-line"></i>
-            My Progress
+    <div class="px-2 sm:px-3 py-2 bg-gray-50 border-b border-gray-200 flex gap-2 overflow-x-auto scrollbar-thin">
+        <button onclick="chatOpenProgress()"
+                class="flex-shrink-0 px-2 sm:px-3 py-1.5 bg-blue-100 text-blue-700 rounded-full text-[10px] sm:text-xs font-medium hover:bg-blue-200 transition flex items-center gap-1">
+            <i class="fas fa-chart-line"></i> My Progress
         </button>
-        <button onclick="chatRequestFlashcards()" class="flex-shrink-0 px-3 py-1.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium hover:bg-purple-200 transition-colors flex items-center gap-1">
-            <i class="fas fa-layer-group"></i>
-            Flashcards
+        <button onclick="chatRequestFlashcards()"
+                class="flex-shrink-0 px-2 sm:px-3 py-1.5 bg-purple-100 text-purple-700 rounded-full text-[10px] sm:text-xs font-medium hover:bg-purple-200 transition flex items-center gap-1">
+            <i class="fas fa-layer-group"></i> Flashcards
         </button>
-        <button onclick="chatQuickQuestion('Give me a nursing study tip')" class="flex-shrink-0 px-3 py-1.5 bg-green-100 text-green-700 rounded-full text-xs font-medium hover:bg-green-200 transition-colors flex items-center gap-1">
-            <i class="fas fa-lightbulb"></i>
-            Study Tips
+        <button onclick="chatQuickQuestion('Give me a nursing study tip')"
+                class="flex-shrink-0 px-2 sm:px-3 py-1.5 bg-green-100 text-green-700 rounded-full text-[10px] sm:text-xs font-medium hover:bg-green-200 transition flex items-center gap-1">
+            <i class="fas fa-lightbulb"></i> Study Tips
         </button>
     </div>
-    
-    <!-- Messages Container -->
-    <div id="chatMessages" class="h-72 sm:h-80 overflow-y-auto p-4 space-y-4 bg-gray-50">
+
+    <!-- Messages -->
+    <div id="chatMessages"
+         class="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 bg-gray-50 scrollbar-thin">
+
         <!-- Welcome Message -->
         <div class="flex items-start space-x-2">
-            <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <i class="fas fa-robot text-primary-600 text-sm"></i>
+            <div class="w-7 h-7 sm:w-8 sm:h-8 bg-primary-100 rounded-full flex items-center justify-center text-xs">
+                <i class="fas fa-robot text-primary-600"></i>
             </div>
             <div class="flex-1">
-                <div class="bg-white rounded-2xl rounded-tl-none px-4 py-3 shadow-sm">
-                    <p class="text-gray-800 text-sm">
-                        Hi <?= $chatStudentName ? $chatStudentName : 'there' ?>! 👋
+                <div class="bg-white rounded-2xl rounded-tl-none px-3 sm:px-4 py-3 shadow-sm">
+                    <p class="text-gray-800 text-xs sm:text-sm">
+                        Hi <?= $chatStudentName ?: "there" ?>! 👋
                     </p>
-                    <p class="text-gray-600 text-sm mt-2">
+                    <p class="text-gray-600 text-xs sm:text-sm mt-1">
                         I'm your AI study assistant. I can help you with:
                     </p>
-                    <ul class="text-gray-600 text-sm mt-2 space-y-1">
-                        <li>• Generate interactive flashcard quizzes</li>
-                        <li>• Track your learning progress</li>
-                        <li>• Answer nursing questions</li>
-                        <li>• Provide study tips</li>
+
+                    <ul class="text-gray-600 text-xs sm:text-sm mt-2 space-y-1">
+                        <li>• Flashcard quizzes</li>
+                        <li>• Track learning progress</li>
+                        <li>• Nursing questions</li>
+                        <li>• Study tips</li>
                     </ul>
                 </div>
-                <span class="text-xs text-gray-400 mt-1 block">Just now</span>
+                <span class="text-[10px] sm:text-xs text-gray-400 mt-1 block">Just now</span>
             </div>
         </div>
     </div>
-    
+
     <!-- Typing Indicator -->
     <div id="typingIndicator" class="hidden px-4 pb-2">
         <div class="flex items-center space-x-2">
-            <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-                <i class="fas fa-robot text-primary-600 text-sm"></i>
+            <div class="w-7 h-7 sm:w-8 sm:h-8 bg-primary-100 rounded-full flex items-center justify-center">
+                <i class="fas fa-robot text-primary-600 text-xs sm:text-sm"></i>
             </div>
-            <div class="bg-white rounded-2xl px-4 py-2 shadow-sm">
+            <div class="bg-white rounded-2xl px-3 py-2 shadow-sm">
                 <div class="flex space-x-1">
-                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0ms;"></div>
-                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 150ms;"></div>
-                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 300ms;"></div>
+                    <div class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce delay-150"></div>
+                    <div class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce delay-300"></div>
                 </div>
             </div>
         </div>
     </div>
-    
-    <!-- Input Area -->
-    <div class="p-3 bg-white border-t border-gray-200">
+
+    <!-- Input -->
+    <div class="p-2 sm:p-3 bg-white border-t border-gray-200">
         <form id="chatForm" onsubmit="chatSendMessage(event)" class="flex items-end gap-2">
-            <div class="flex-1 relative">
-                <textarea id="chatInput" 
-                          placeholder="Type your message..." 
-                          rows="1"
-                          class="w-full px-4 py-3 bg-gray-100 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all"
-                          onkeydown="chatHandleKeydown(event)"
-                          oninput="chatAutoResize(this)"></textarea>
-            </div>
-            <button type="submit" 
-                    class="w-11 h-11 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors flex items-center justify-center flex-shrink-0 shadow-sm">
-                <i class="fas fa-paper-plane"></i>
+            <textarea id="chatInput"
+                      class="flex-1 px-3 sm:px-4 py-2 bg-gray-100 rounded-xl text-xs sm:text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500 transition"
+                      placeholder="Type your message..."
+                      rows="1"
+                      oninput="chatAutoResize(this)"
+                      onkeydown="chatHandleKeydown(event)"></textarea>
+
+            <button type="submit"
+                    class="w-10 h-10 sm:w-11 sm:h-11 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition flex items-center justify-center">
+                <i class="fas fa-paper-plane text-sm sm:text-base"></i>
             </button>
         </form>
     </div>
 </div>
+
 
 <script>
 // ============================================

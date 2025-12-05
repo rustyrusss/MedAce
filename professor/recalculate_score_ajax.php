@@ -25,7 +25,7 @@ if ($attemptId <= 0) {
 }
 
 try {
-    // Verify attempt belongs to professor's quiz
+    // Validate professor owns quiz
     $stmt = $conn->prepare("
         SELECT qa.id, q.professor_id
         FROM quiz_attempts qa
@@ -34,76 +34,90 @@ try {
     ");
     $stmt->execute([$attemptId, $professorId]);
     $attempt = $stmt->fetch(PDO::FETCH_ASSOC);
-    
+
     if (!$attempt) {
         echo json_encode(['success' => false, 'error' => 'Attempt not found or access denied']);
         exit();
     }
-    
-    // ✅ FIXED: Auto-grade multiple choice questions using answer_id only
+
+    // -----------------------------------------------------
+    // AUTO-GRADE MULTIPLE CHOICE QUESTIONS
+    // -----------------------------------------------------
     $stmt = $conn->prepare("
         SELECT 
-            sa.id, 
+            sa.id,
             sa.answer_id,
-            q.points, 
+            q.points,
             q.question_type,
             a.is_correct
         FROM student_answers sa
         JOIN questions q ON sa.question_id = q.id
         LEFT JOIN answers a ON sa.answer_id = a.id
-        WHERE sa.attempt_id = ? AND q.question_type = 'multiple_choice'
+        WHERE sa.attempt_id = ? 
+          AND q.question_type = 'multiple_choice'
     ");
     $stmt->execute([$attemptId]);
     $mcQuestions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Grade each multiple choice question
+
     foreach ($mcQuestions as $mc) {
         $points = 0;
-        
-        // Check if answer_id is set and if it's correct
+
+        // Auto-grade only if correct
         if (!empty($mc['answer_id']) && $mc['is_correct'] == 1) {
             $points = $mc['points'];
         }
-        
-        // Update points_earned
-        $updateStmt = $conn->prepare("UPDATE student_answers SET points_earned = ? WHERE id = ?");
+
+        $updateStmt = $conn->prepare("
+            UPDATE student_answers 
+            SET points_earned = ? 
+            WHERE id = ?
+        ");
         $updateStmt->execute([$points, $mc['id']]);
     }
-    
-    // Calculate total points earned and total possible points
+
+    // -----------------------------------------------------
+    // RECOUNT TOTAL POINTS AFTER GRADING
+    // -----------------------------------------------------
     $stmt = $conn->prepare("
         SELECT 
-            SUM(sa.points_earned) as total_earned,
-            SUM(q.points) as total_possible
+            SUM(sa.points_earned) AS total_earned,
+            SUM(q.points) AS total_possible
         FROM student_answers sa
         JOIN questions q ON sa.question_id = q.id
         WHERE sa.attempt_id = ?
     ");
     $stmt->execute([$attemptId]);
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    $totalEarned = floatval($result['total_earned'] ?? 0);
+
+    $totalEarned   = floatval($result['total_earned'] ?? 0);
     $totalPossible = floatval($result['total_possible'] ?? 1);
-    
-    // Calculate percentage for display
+
     $percentage = ($totalPossible > 0) ? ($totalEarned / $totalPossible) * 100 : 0;
-    
-    // ✅ FIX: Store the RAW POINTS EARNED, not the percentage
-    // The student's quiz page will calculate the percentage for display
+
+    // -----------------------------------------------------
+    // COMPUTE PASS / FAIL STATUS
+    // -----------------------------------------------------
+    $status = ($percentage >= 75) ? 'PASSED' : 'FAILED';
+
+    // -----------------------------------------------------
+    // UPDATE QUIZ ATTEMPT WITH FINAL SCORE & STATUS
+    // -----------------------------------------------------
     $stmt = $conn->prepare("
-        UPDATE quiz_attempts 
-        SET score = ?, status = 'Completed'
+        UPDATE quiz_attempts
+        SET score = ?, total_questions = ?, status = ?
         WHERE id = ?
     ");
-    $stmt->execute([$totalEarned, $attemptId]);
-    
+    $stmt->execute([$totalEarned, $totalPossible, $status, $attemptId]);
+
     echo json_encode([
         'success' => true,
         'score_raw' => $totalEarned,
         'total_possible' => $totalPossible,
-        'percentage' => round($percentage, 2)
+        'percentage' => round($percentage, 2),
+        'status' => $status
     ]);
-    
+
 } catch (Exception $e) {
     echo json_encode(['success' => false, 'error' => $e->getMessage()]);
 }
+?>

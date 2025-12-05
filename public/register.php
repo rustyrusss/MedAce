@@ -1,5 +1,25 @@
 <?php
 session_start();
+
+// Retrieve old inputs
+$old = $_SESSION['old'] ?? [];
+
+function old($key, $default = '') {
+    global $old;
+    return isset($old[$key]) ? htmlspecialchars($old[$key]) : htmlspecialchars($default);
+}
+
+// Retrieve error/success
+$error = $_SESSION['error'] ?? null;
+$success = $_SESSION['success'] ?? null;
+
+// Sections map for JS
+$sections_map = [
+    1 => ["1A","1B","1C","1D","1E"],
+    2 => ["2A","2B","2C","2D","2E"],
+    3 => ["3A","3B","3C","3D","3E"],
+    4 => ["4A","4B","4C","4D","4E"],
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -8,16 +28,24 @@ session_start();
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MedAce - Register</title>
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+  </style>
 </head>
-<body class="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-teal-50 via-blue-50 to-indigo-100 overflow-hidden">
+
+<body class="relative h-screen w-screen flex items-center justify-center bg-gradient-to-br from-teal-50 via-blue-50 to-indigo-100">
 
   <!-- Background Blobs -->
-  <div class="absolute -top-20 -left-20 w-72 h-72 bg-teal-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse"></div>
-  <div class="absolute top-40 -right-20 w-80 h-80 bg-blue-400 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse"></div>
-  <div class="absolute -bottom-20 left-40 w-72 h-72 bg-indigo-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse"></div>
+  <div class="absolute -top-32 -left-32 w-80 h-80 bg-teal-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30"></div>
+  <div class="absolute top-20 -right-32 w-96 h-96 bg-blue-400 rounded-full mix-blend-multiply filter blur-3xl opacity-30"></div>
+  <div class="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-96 h-96 bg-indigo-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30"></div>
 
-  <!-- Medical Cross Pattern Overlay -->
-  <svg class="absolute inset-0 w-full h-full opacity-10" xmlns="http://www.w3.org/2000/svg">
+  <!-- Pattern -->
+  <svg class="absolute inset-0 w-full h-full opacity-10 pointer-events-none" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <pattern id="crossPattern" width="40" height="40" patternUnits="userSpaceOnUse">
         <path d="M20 0v40M0 20h40" stroke="#14b8a6" stroke-width="1.2" />
@@ -26,184 +54,165 @@ session_start();
     <rect width="100%" height="100%" fill="url(#crossPattern)" />
   </svg>
 
-  <!-- Register Card -->
-  <div class="relative z-10 w-full max-w-lg bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl p-10 border border-gray-200">
+  <!-- Width Wrapper -->
+  <div class="w-full px-4 max-w-[500px] sm:max-w-[560px] lg:max-w-[650px] xl:max-w-[700px]">
 
-    <!-- Header -->
-    <div class="text-center mb-8">
-      <div class="mx-auto w-16 h-16 flex items-center justify-center bg-gradient-to-br from-teal-500 to-blue-500 rounded-full shadow-lg mb-4">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-        </svg>
-      </div>
-      <h2 class="text-3xl font-bold text-gray-800 tracking-tight">Create Account</h2>
-      <p class="text-sm text-gray-500">Join <span class="font-semibold text-teal-600">MedAce</span> and start your journey 🚑</p>
-    </div>
+    <!-- Card -->
+    <div class="bg-white/80 backdrop-blur-xl border border-gray-200 rounded-2xl shadow-xl 
+                p-5 sm:p-6 lg:p-7">
 
-    <!-- Notifications -->
-    <?php if (isset($_SESSION['error'])): ?>
-      <div class="mb-4 p-3 text-sm text-red-700 bg-red-100 rounded-lg text-center">
-        <?= $_SESSION['error']; ?>
-      </div>
-      <?php unset($_SESSION['error']); ?>
-    <?php endif; ?>
-
-    <?php if (isset($_SESSION['success'])): ?>
-      <div class="mb-4 p-3 text-sm text-green-700 bg-green-100 rounded-lg text-center">
-        <?= $_SESSION['success']; ?>
-      </div>
-      <?php unset($_SESSION['success']); ?>
-    <?php endif; ?>
-
-    <!-- Registration Form -->
-    <form action="../actions/register_action.php" method="POST" class="space-y-6">
-
-      <!-- First Name + Last Name -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <div class="relative">
-          <input type="text" id="firstname" name="firstname" required
-            class="peer w-full px-4 pt-5 pb-2 border border-gray-300 rounded-xl shadow-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-800 placeholder-transparent"
-            placeholder="First Name">
-          <label for="firstname" class="absolute left-4 top-2 text-gray-500 text-sm transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-gray-400 peer-placeholder-shown:text-base peer-focus:top-2 peer-focus:text-sm peer-focus:text-teal-600">
-            First Name
-          </label>
+      <!-- Header -->
+      <div class="text-center mb-4">
+        <div class="mx-auto w-12 h-12 flex items-center justify-center bg-gradient-to-br from-teal-500 to-blue-500 rounded-full shadow-md mb-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
         </div>
-        <div class="relative">
-          <input type="text" id="lastname" name="lastname" required
-            class="peer w-full px-4 pt-5 pb-2 border border-gray-300 rounded-xl shadow-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-800 placeholder-transparent"
-            placeholder="Last Name">
-          <label for="lastname" class="absolute left-4 top-2 text-gray-500 text-sm transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-gray-400 peer-placeholder-shown:text-base peer-focus:top-2 peer-focus:text-sm peer-focus:text-teal-600">
-            Last Name
-          </label>
-        </div>
+        <h2 class="text-xl font-bold text-gray-800">Create Account</h2>
+        <p class="text-xs text-gray-500">Join <span class="font-semibold text-teal-600">MedAce</span> 🚑</p>
       </div>
 
-      <!-- Role Selection -->
-      <div class="relative">
-        <select id="role" name="role" required
-          class="peer w-full px-4 pt-5 pb-2 border border-gray-300 rounded-xl shadow-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-800">
+      <!-- Alerts -->
+      <?php if ($error): ?>
+        <div class="mb-3 p-2 text-sm text-red-700 bg-red-100 rounded text-center">
+          <?= htmlspecialchars($error) ?>
+        </div>
+      <?php endif; ?>
+
+      <?php if ($success): ?>
+        <div class="mb-3 p-2 text-sm text-green-700 bg-green-100 rounded text-center">
+          <?= htmlspecialchars($success) ?>
+        </div>
+      <?php endif; ?>
+
+      <!-- FORM -->
+      <form action="../actions/register_action.php" method="POST" class="space-y-3">
+
+        <!-- First + Last -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <input name="firstname" type="text" placeholder="First Name" required 
+                 value="<?= old('firstname') ?>"
+                 class="px-3 py-2 border rounded-xl text-sm">
+
+          <input name="lastname" type="text" placeholder="Last Name" required 
+                 value="<?= old('lastname') ?>"
+                 class="px-3 py-2 border rounded-xl text-sm">
+        </div>
+
+        <!-- Student ID -->
+        <div id="studentIdField" class="<?= (old('role') === 'student') ? '' : 'hidden' ?>">
+          <input name="student_id" type="text" placeholder="Student ID"
+                 value="<?= old('student_id') ?>"
+                 class="w-full px-3 py-2 border rounded-xl text-sm">
+        </div>
+
+        <!-- Role -->
+        <select id="role" name="role" required class="w-full px-3 py-2 border rounded-xl text-sm">
           <option value="">Select Role</option>
-          <option value="student">Student</option>
-          <option value="professor">Professor</option>
+          <option value="student" <?= old('role') === 'student' ? 'selected' : '' ?>>Student</option>
+          <option value="professor" <?= old('role') === 'professor' ? 'selected' : '' ?>>Professor</option>
         </select>
-        <label for="role" class="absolute left-4 top-2 text-gray-500 text-sm peer-focus:text-teal-600">Role</label>
-      </div>
 
-      <!-- Year + Section (Hidden when professor is selected) -->
-      <div id="studentFields" class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <div class="relative">
-          <select id="year" name="year"
-            class="peer w-full px-4 pt-5 pb-2 border border-gray-300 rounded-xl shadow-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-800">
+        <!-- Year + Section -->
+        <div id="studentFields"
+             class="grid grid-cols-1 sm:grid-cols-2 gap-3 <?= (old('role') === 'student') ? '' : 'hidden' ?>">
+
+          <select id="year" name="year" class="px-3 py-2 border rounded-xl text-sm">
             <option value="">Select Year</option>
-            <option value="1">1st Year</option>
-            <option value="2">2nd Year</option>
-            <option value="3">3rd Year</option>
-            <option value="4">4th Year</option>
+            <option value="1" <?= old('year') === '1' ? 'selected' : '' ?>>1st Year</option>
+            <option value="2" <?= old('year') === '2' ? 'selected' : '' ?>>2nd Year</option>
+            <option value="3" <?= old('year') === '3' ? 'selected' : '' ?>>3rd Year</option>
+            <option value="4" <?= old('year') === '4' ? 'selected' : '' ?>>4th Year</option>
           </select>
-          <label for="year" class="absolute left-4 top-2 text-gray-500 text-sm peer-focus:text-teal-600">Year</label>
-        </div>
-        <div class="relative">
-          <select id="section" name="section"
-            class="peer w-full px-4 pt-5 pb-2 border border-gray-300 rounded-xl shadow-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-800">
-            <option value="">Select Section</option>
+
+          <select id="section" name="section" class="px-3 py-2 border rounded-xl text-sm">
+            <option value=""><?= old('section') ?: "Select Section" ?></option>
           </select>
-          <label for="section" class="absolute left-4 top-2 text-gray-500 text-sm peer-focus:text-teal-600">Section</label>
         </div>
-      </div>
 
-      <!-- Email -->
-      <div class="relative">
-        <input type="email" id="email" name="email" required
-          class="peer w-full px-4 pt-5 pb-2 border border-gray-300 rounded-xl shadow-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-800 placeholder-transparent"
-          placeholder="Email">
-        <label for="email" class="absolute left-4 top-2 text-gray-500 text-sm transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-gray-400 peer-placeholder-shown:text-base peer-focus:top-2 peer-focus:text-sm peer-focus:text-teal-600">
-          Email
-        </label>
-      </div>
+        <!-- Email -->
+        <input type="email" name="email" required placeholder="Email"
+               value="<?= old('email') ?>"
+               class="w-full px-3 py-2 border rounded-xl text-sm">
 
-      <!-- Username -->
-      <div class="relative">
-        <input type="text" id="username" name="username" required
-          class="peer w-full px-4 pt-5 pb-2 border border-gray-300 rounded-xl shadow-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-800 placeholder-transparent"
-          placeholder="Username">
-        <label for="username" class="absolute left-4 top-2 text-gray-500 text-sm transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-gray-400 peer-placeholder-shown:text-base peer-focus:top-2 peer-focus:text-sm peer-focus:text-teal-600">
-          Username
-        </label>
-      </div>
+        <!-- Username -->
+        <input type="text" name="username" required placeholder="Username"
+               value="<?= old('username') ?>"
+               class="w-full px-3 py-2 border rounded-xl text-sm">
 
-      <!-- Password -->
-      <div class="relative">
-        <input type="password" id="password" name="password" required
-          class="peer w-full px-4 pt-5 pb-2 border border-gray-300 rounded-xl shadow-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-800 placeholder-transparent"
-          placeholder="Password">
-        <label for="password" class="absolute left-4 top-2 text-gray-500 text-sm transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-gray-400 peer-placeholder-shown:text-base peer-focus:top-2 peer-focus:text-sm peer-focus:text-teal-600">
-          Password
-        </label>
-      </div>
+        <!-- Password -->
+        <input type="password" name="password" required placeholder="Password"
+               class="w-full px-3 py-2 border rounded-xl text-sm">
 
-      <!-- Confirm Password -->
-      <div class="relative">
-        <input type="password" id="confirm" name="confirm" required
-          class="peer w-full px-4 pt-5 pb-2 border border-gray-300 rounded-xl shadow-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-800 placeholder-transparent"
-          placeholder="Confirm Password">
-        <label for="confirm" class="absolute left-4 top-2 text-gray-500 text-sm transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-gray-400 peer-placeholder-shown:text-base peer-focus:top-2 peer-focus:text-sm peer-focus:text-teal-600">
-          Confirm Password
-        </label>
-      </div>
+        <input type="password" name="confirm" required placeholder="Confirm Password"
+               class="w-full px-3 py-2 border rounded-xl text-sm">
 
-      <button type="submit"
-        class="w-full bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 text-white font-semibold py-3 rounded-xl shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition duration-200 text-lg">
-        Sign Up
-      </button>
-    </form>
+        <!-- Submit -->
+        <button class="w-full bg-gradient-to-r from-teal-600 to-blue-600 text-white font-semibold py-2 rounded-xl text-sm">
+          Sign Up
+        </button>
+      </form>
 
-    <!-- Extra Links -->
-    <div class="mt-6 text-center space-y-2">
-      <p class="text-sm text-gray-500">Already have an account? 
-        <a href="index.php" class="text-teal-600 hover:text-teal-700 font-medium">Log In</a>
+      <!-- Footer -->
+      <p class="text-center text-xs text-gray-500 mt-3">
+        Already have an account?
+        <a href="index.php" class="text-teal-600 font-medium">Log In</a>
       </p>
+
     </div>
   </div>
 
-  <!-- Script for Dynamic Section + Role -->
+  <!-- JS -->
   <script>
-    const roleSelect = document.getElementById("role");
+    const sectionsMap = <?= json_encode($sections_map) ?>;
+
+    const role = document.getElementById("role");
     const studentFields = document.getElementById("studentFields");
-    const yearSelect = document.getElementById("year");
+    const studentIdField = document.getElementById("studentIdField");
+    const year = document.getElementById("year");
     const section = document.getElementById("section");
 
-    const sections = {
-      1: ["1A", "1B", "1C", "1D", "1E"],
-      2: ["2A", "2B", "2C", "2D", "2E"],
-      3: ["3A", "3B", "3C", "3D", "3E"],
-      4: ["4A", "4B", "4C", "4D", "4E"],
-    };
+    // Role toggle
+    function toggleStudentFields() {
+      const isStudent = role.value === "student";
+      studentFields.classList.toggle("hidden", !isStudent);
+      studentIdField.classList.toggle("hidden", !isStudent);
+    }
 
-    // populate sections when year changes
-    yearSelect.addEventListener("change", function () {
-      const selectedYear = this.value;
-      section.innerHTML = '<option value="">Select Section</option>'; // reset
+    role.addEventListener("change", toggleStudentFields);
 
-      if (sections[selectedYear]) {
-        sections[selectedYear].forEach(sec => {
-          let option = document.createElement("option");
-          option.value = sec;
-          option.textContent = sec;
-          section.appendChild(option);
+    // Populate section dropdown
+    function populateSections(selectedYear, selectedSection = "") {
+      section.innerHTML = "<option value=''>Select Section</option>";
+      if (sectionsMap[selectedYear]) {
+        sectionsMap[selectedYear].forEach(sec => {
+          const opt = document.createElement("option");
+          opt.value = sec;
+          opt.textContent = sec;
+          if (sec === selectedSection) opt.selected = true;
+          section.appendChild(opt);
         });
       }
-    });
+    }
 
-    // hide/show student fields depending on role
-    roleSelect.addEventListener("change", function () {
-      if (this.value === "professor") {
-        studentFields.style.display = "none";
-        yearSelect.value = "";
-        section.value = "";
-      } else {
-        studentFields.style.display = "grid";
+    year.addEventListener("change", () => populateSections(year.value));
+
+    // Restore previous fields on load
+    document.addEventListener("DOMContentLoaded", () => {
+      toggleStudentFields();
+
+      const oldYear = "<?= old('year') ?>";
+      const oldSection = "<?= old('section') ?>";
+
+      if (oldYear) {
+        populateSections(oldYear, oldSection);
       }
     });
   </script>
+
 </body>
 </html>
+
+<?php
+unset($_SESSION['old'], $_SESSION['error'], $_SESSION['success']);
+?>
