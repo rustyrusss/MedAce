@@ -1,0 +1,206 @@
+<?php
+/**
+ * journey_fetch.php - Student Journey Data Fetcher
+ * 
+ * This file fetches student progress data including modules and quizzes.
+ * UPDATED: Now returns the HIGHEST SCORE for each quiz instead of the latest attempt.
+ */
+/**
+function getStudentJourney($conn, $studentId) {
+    $result = [
+        'modules' => [],
+        'quizzes' => [],
+        'stats' => [
+            'completed' => 0,
+            'total' => 0,
+            'progress' => 0
+        ]
+    ];
+    
+    // Fetch modules with student progress
+    $moduleStmt = $conn->prepare("
+        SELECT 
+            m.id,
+            m.title,
+            m.description,
+            COALESCE(sp.status, 'pending') as status,
+            sp.started_at,
+            sp.completed_at
+        FROM modules m
+        LEFT JOIN student_progress sp ON sp.module_id = m.id AND sp.student_id = ?
+        WHERE m.status IN ('active', 'published')
+        ORDER BY m.created_at ASC
+    ");
+    $moduleStmt->execute([$studentId]);
+    $result['modules'] = $moduleStmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Fetch quizzes with HIGHEST SCORE for each quiz (not latest attempt)
+    // This uses a subquery to get the best attempt for each quiz
+    $quizStmt = $conn->prepare("
+        SELECT 
+            q.id,
+            q.title,
+            q.description,
+            q.passing_score,
+            best_attempt.score,
+            best_attempt.status,
+            best_attempt.completed_at
+        FROM quizzes q
+        LEFT JOIN (
+            SELECT 
+                qa.quiz_id,
+                qa.score,
+                qa.status,
+                qa.completed_at
+            FROM quiz_attempts qa
+            INNER JOIN (
+                SELECT 
+                    quiz_id, 
+                    MAX(score) as max_score
+                FROM quiz_attempts
+                WHERE student_id = ?
+                GROUP BY quiz_id
+            ) best ON qa.quiz_id = best.quiz_id 
+                   AND qa.score = best.max_score 
+                   AND qa.student_id = ?
+            GROUP BY qa.quiz_id
+        ) best_attempt ON q.id = best_attempt.quiz_id
+        WHERE q.status = 'active'
+        ORDER BY q.created_at ASC
+    ");
+    $quizStmt->execute([$studentId, $studentId]);
+    $quizzes = $quizStmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Process quizzes - set status based on score if not already set
+    foreach ($quizzes as &$quiz) {
+        if ($quiz['score'] !== null) {
+            // Determine pass/fail based on score and passing_score
+            $passingScore = $quiz['passing_score'] ?? 70;
+            if ($quiz['score'] >= $passingScore) {
+                $quiz['status'] = 'passed';
+            } else {
+                $quiz['status'] = 'failed';
+            }
+        } else {
+            $quiz['status'] = 'pending';
+        }
+    }
+    unset($quiz); // Break reference
+    
+    $result['quizzes'] = $quizzes;
+    
+    // Calculate stats
+    $completedModules = count(array_filter($result['modules'], fn($m) => strtolower($m['status']) === 'completed'));
+    $passedQuizzes = count(array_filter($result['quizzes'], fn($q) => strtolower($q['status']) === 'passed'));
+    
+    $totalItems = count($result['modules']) + count($result['quizzes']);
+    $completedItems = $completedModules + $passedQuizzes;
+    
+    $result['stats'] = [
+        'completed' => $completedItems,
+        'total' => $totalItems,
+        'progress' => $totalItems > 0 ? round(($completedItems / $totalItems) * 100) : 0
+    ];
+    
+    return $result;
+}
+    */
+
+/**
+ * Alternative simpler version if the above query is too complex for your database structure.
+ * This fetches all attempts and lets PHP find the highest score.
+
+function getStudentJourneySimple($conn, $studentId) {
+    $result = [
+        'modules' => [],
+        'quizzes' => [],
+        'stats' => [
+            'completed' => 0,
+            'total' => 0,
+            'progress' => 0
+        ]
+    ];
+    
+    // Fetch modules with student progress
+    $moduleStmt = $conn->prepare("
+        SELECT 
+            m.id,
+            m.title,
+            m.description,
+            COALESCE(sp.status, 'pending') as status,
+            sp.started_at,
+            sp.completed_at
+        FROM modules m
+        LEFT JOIN student_progress sp ON sp.module_id = m.id AND sp.student_id = ?
+        WHERE m.status IN ('active', 'published')
+        ORDER BY m.created_at ASC
+    ");
+    $moduleStmt->execute([$studentId]);
+    $result['modules'] = $moduleStmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Fetch ALL quiz attempts for this student
+    $quizStmt = $conn->prepare("
+        SELECT 
+            q.id,
+            q.title,
+            q.description,
+            q.passing_score,
+            qa.score,
+            qa.status,
+            qa.completed_at
+        FROM quizzes q
+        LEFT JOIN quiz_attempts qa ON q.id = qa.quiz_id AND qa.student_id = ?
+        WHERE q.status = 'active'
+        ORDER BY q.created_at ASC, qa.score DESC
+    ");
+    $quizStmt->execute([$studentId]);
+    $allQuizAttempts = $quizStmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Group by quiz and keep only highest score
+    $quizMap = [];
+    foreach ($allQuizAttempts as $attempt) {
+        $quizId = $attempt['id'];
+        
+        if (!isset($quizMap[$quizId])) {
+            $quizMap[$quizId] = $attempt;
+        } else {
+            // Keep the one with higher score
+            $existingScore = $quizMap[$quizId]['score'] ?? -1;
+            $newScore = $attempt['score'] ?? -1;
+            
+            if ($newScore > $existingScore) {
+                $quizMap[$quizId] = $attempt;
+            }
+        }
+    }
+    
+    // Process quizzes - set status based on score
+    foreach ($quizMap as &$quiz) {
+        if ($quiz['score'] !== null) {
+            $passingScore = $quiz['passing_score'] ?? 70;
+            $quiz['status'] = ($quiz['score'] >= $passingScore) ? 'passed' : 'failed';
+        } else {
+            $quiz['status'] = 'pending';
+        }
+    }
+    unset($quiz);
+    
+    $result['quizzes'] = array_values($quizMap);
+    
+    // Calculate stats
+    $completedModules = count(array_filter($result['modules'], fn($m) => strtolower($m['status']) === 'completed'));
+    $passedQuizzes = count(array_filter($result['quizzes'], fn($q) => strtolower($q['status']) === 'passed'));
+    
+    $totalItems = count($result['modules']) + count($result['quizzes']);
+    $completedItems = $completedModules + $passedQuizzes;
+    
+    $result['stats'] = [
+        'completed' => $completedItems,
+        'total' => $totalItems,
+        'progress' => $totalItems > 0 ? round(($completedItems / $totalItems) * 100) : 0
+    ];
+    
+    return $result;
+}
+
+*/

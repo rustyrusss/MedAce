@@ -12,13 +12,24 @@ if (!isset($_SESSION['user_id'])) {
 $studentId = $_SESSION['user_id'];
 $journeyData = getStudentJourney($conn, $studentId);
 
-// Avoid duplicate quizzes by only keeping the latest attempt
+// Avoid duplicate quizzes by keeping the HIGHEST SCORE attempt (not latest)
 $modules = $journeyData['modules'] ?? [];
 $quizzes = [];
 if (!empty($journeyData['quizzes'])) {
     $temp = [];
     foreach ($journeyData['quizzes'] as $quiz) {
-        $temp[$quiz['id']] = $quiz; // overwrite duplicates, keep latest
+        $quizId = $quiz['id'];
+        // Keep the attempt with the highest score
+        if (!isset($temp[$quizId])) {
+            $temp[$quizId] = $quiz;
+        } else {
+            // Compare scores - keep the higher one
+            $existingScore = $temp[$quizId]['score'] ?? 0;
+            $newScore = $quiz['score'] ?? 0;
+            if ($newScore > $existingScore) {
+                $temp[$quizId] = $quiz;
+            }
+        }
     }
     $quizzes = array_values($temp);
 }
@@ -68,6 +79,7 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <script>
         tailwind.config = {
             theme: {
@@ -130,34 +142,23 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
         }
 
         @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         @keyframes scaleIn {
-            from {
-                opacity: 0;
-                transform: scale(0.9);
-            }
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
         }
 
-        .animate-fade-in-up {
-            animation: fadeInUp 0.6s ease-out;
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
         }
 
-        .animate-scale-in {
-            animation: scaleIn 0.4s ease-out;
-        }
+        .animate-fade-in-up { animation: fadeInUp 0.6s ease-out; }
+        .animate-scale-in { animation: scaleIn 0.4s ease-out; }
+        .message-slide-in { animation: slideInRight 0.3s ease-out; }
 
         .sidebar-transition {
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -218,7 +219,6 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
             }
         }
 
-        /* Prevent body scroll when sidebar is open on mobile */
         body.sidebar-open {
             overflow: hidden;
         }
@@ -229,14 +229,12 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
             }
         }
 
-        /* Prevent horizontal scroll */
         .main-container {
             width: 100%;
             max-width: 100%;
             overflow-x: hidden;
         }
 
-        /* Responsive chart container */
         .chart-container {
             position: relative;
             width: 100%;
@@ -252,7 +250,6 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
             }
         }
 
-        /* Responsive stats grid */
         @media (max-width: 640px) {
             .stats-grid {
                 grid-template-columns: 1fr 1fr;
@@ -260,36 +257,52 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
             }
         }
 
-        /* Chatbot Styles */
-        @keyframes slideInRight {
-            from {
-                opacity: 0;
-                transform: translateX(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
+        /* Chatbot Styles - Right Side */
+        #chatbotContainer {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            z-index: 45;
         }
-
-        .message-slide-in {
-            animation: slideInRight 0.3s ease-out;
+        
+        #chatbotWindow {
+            position: fixed;
+            bottom: 6rem;
+            right: 2rem;
+            width: 380px;
+            max-width: calc(100vw - 2rem);
+            z-index: 44;
         }
-
+        
+        #quickActions {
+            position: fixed;
+            bottom: 6rem;
+            right: 2rem;
+            z-index: 43;
+        }
+        
+        @media (min-width: 1025px) {
+            #chatbotContainer { right: 2rem; }
+            #chatbotWindow { right: 2rem; width: 400px; }
+            #quickActions { right: 2rem; }
+        }
+        
         @media (max-width: 640px) {
+            #chatbotContainer { right: 1rem; bottom: 1rem; }
             #chatbotWindow {
-                position: fixed;
+                left: 0;
                 bottom: 0;
                 right: 0;
-                left: 0;
+                width: 100%;
                 max-width: 100%;
-                height: calc(100vh - 80px);
+                height: calc(100vh - 60px);
                 border-radius: 1rem 1rem 0 0;
             }
+            #quickActions { right: 1rem; bottom: 5rem; }
             
-            #chatbotContainer {
-                bottom: 1rem;
-                right: 1rem;
+            /* Hide the toggle button when chat is open on mobile */
+            #chatbotContainer.chat-open {
+                display: none;
             }
         }
     </style>
@@ -300,50 +313,79 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
     <!-- Sidebar -->
     <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 sidebar-transition sidebar-collapsed">
         <div class="flex flex-col h-full">
+            
+            <!-- Profile Section -->
             <div class="flex items-center justify-between px-4 py-5 border-b border-gray-200">
                 <div class="flex items-center space-x-3 min-w-0">
                     <div class="relative flex-shrink-0">
-                        <img src="<?= htmlspecialchars($profilePic) ?>" alt="Profile" class="w-12 h-12 rounded-full object-cover ring-2 ring-primary-500">
+                        <img src="<?= htmlspecialchars($profilePic) ?>" 
+                             alt="Profile" 
+                             class="w-12 h-12 rounded-full object-cover ring-2 ring-primary-500">
                         <span class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full"></span>
                     </div>
+
                     <div class="profile-info sidebar-transition min-w-0">
-                        <h3 class="font-semibold text-gray-900 text-sm truncate"><?= htmlspecialchars(ucwords(strtolower($studentName))) ?></h3>
+                        <h3 class="font-semibold text-gray-900 text-sm truncate">
+                            <?= htmlspecialchars(ucwords(strtolower($studentName))) ?>
+                        </h3>
                         <p class="text-xs text-gray-500">Student</p>
                     </div>
                 </div>
             </div>
 
-            <div class="px-4 py-3 border-b border-gray-200 hidden lg:block">
+            <!-- Desktop Toggle Button INSIDE SIDEBAR -->
+          <div class="px-3 lg:px-4 py-2 lg:py-3 border-b border-gray-200 hidden lg:block">
                 <button onclick="toggleSidebar()" class="w-full flex items-center justify-center p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600">
                     <i class="fas fa-bars text-lg"></i>
                 </button>
             </div>
 
-            <nav class="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
-                <a href="dashboard.php" class="flex items-center space-x-3 px-3 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg font-medium transition-all">
-                    <i class="fas fa-home text-gray-400 w-5 text-center flex-shrink-0"></i>
-                    <span class="nav-text sidebar-transition whitespace-nowrap">Dashboard</span>
-                </a>
-                <a href="progress.php" class="flex items-center space-x-3 px-3 py-3 text-gray-700 bg-primary-50 border-l-4 border-primary-500 rounded-r-lg font-medium transition-all">
-                    <i class="fas fa-chart-line text-primary-600 w-5 text-center flex-shrink-0"></i>
-                    <span class="nav-text sidebar-transition whitespace-nowrap">My Progress</span>
-                </a>
-                <a href="quizzes.php" class="flex items-center space-x-3 px-3 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg font-medium transition-all">
-                    <i class="fas fa-clipboard-list text-gray-400 w-5 text-center flex-shrink-0"></i>
-                    <span class="nav-text sidebar-transition whitespace-nowrap">Quizzes</span>
-                </a>
-                <a href="resources.php" class="flex items-center space-x-3 px-3 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg font-medium transition-all">
-                    <i class="fas fa-book text-gray-400 w-5 text-center flex-shrink-0"></i>
-                    <span class="nav-text sidebar-transition whitespace-nowrap">Resources</span>
-                </a>
+           <!-- Navigation -->
+<nav class="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
+
+    <a href="dashboard.php" 
+       class="flex items-center space-x-3 px-3 py-3 text-gray-600 
+              hover:bg-gray-50 hover:text-gray-900 rounded-lg font-medium transition-all">
+        <i class="fas fa-home text-gray-400 w-5 flex-shrink-0 text-center"></i>
+        <span class="nav-text sidebar-transition whitespace-nowrap">Dashboard</span>
+    </a>
+
+    <!-- ACTIVE LINK FOR THIS PAGE -->
+    <a href="progress.php" 
+       class="flex items-center space-x-3 px-3 py-3 text-gray-700 
+              bg-primary-50 border-l-4 border-primary-500 rounded-r-lg 
+              font-medium transition-all">
+        <i class="fas fa-chart-line text-primary-600 w-5 flex-shrink-0 text-center"></i>
+        <span class="nav-text sidebar-transition whitespace-nowrap">My Progress</span>
+    </a>
+
+    <a href="quizzes.php" 
+       class="flex items-center space-x-3 px-3 py-3 text-gray-600 
+              hover:bg-gray-50 hover:text-gray-900 rounded-lg font-medium transition-all">
+        <i class="fas fa-clipboard-list text-gray-400 w-5 flex-shrink-0 text-center"></i>
+        <span class="nav-text sidebar-transition whitespace-nowrap">Quizzes</span>
+    </a>
+
+    <a href="resources.php" 
+       class="flex items-center space-x-3 px-3 py-3 text-gray-600 
+              hover:bg-gray-50 hover:text-gray-900 rounded-lg font-medium transition-all">
+        <i class="fas fa-book text-gray-400 w-5 flex-shrink-0 text-center"></i>
+        <span class="nav-text sidebar-transition whitespace-nowrap">Resources</span>
+    </a>
+
+</nav>
+
             </nav>
 
+            <!-- Logout -->
             <div class="px-3 py-4 border-t border-gray-200">
-                <a href="../actions/logout_action.php" class="flex items-center space-x-3 px-3 py-3 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-all">
+                <a href="../actions/logout_action.php" 
+                   class="flex items-center space-x-3 px-3 py-3 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-all">
                     <i class="fas fa-sign-out-alt w-5 text-center flex-shrink-0"></i>
                     <span class="nav-text sidebar-transition whitespace-nowrap">Logout</span>
                 </a>
             </div>
+
         </div>
     </aside>
 
@@ -351,9 +393,9 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
     <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden lg:hidden" onclick="closeSidebar()"></div>
 
     <!-- Main Content -->
-    <main id="main-content" class="flex-1 transition-all duration-300 main-container" style="margin-left: 5rem;">
+   <main id="main-content" class="flex-1 transition-all duration-300 main-container overflow-y-auto" style="margin-left: 5rem;">
         <!-- Top Bar -->
-        <header class="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-4">
+       <header class="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-4">
             <div class="flex items-center justify-between">
                 <button onclick="toggleSidebar()" class="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors">
                     <i class="fas fa-bars text-gray-600 text-xl"></i>
@@ -389,7 +431,7 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
                                  style="width: <?= $progressPercent ?>%"></div>
                         </div>
 
-                        <!-- Stats Grid - COMPLETED, PASSED, FAILED, PENDING -->
+                        <!-- Stats Grid -->
                         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 stats-grid">
                             <div class="text-center p-3 sm:p-4 bg-emerald-50 rounded-lg border border-emerald-200">
                                 <p class="text-xl sm:text-2xl font-bold text-emerald-700"><?= $completedModules ?></p>
@@ -483,7 +525,7 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
                     <div class="px-4 sm:px-6 py-4 border-b border-gray-200">
                         <h3 class="text-base sm:text-lg font-semibold text-gray-900 flex items-center">
                             <i class="fas fa-clipboard-list text-purple-500 mr-2"></i>
-                            Quizzes
+                            Quizzes <span class="text-xs text-gray-400 ml-2">(Best Scores)</span>
                         </h3>
                     </div>
                     <div class="p-4 sm:p-6 max-h-96 overflow-y-auto">
@@ -497,6 +539,11 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
                                                 <h4 class="font-semibold text-sm sm:text-base text-gray-900 mb-1 break-words"><?= htmlspecialchars($quiz['title']) ?></h4>
                                                 <?php if (!empty($quiz['description'])): ?>
                                                     <p class="text-xs sm:text-sm text-gray-600 break-words"><?= htmlspecialchars($quiz['description']) ?></p>
+                                                <?php endif; ?>
+                                                <?php if (isset($quiz['score'])): ?>
+                                                    <p class="text-xs text-purple-600 mt-1 font-medium">
+                                                        <i class="fas fa-trophy mr-1"></i>Best Score: <?= htmlspecialchars($quiz['score']) ?>%
+                                                    </p>
                                                 <?php endif; ?>
                                             </div>
                                             <span class="flex-shrink-0 inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap
@@ -535,73 +582,197 @@ $progressPercent = round(($totalCompleted / $totalSteps) * 100);
     </main>
 </div>
 
-<?php 
-// Include the FIXED chatbot component
-include __DIR__ . '/../includes/chatbot.php'; 
-?>
+<!-- ========================================== -->
+<!-- CHATBOT UI - COMPLETE VERSION -->
+<!-- ========================================== -->
 
-<script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<!-- Quick Action Buttons (shown when chatbot is closed) -->
+<div id="quickActions" class="hidden">
+    <div class="bg-white rounded-2xl shadow-xl border border-gray-200 p-3 mb-3 max-w-xs">
+        <p class="text-xs text-gray-500 mb-2 font-medium">Quick Actions:</p>
+        <div class="flex flex-wrap gap-2">
+            <button onclick="quickQuestion('Show my progress')" class="px-3 py-1.5 bg-primary-50 text-primary-700 rounded-full text-xs font-medium hover:bg-primary-100 transition-colors flex items-center gap-1">
+                <i class="fas fa-chart-line text-xs"></i> My Progress
+            </button>
+            <button onclick="quickQuestion('Create flashcards')" class="px-3 py-1.5 bg-green-50 text-green-700 rounded-full text-xs font-medium hover:bg-green-100 transition-colors flex items-center gap-1">
+                <i class="fas fa-layer-group text-xs"></i> Flashcards
+            </button>
+            <button onclick="quickQuestion('Give me study tips')" class="px-3 py-1.5 bg-amber-50 text-amber-700 rounded-full text-xs font-medium hover:bg-amber-100 transition-colors flex items-center gap-1">
+                <i class="fas fa-lightbulb text-xs"></i> Study Tips
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Chatbot Toggle Button -->
+<div id="chatbotContainer">
+    <button id="chatbotToggleBtn" onclick="toggleChatbot()" class="w-14 h-14 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center group">
+        <i id="chatbotIcon" class="fas fa-robot text-xl group-hover:scale-110 transition-transform"></i>
+    </button>
+</div>
+
+<!-- Chatbot Window -->
+<div id="chatbotWindow" class="hidden bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col" style="height: 500px;">
+    <!-- Chat Header -->
+    <div class="bg-gradient-to-r from-primary-600 to-primary-700 text-white px-4 py-3 flex items-center justify-between flex-shrink-0">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                <i class="fas fa-robot text-lg"></i>
+            </div>
+            <div>
+                <h3 class="font-semibold text-sm">MedAce Assistant</h3>
+                <p class="text-xs text-primary-100 flex items-center">
+                    <span class="w-2 h-2 bg-green-400 rounded-full mr-1.5 animate-pulse"></span>
+                    Online
+                </p>
+            </div>
+        </div>
+        <button onclick="toggleChatbot()" class="w-8 h-8 hover:bg-white/20 rounded-full flex items-center justify-center transition-colors">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+    
+    <!-- Quick Action Pills -->
+    <div class="px-4 py-2 border-b border-gray-100 flex-shrink-0">
+        <div class="flex gap-2 overflow-x-auto pb-1">
+            <button onclick="quickQuestion('Show my progress')" class="px-3 py-1 bg-primary-50 text-primary-700 rounded-full text-xs font-medium hover:bg-primary-100 transition-colors whitespace-nowrap flex items-center gap-1">
+                <i class="fas fa-chart-line"></i> My Progress
+            </button>
+            <button onclick="quickQuestion('Create flashcards')" class="px-3 py-1 bg-green-50 text-green-700 rounded-full text-xs font-medium hover:bg-green-100 transition-colors whitespace-nowrap flex items-center gap-1">
+                <i class="fas fa-layer-group"></i> Flashcards
+            </button>
+            <button onclick="quickQuestion('Give me study tips')" class="px-3 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-medium hover:bg-amber-100 transition-colors whitespace-nowrap flex items-center gap-1">
+                <i class="fas fa-lightbulb"></i> Study Tips
+            </button>
+        </div>
+    </div>
+    
+    <!-- Chat Messages -->
+    <div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-4" style="min-height: 0;">
+        <!-- Welcome Message -->
+        <div class="flex items-start space-x-2 message-slide-in">
+            <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-robot text-primary-600 text-sm"></i>
+            </div>
+            <div class="flex-1">
+                <div class="bg-gray-100 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm">
+                    <p class="text-gray-800 text-sm">Hi <?= htmlspecialchars($student['firstname'] ?? 'there') ?>! 👋</p>
+                    <p class="text-gray-600 text-sm mt-1">I'm your AI study assistant. I can help you with:</p>
+                    <ul class="text-gray-600 text-sm mt-2 space-y-1">
+                        <li>• Flashcard quizzes</li>
+                        <li>• Track learning progress</li>
+                        <li>• Nursing questions</li>
+                        <li>• Study tips</li>
+                    </ul>
+                </div>
+                <span class="text-xs text-gray-500 mt-1 block">Just now</span>
+            </div>
+        </div>
+        
+        <!-- Typing Indicator (hidden by default) -->
+        <div id="typingIndicator" class="hidden flex items-start space-x-2">
+            <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-robot text-primary-600 text-sm"></i>
+            </div>
+            <div class="bg-gray-100 rounded-2xl rounded-tl-none px-4 py-3">
+                <div class="flex space-x-1">
+                    <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0ms;"></span>
+                    <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 150ms;"></span>
+                    <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 300ms;"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Chat Input -->
+    <div class="p-3 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+        <form id="chatForm" onsubmit="sendMessage(event)" class="flex items-end gap-2">
+            <div class="flex-1 relative">
+                <textarea 
+                    id="chatInput" 
+                    placeholder="Type your message..." 
+                    class="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none text-sm"
+                    rows="1"
+                    style="max-height: 120px;"
+                    onkeydown="handleInputKeydown(event)"
+                ></textarea>
+            </div>
+            <button type="submit" class="w-10 h-10 bg-primary-600 hover:bg-primary-700 text-white rounded-xl flex items-center justify-center transition-colors flex-shrink-0">
+                <i class="fas fa-paper-plane text-sm"></i>
+            </button>
+        </form>
+    </div>
+</div>
+
 <script>
     // ============================================
-    // GLOBAL VARIABLES (Shared with chatbot)
+    // GLOBAL VARIABLES
     // ============================================
     let sidebarExpanded = false;
     let chatbotOpen = false;
+    let messageHistory = [];
+
+    const API_CONFIG = {
+        url: '../config/chatbot_integration.php',
+        model: 'gpt-4o-nano',
+        maxTokens: 1024
+    };
 
     // ============================================
     // SIDEBAR FUNCTIONS
     // ============================================
-    function toggleSidebar() {
-        const sidebar = document.getElementById('sidebar');
-        const mainContent = document.getElementById('main-content');
-        const overlay = document.getElementById('sidebar-overlay');
-        
-        if (!sidebar || !mainContent || !overlay) {
-            console.error('Sidebar elements not found!');
-            return;
-        }
-        
-        sidebarExpanded = !sidebarExpanded;
-        
-        if (window.innerWidth < 1024) {
-            // Mobile behavior
-            if (sidebarExpanded) {
-                sidebar.classList.remove('sidebar-collapsed');
-                sidebar.classList.add('sidebar-expanded');
-                overlay.classList.remove('hidden');
-                document.body.classList.add('sidebar-open');
-            } else {
-                sidebar.classList.remove('sidebar-expanded');
-                sidebar.classList.add('sidebar-collapsed');
-                overlay.classList.add('hidden');
-                document.body.classList.remove('sidebar-open');
-            }
-        } else {
-            // Desktop behavior
-            sidebar.classList.toggle('sidebar-expanded');
-            sidebar.classList.toggle('sidebar-collapsed');
-            
-            if (sidebarExpanded) {
-                mainContent.style.marginLeft = '18rem';
-            } else {
-                mainContent.style.marginLeft = '5rem';
-            }
-        }
-    }
+ // ============================================
+// SIDEBAR FUNCTIONS
+// ============================================
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const mainContent = document.getElementById('main-content');
+    const overlay = document.getElementById('sidebar-overlay');
 
-    function closeSidebar() {
-        if (window.innerWidth < 1024 && sidebarExpanded) {
-            toggleSidebar();
+    sidebarExpanded = !sidebarExpanded;
+
+    // Mobile (<1025px)
+    if (window.innerWidth < 1025) {
+        if (sidebarExpanded) {
+            sidebar.classList.remove('sidebar-collapsed');
+            sidebar.classList.add('sidebar-expanded');
+            overlay.classList.remove('hidden');
+            document.body.classList.add('sidebar-open');
+        } else {
+            sidebar.classList.remove('sidebar-expanded');
+            sidebar.classList.add('sidebar-collapsed');
+            overlay.classList.add('hidden');
+            document.body.classList.remove('sidebar-open');
+        }
+    } 
+    // Desktop (>=1025px)
+    else {
+        sidebar.classList.toggle('sidebar-expanded');
+        sidebar.classList.toggle('sidebar-collapsed');
+
+        if (sidebarExpanded) {
+            mainContent.style.marginLeft = '18rem';
+        } else {
+            mainContent.style.marginLeft = '5rem';
         }
     }
+}
+
+function closeSidebar() {
+    if (window.innerWidth < 1025 && sidebarExpanded) {
+        toggleSidebar();
+    }
+}
+
 
     // ============================================
-    // CHATBOT TOGGLE (called from chatbot.php)
+    // CHATBOT FUNCTIONS
     // ============================================
     function toggleChatbot() {
         const chatWindow = document.getElementById('chatbotWindow');
         const icon = document.getElementById('chatbotIcon');
         const quickActions = document.getElementById('quickActions');
+        const chatbotContainer = document.getElementById('chatbotContainer');
         
         if (!chatWindow || !icon) {
             console.error('Chatbot elements not found!');
@@ -609,15 +780,17 @@ include __DIR__ . '/../includes/chatbot.php';
         }
         
         chatbotOpen = !chatbotOpen;
-        console.log('Chatbot toggled:', chatbotOpen);
         
         if (chatbotOpen) {
             chatWindow.classList.remove('hidden');
             chatWindow.classList.add('animate-scale-in');
             icon.classList.remove('fa-robot');
             icon.classList.add('fa-times');
-            if (quickActions) {
-                quickActions.classList.add('hidden');
+            if (quickActions) quickActions.classList.add('hidden');
+            
+            // Hide toggle button on mobile when chat is open
+            if (chatbotContainer && window.innerWidth <= 640) {
+                chatbotContainer.classList.add('chat-open');
             }
             
             setTimeout(() => {
@@ -629,7 +802,142 @@ include __DIR__ . '/../includes/chatbot.php';
             chatWindow.classList.remove('animate-scale-in');
             icon.classList.remove('fa-times');
             icon.classList.add('fa-robot');
+            
+            // Show toggle button again
+            if (chatbotContainer) {
+                chatbotContainer.classList.remove('chat-open');
+            }
         }
+    }
+
+    function handleInputKeydown(event) {
+        const textarea = event.target;
+        textarea.style.height = 'auto';
+        textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            sendMessage(event);
+        }
+    }
+
+    async function sendMessage(event) {
+        if (event && event.preventDefault) event.preventDefault();
+        
+        const input = document.getElementById('chatInput');
+        if (!input) return;
+        
+        const message = input.value.trim();
+        if (!message) return;
+        
+        addMessage(message, 'user');
+        input.value = '';
+        input.style.height = 'auto';
+        showTypingIndicator(true);
+        
+        try {
+            const response = await callChatAPI(message);
+            showTypingIndicator(false);
+            addMessage(response, 'bot');
+        } catch (error) {
+            showTypingIndicator(false);
+            addMessage('Sorry, I encountered an error: ' + error.message, 'bot', true);
+        }
+    }
+
+    function addMessage(text, sender, isError = false) {
+        const messagesContainer = document.getElementById('chatMessages');
+        if (!messagesContainer) return;
+        
+        const messageDiv = document.createElement('div');
+        const timestamp = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        
+        if (sender === 'user') {
+            messageDiv.className = 'flex items-start space-x-2 justify-end message-slide-in mb-4';
+            messageDiv.innerHTML = `
+                <div class="flex-1 flex flex-col items-end">
+                    <div class="bg-primary-600 text-white rounded-2xl rounded-tr-none px-4 py-3 shadow-sm max-w-[85%]">
+                        <p class="text-sm break-words">${escapeHtml(text)}</p>
+                    </div>
+                    <span class="text-xs text-gray-500 mt-1">${timestamp}</span>
+                </div>
+                <div class="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center flex-shrink-0">
+                    <i class="fas fa-user text-white text-sm"></i>
+                </div>
+            `;
+        } else {
+            messageDiv.className = 'flex items-start space-x-2 message-slide-in mb-4';
+            messageDiv.innerHTML = `
+                <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <i class="fas fa-robot text-primary-600 text-sm"></i>
+                </div>
+                <div class="flex-1">
+                    <div class="bg-gray-100 ${isError ? 'border-2 border-red-300' : ''} rounded-2xl rounded-tl-none px-4 py-3 shadow-sm">
+                        <p class="text-gray-800 text-sm break-words whitespace-pre-wrap">${isError ? escapeHtml(text) : formatBotMessage(text)}</p>
+                    </div>
+                    <span class="text-xs text-gray-500 mt-1 block">${timestamp}</span>
+                </div>
+            `;
+        }
+        
+        messagesContainer.appendChild(messageDiv);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        messageHistory.push({ role: sender === 'user' ? 'user' : 'assistant', content: text });
+    }
+
+    function showTypingIndicator(show) {
+        const indicator = document.getElementById('typingIndicator');
+        const messagesContainer = document.getElementById('chatMessages');
+        if (!indicator) return;
+        
+        if (show) {
+            indicator.classList.remove('hidden');
+            if (messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        } else {
+            indicator.classList.add('hidden');
+        }
+    }
+
+    async function callChatAPI(userMessage) {
+        try {
+            const response = await fetch(API_CONFIG.url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: userMessage })
+            });
+
+            if (!response.ok) throw new Error(`API request failed: ${response.status}`);
+
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+            if (data.reply) return data.reply;
+            throw new Error('Invalid API response format');
+        } catch (error) {
+            console.error('Chat API Error:', error);
+            throw error;
+        }
+    }
+
+    function quickQuestion(question) {
+        const input = document.getElementById('chatInput');
+        if (input) input.value = question;
+        if (!chatbotOpen) toggleChatbot();
+        setTimeout(() => {
+            const form = document.getElementById('chatForm');
+            if (form) form.dispatchEvent(new Event('submit'));
+        }, 300);
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function formatBotMessage(text) {
+        text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        text = text.replace(/^\d+\.\s+(.+)$/gm, '<div class="ml-2 mb-1">• $1</div>');
+        text = text.replace(/^[•\-]\s+(.+)$/gm, '<div class="ml-2 mb-1">• $1</div>');
+        return text;
     }
 
     // ============================================
@@ -652,20 +960,13 @@ include __DIR__ . '/../includes/chatbot.php';
             responsive: true,
             maintainAspectRatio: true,
             plugins: {
-                legend: {
-                    display: false
-                },
+                legend: { display: false },
                 tooltip: {
                     backgroundColor: 'rgba(0, 0, 0, 0.8)',
                     padding: 12,
                     cornerRadius: 8,
-                    titleFont: {
-                        size: 14,
-                        weight: 'bold'
-                    },
-                    bodyFont: {
-                        size: 13
-                    }
+                    titleFont: { size: 14, weight: 'bold' },
+                    bodyFont: { size: 13 }
                 }
             }
         }
@@ -681,9 +982,9 @@ include __DIR__ . '/../includes/chatbot.php';
             const sidebar = document.getElementById('sidebar');
             const mainContent = document.getElementById('main-content');
             const overlay = document.getElementById('sidebar-overlay');
+            const chatbotContainer = document.getElementById('chatbotContainer');
             
             if (window.innerWidth >= 1024) {
-                // Desktop mode
                 overlay.classList.add('hidden');
                 document.body.classList.remove('sidebar-open');
                 
@@ -693,7 +994,6 @@ include __DIR__ . '/../includes/chatbot.php';
                     mainContent.style.marginLeft = '5rem';
                 }
             } else {
-                // Mobile mode
                 mainContent.style.marginLeft = '0';
                 
                 if (!sidebarExpanded) {
@@ -703,6 +1003,15 @@ include __DIR__ . '/../includes/chatbot.php';
                     document.body.classList.remove('sidebar-open');
                 }
             }
+            
+            // Handle chatbot container visibility on resize
+            if (chatbotContainer) {
+                if (window.innerWidth > 640) {
+                    chatbotContainer.classList.remove('chat-open');
+                } else if (chatbotOpen) {
+                    chatbotContainer.classList.add('chat-open');
+                }
+            }
         }, 250);
     });
 
@@ -710,14 +1019,26 @@ include __DIR__ . '/../includes/chatbot.php';
     // PAGE INITIALIZATION
     // ============================================
     document.addEventListener('DOMContentLoaded', function() {
-        console.log('📊 Progress page initialized');
-        console.log('Progress data available for chatbot:', {
-            completed: <?= $completedModules ?>,
-            passed: <?= $passedSteps ?>,
-            failed: <?= $failedSteps ?>,
-            pending: <?= $pendingSteps ?>,
-            percent: <?= $progressPercent ?>
-        });
+    const sidebar = document.getElementById('sidebar');
+    const mainContent = document.getElementById('main-content');
+
+    // Default collapsed
+    if (window.innerWidth >= 1025) {
+        sidebar.classList.add('sidebar-collapsed');
+        mainContent.style.marginLeft = '5rem';
+    } else {
+        sidebar.classList.add('sidebar-collapsed');
+        mainContent.style.marginLeft = '0';
+    }
+
+    sidebarExpanded = false;
+});
+
+    // Close chatbot on escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && chatbotOpen) {
+            toggleChatbot();
+        }
     });
 </script>
 
