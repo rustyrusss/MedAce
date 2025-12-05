@@ -143,8 +143,23 @@ function calculatePercentage($score, $total) {
             }
         }
 
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
         .animate-fade-in-up {
             animation: fadeInUp 0.6s ease-out;
+        }
+
+        .animate-scale-in {
+            animation: scaleIn 0.4s ease-out;
         }
 
         .sidebar-transition {
@@ -257,6 +272,39 @@ function calculatePercentage($score, $total) {
             background: rgba(0, 0, 0, 0.05);
             border-radius: 0.75rem;
             pointer-events: none;
+        }
+
+        /* Chatbot Styles */
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .message-slide-in {
+            animation: slideInRight 0.3s ease-out;
+        }
+
+        @media (max-width: 640px) {
+            #chatbotWindow {
+                position: fixed;
+                bottom: 0;
+                right: 0;
+                left: 0;
+                max-width: 100%;
+                height: calc(100vh - 80px);
+                border-radius: 1rem 1rem 0 0;
+            }
+            
+            #chatbotContainer {
+                bottom: 1rem;
+                right: 1rem;
+            }
         }
     </style>
 </head>
@@ -734,10 +782,59 @@ function calculatePercentage($score, $total) {
     </main>
 </div>
 
+<?php 
+// Include the chatbot component
+include __DIR__ . '/../includes/chatbot.php'; 
+?>
+
 <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <script>
+    // ============================================
+    // GLOBAL VARIABLES (Shared with chatbot)
+    // ============================================
     let sidebarExpanded = false;
+    let chatbotOpen = false;
 
+    // ============================================
+    // CHATBOT TOGGLE (called from chatbot.php)
+    // ============================================
+    function toggleChatbot() {
+        const chatWindow = document.getElementById('chatbotWindow');
+        const icon = document.getElementById('chatbotIcon');
+        const quickActions = document.getElementById('quickActions');
+        
+        if (!chatWindow || !icon) {
+            console.error('Chatbot elements not found!');
+            return;
+        }
+        
+        chatbotOpen = !chatbotOpen;
+        console.log('Chatbot toggled:', chatbotOpen);
+        
+        if (chatbotOpen) {
+            chatWindow.classList.remove('hidden');
+            chatWindow.classList.add('animate-scale-in');
+            icon.classList.remove('fa-robot');
+            icon.classList.add('fa-times');
+            if (quickActions) {
+                quickActions.classList.add('hidden');
+            }
+            
+            setTimeout(() => {
+                const input = document.getElementById('chatInput');
+                if (input) input.focus();
+            }, 300);
+        } else {
+            chatWindow.classList.add('hidden');
+            chatWindow.classList.remove('animate-scale-in');
+            icon.classList.remove('fa-times');
+            icon.classList.add('fa-robot');
+        }
+    }
+
+    // ============================================
+    // SIDEBAR FUNCTIONS
+    // ============================================
     function toggleSidebar() {
         const sidebar = document.getElementById('sidebar');
         const mainContent = document.getElementById('main-content');
@@ -808,8 +905,10 @@ function calculatePercentage($score, $total) {
         }, 250);
     });
     
-    // Initialize on page load
-    window.addEventListener('load', function() {
+    // ============================================
+    // PAGE INITIALIZATION
+    // ============================================
+    document.addEventListener('DOMContentLoaded', function() {
         const sidebar = document.getElementById('sidebar');
         const mainContent = document.getElementById('main-content');
         
@@ -822,6 +921,8 @@ function calculatePercentage($score, $total) {
             sidebar.classList.add('sidebar-collapsed');
             mainContent.style.marginLeft = '0';
         }
+        
+        console.log('📋 Quizzes page initialized with chatbot');
     });
 </script>
 
