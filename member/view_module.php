@@ -89,13 +89,13 @@ if (!empty($module['content'])) {
                 $moduleContent = '
                 <div class="space-y-3" x-data="{ fullscreen: false }">
                     <div class="bg-white rounded-xl overflow-hidden shadow-lg border border-gray-200">
-                        <iframe 
-                            src="' . htmlspecialchars($pdfFileUrl) . '#view=FitH&toolbar=1&navpanes=0&scrollbar=1" 
-                            class="w-full border-0"
-                            style="height: calc(100vh - 200px); min-height: 500px;"
-                            type="application/pdf"
-                            title="PowerPoint Presentation">
-                        </iframe>
+                      <iframe 
+                   src="' . htmlspecialchars($pdfFileUrl) . '#view=FitH&toolbar=1&navpanes=0&scrollbar=1"
+                   class="pdf-viewer w-full border-0"
+                     type="application/pdf"
+                 title="PowerPoint Presentation">
+                 </iframe>
+
                     </div>
                     <div class="flex gap-3 justify-center">
                         <button @click="fullscreen = true" class="bg-purple-600 text-white px-6 py-2.5 rounded-lg hover:bg-purple-700 transition font-semibold inline-flex items-center gap-2 shadow-sm text-sm">
@@ -342,6 +342,45 @@ $statusClass = match (strtolower($module['status'])) {
             #chatbotContainer.chat-open {
                 display: none;
             }
+            /* Desktop default */
+.pdf-viewer {
+    height: calc(100vh - 180px);
+    min-height: 450px;
+    max-height: 100vh;
+}
+
+/* Tablets */
+@media (max-width: 1024px) {
+    .pdf-viewer {
+        height: calc(100vh - 150px);
+        min-height: 380px;
+    }
+}
+
+/* Large phones + small tablets */
+@media (max-width: 820px) {
+    .pdf-viewer {
+        height: calc(100dvh - 130px);
+        min-height: 320px;
+    }
+}
+
+/* Regular mobile phones */
+@media (max-width: 640px) {
+    .pdf-viewer {
+        height: calc(100dvh - 110px);
+        min-height: 250px;
+    }
+}
+
+/* Small phones (iPhone SE, older Android) */
+@media (max-width: 480px) {
+    .pdf-viewer {
+        height: calc(100dvh - 100px);
+        min-height: 220px;
+    }
+}
+
         }
     </style>
 </head>

@@ -1505,31 +1505,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_picture'])) 
         document.body.style.overflowX = 'hidden';
     });
 
-    // Touch swipe support for mobile sidebar
-    let touchStartX = 0;
-    let touchEndX = 0;
-    
-    document.addEventListener('touchstart', function(e) {
-        touchStartX = e.changedTouches[0].screenX;
-    }, false);
-    
-    document.addEventListener('touchend', function(e) {
-        touchEndX = e.changedTouches[0].screenX;
-        handleSwipe();
-    }, false);
-    
-    function handleSwipe() {
-        if (window.innerWidth < 1024) {
-            // Swipe right to open
-            if (touchEndX - touchStartX > 50 && !sidebarExpanded) {
-                toggleSidebar();
-            }
-            // Swipe left to close
-            if (touchStartX - touchEndX > 50 && sidebarExpanded) {
-                toggleSidebar();
-            }
-        }
+  // Touch swipe support for mobile sidebar
+let touchStartX = 0;
+let touchStartY = 0;
+let touchEndX = 0;
+let touchEndY = 0;
+
+document.addEventListener('touchstart', function(e) {
+    touchStartX = e.changedTouches[0].screenX;
+    touchStartY = e.changedTouches[0].screenY;
+}, false);
+
+document.addEventListener('touchend', function(e) {
+    touchEndX = e.changedTouches[0].screenX;
+    touchEndY = e.changedTouches[0].screenY;
+    handleSwipe();
+}, false);
+
+function handleSwipe() {
+    if (window.innerWidth >= 1024) return;
+
+    const dx = touchEndX - touchStartX; // horizontal drag
+    const dy = touchEndY - touchStartY; // vertical drag
+
+    const swipeThreshold = 90;         // horizontal distance needed
+    const verticalTolerance = 60;      // ignore if vertical movement is large
+
+    // ❌ If vertical movement is bigger than horizontal → user is scrolling → IGNORE
+    if (Math.abs(dy) > Math.abs(dx) || Math.abs(dy) > verticalTolerance) return;
+
+    // Swipe RIGHT → open sidebar
+    if (dx > swipeThreshold && !sidebarExpanded) {
+        toggleSidebar();
     }
+
+    // Swipe LEFT → close sidebar
+    if (-dx > swipeThreshold && sidebarExpanded) {
+        toggleSidebar();
+    }
+}
+
 </script>
 
 </body>
