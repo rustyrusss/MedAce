@@ -14,6 +14,7 @@ $professorId = $_SESSION['user_id'];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $title = trim($_POST['title']);
     $description = trim($_POST['description']);
+    $subject = trim($_POST['subject'] ?? ''); // ADDED: Capture subject field
     
     // FIX: Get raw status and normalize it properly
     $statusRaw = isset($_POST['status']) ? $_POST['status'] : 'draft';
@@ -23,6 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     error_log("=== ADD MODULE DEBUG ===");
     error_log("Professor ID: " . $professorId);
     error_log("Title: " . $title);
+    error_log("Subject: " . $subject); // ADDED: Log subject
     error_log("Raw POST status: '" . print_r($_POST['status'], true) . "'");
     error_log("Status after trim/lowercase: '" . $status . "'");
     error_log("Status length: " . strlen($status));
@@ -43,6 +45,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Validate required fields
     if (empty($title)) {
         $_SESSION['error'] = "Module title is required.";
+        header("Location: ../professor/manage_modules.php");
+        exit();
+    }
+    
+    // ADDED: Validate subject
+    if (empty($subject)) {
+        $_SESSION['error'] = "Subject is required.";
         header("Location: ../professor/manage_modules.php");
         exit();
     }
@@ -109,15 +118,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         $displayOrder = ($result['max_order'] ?? -1) + 1;
         
-        // FIX: Explicit INSERT with parameter logging
-        $sql = "INSERT INTO modules (professor_id, title, description, content, status, display_order, created_at) 
-                VALUES (:professor_id, :title, :description, :content, :status, :display_order, NOW())";
+        // FIXED: Added subject column to INSERT
+        $sql = "INSERT INTO modules (professor_id, title, description, content, subject, status, display_order, created_at) 
+                VALUES (:professor_id, :title, :description, :content, :subject, :status, :display_order, NOW())";
         
         $params = [
             'professor_id' => $professorId,
             'title' => $title,
             'description' => $description,
             'content' => $filePath,
+            'subject' => $subject, // ADDED: Include subject in params
             'status' => $status,
             'display_order' => $displayOrder
         ];
@@ -131,16 +141,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $newModuleId = $conn->lastInsertId();
         error_log("INSERT executed. New module ID: " . $newModuleId);
         
-        // FIX: Verify the insert actually worked with correct status
-        $verifyStmt = $conn->prepare("SELECT status FROM modules WHERE id = ?");
+        // FIX: Verify the insert actually worked with correct status and subject
+        $verifyStmt = $conn->prepare("SELECT status, subject FROM modules WHERE id = ?");
         $verifyStmt->execute([$newModuleId]);
         $verifyResult = $verifyStmt->fetch(PDO::FETCH_ASSOC);
         error_log("Verified status in DB: '" . $verifyResult['status'] . "'");
+        error_log("Verified subject in DB: '" . $verifyResult['subject'] . "'");
         error_log("Expected status: '" . $status . "'");
+        error_log("Expected subject: '" . $subject . "'");
         
         if ($verifyResult['status'] !== $status) {
             error_log("WARNING: Status mismatch! Expected '" . $status . "' but got '" . $verifyResult['status'] . "'");
-            error_log("This indicates a database constraint or default value issue!");
+        }
+        
+        if ($verifyResult['subject'] !== $subject) {
+            error_log("WARNING: Subject mismatch! Expected '" . $subject . "' but got '" . $verifyResult['subject'] . "'");
         }
         
         error_log("=== END DEBUG ===");

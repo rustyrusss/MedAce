@@ -15,6 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $moduleId = $_POST['module_id'];
     $title = trim($_POST['title']);
     $description = trim($_POST['description']);
+    $subject = trim($_POST['subject'] ?? ''); // ADDED: Capture subject field
     
     // FIX: Get raw status and normalize it properly
     $statusRaw = isset($_POST['status']) ? $_POST['status'] : 'draft';
@@ -23,6 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Debug logging
     error_log("=== EDIT MODULE DEBUG ===");
     error_log("Module ID: " . $moduleId);
+    error_log("Subject: " . $subject); // ADDED: Log subject
     error_log("Raw POST status: '" . print_r($_POST['status'], true) . "'");
     error_log("Status after trim/lowercase: '" . $status . "'");
     error_log("Status length: " . strlen($status));
@@ -43,6 +45,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Validate required fields
     if (empty($moduleId) || empty($title)) {
         $_SESSION['error'] = "Module ID and title are required.";
+        header("Location: ../professor/manage_modules.php");
+        exit();
+    }
+    
+    // ADDED: Validate subject
+    if (empty($subject)) {
+        $_SESSION['error'] = "Subject is required.";
         header("Location: ../professor/manage_modules.php");
         exit();
     }
@@ -118,11 +127,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     try {
-        // FIX: Explicit UPDATE with parameter logging
+        // FIXED: Added subject column to UPDATE
         $sql = "UPDATE modules 
                 SET title = :title, 
                     description = :description, 
                     content = :content, 
+                    subject = :subject,
                     status = :status
                 WHERE id = :id AND professor_id = :professor_id";
         
@@ -130,6 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'title' => $title,
             'description' => $description,
             'content' => $filePath,
+            'subject' => $subject, // ADDED: Include subject in params
             'status' => $status,
             'id' => $moduleId,
             'professor_id' => $professorId
@@ -144,10 +155,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         error_log("UPDATE executed. Rows affected: " . $stmt->rowCount());
         
         // FIX: Verify the update actually worked
-        $verifyStmt = $conn->prepare("SELECT status FROM modules WHERE id = ?");
+        $verifyStmt = $conn->prepare("SELECT status, subject FROM modules WHERE id = ?");
         $verifyStmt->execute([$moduleId]);
         $verifyResult = $verifyStmt->fetch(PDO::FETCH_ASSOC);
         error_log("Verified status in DB: '" . $verifyResult['status'] . "'");
+        error_log("Verified subject in DB: '" . $verifyResult['subject'] . "'");
         error_log("=== END DEBUG ===");
         
         // Set success message with file upload notification

@@ -1,7 +1,7 @@
 <?php
 /**
  * Enhanced Chatbot Integration - Complete Version
- * Combines chatbot_integration.php functionality with chatbot_endpoint.php structure
+ * Combines all chatbot functionality with progress analysis and study tips
  */
 
 ini_set('display_errors', 0);
@@ -39,8 +39,19 @@ $studentId = $_SESSION['user_id'];
 try {
     require_once __DIR__ . '/db_conn.php';
     
-    // Load API key
-    if (file_exists(__DIR__ . "/../vendor/autoload.php")) {
+    // Load API key from multiple sources
+    $apiKey = null;
+    
+    // Try env.php first
+    if (file_exists(__DIR__ . '/env.php')) {
+        require_once __DIR__ . '/env.php';
+        if (defined('OPENAI_API_KEY')) {
+            $apiKey = OPENAI_API_KEY;
+        }
+    }
+    
+    // Try composer autoload
+    if (!$apiKey && file_exists(__DIR__ . "/../vendor/autoload.php")) {
         require_once __DIR__ . "/../vendor/autoload.php";
         if (class_exists('Dotenv\Dotenv')) {
             $dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . "/../");
@@ -48,12 +59,15 @@ try {
         }
     }
     
-    $apiKey = getenv("API_KEY") ?: ($_ENV["API_KEY"] ?? ($_SERVER["API_KEY"] ?? null));
+    // Try environment variables
+    if (!$apiKey) {
+        $apiKey = getenv("API_KEY") ?: ($_ENV["API_KEY"] ?? ($_SERVER["API_KEY"] ?? null));
+    }
     if (!$apiKey) {
         $apiKey = getenv("OPENAI_API_KEY") ?: ($_ENV["OPENAI_API_KEY"] ?? ($_SERVER["OPENAI_API_KEY"] ?? null));
     }
     
-    // Manual .env load
+    // Try manual .env load
     if (!$apiKey && file_exists(__DIR__ . '/../.env')) {
         $lines = file(__DIR__ . '/../.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         foreach ($lines as $line) {
@@ -73,6 +87,7 @@ try {
     
     // Handle different actions
     $action = $input['action'] ?? null;
+    $message = $input['message'] ?? null;
     
     // ============================================
     // ACTION: GET MODULES
@@ -96,7 +111,6 @@ try {
             'success' => true,
             'modules' => $modules
         ]);
-        exit; // IMPORTANT: Stop execution here
     }
     
     // ============================================
@@ -125,7 +139,6 @@ try {
             'success' => true,
             'module' => $module
         ]);
-        exit; // IMPORTANT: Stop execution here
     }
     
     // ============================================
@@ -134,143 +147,248 @@ try {
     if ($action === 'get_progress') {
         $progressData = getStudentProgress($conn, $studentId);
         
+        // Calculate overall percentage
+        $totalItems = $progressData['total_modules'] + $progressData['total_quizzes'];
+        $completedItems = $progressData['completed_modules'] + $progressData['passed_quizzes'];
+        $progressPercent = $totalItems > 0 ? round(($completedItems / $totalItems) * 100) : 0;
+        
         sendJson([
             'success' => true,
-            'progress' => $progressData
+            'progress' => [
+                'modules' => [
+                    'total_available' => $progressData['total_modules'],
+                    'completed' => $progressData['completed_modules'],
+                    'in_progress' => $progressData['active_modules'],
+                    'pending' => $progressData['total_modules'] - $progressData['completed_modules'] - $progressData['active_modules']
+                ],
+                'quizzes' => [
+                    'total_available' => $progressData['total_quizzes'],
+                    'passed' => $progressData['passed_quizzes'],
+                    'failed' => $progressData['failed_quizzes'],
+                    'pending' => $progressData['total_quizzes'] - $progressData['completed_quizzes'],
+                    'avg_score' => $progressData['average_score']
+                ],
+                'overall_percent' => $progressPercent,
+                'total_items' => $totalItems,
+                'completed_items' => $completedItems
+            ]
         ]);
-        exit; // IMPORTANT: Stop execution here
     }
     
     // ============================================
-    // CHAT/AI ACTIONS (chat, progress, flashcard)
+    // ACTION: GET DAILY TIP
     // ============================================
-    
-    if (!$apiKey) {
-        sendJson(['error' => 'API key not configured'], 500);
-    }
-    
-    $message = $input["message"] ?? null;
-    $task = $input["task"] ?? "chat"; // 'chat', 'progress', or 'flashcard'
-    $moduleId = $input["module_id"] ?? null;
-    
-    if (!$message || empty(trim($message))) {
-        sendJson(['error' => 'Missing message'], 400);
-    }
-    
-    $message = trim($message);
-    
-    // Get student info
-    $stmt = $conn->prepare("SELECT firstname, lastname FROM users WHERE id = ?");
-    $stmt->execute([$studentId]);
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
-    $studentName = $user ? $user['firstname'] : "";
-    
-    // Get student progress data
-    $progressData = getStudentProgress($conn, $studentId);
-    
-    // Get module content if flashcard task with module_id
-    $moduleContent = null;
-    if ($task === "flashcard" && $moduleId) {
-        $stmt = $conn->prepare("
-            SELECT title, description, content
-            FROM modules
-            WHERE id = ?
-        ");
-        $stmt->execute([$moduleId]);
-        $module = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if ($module) {
-            $moduleContent = "MODULE: " . $module['title'] . "\n\n";
-            if (!empty($module['description'])) {
-                $moduleContent .= "DESCRIPTION:\n" . $module['description'] . "\n\n";
-            }
-            if (!empty($module['content'])) {
-                $moduleContent .= "CONTENT:\n" . substr($module['content'], 0, 3000) . "\n";
-            }
+    if ($action === 'get_daily_tip') {
+        try {
+            $tip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMIT 1")->fetchColumn();
+            sendJson([
+                'success' => true,
+                'tip' => $tip ?: 'Stay consistent with your studies and practice regularly!'
+            ]);
+        } catch (Exception $e) {
+            sendJson([
+                'success' => true,
+                'tip' => 'Stay consistent with your studies and practice regularly!'
+            ]);
         }
     }
     
-    // Build system prompt
-    $systemPrompt = buildSystemPrompt($task, $studentName, $progressData);
-    
-    // Build user prompt
-    $userPrompt = buildUserPrompt($task, $message, $progressData, $moduleContent);
-    
-    // Build OpenAI request
-    $payload = [
-        "model" => "gpt-3.5-turbo",
-        "messages" => [
-            ["role" => "system", "content" => $systemPrompt],
-            ["role" => "user", "content" => $userPrompt]
-        ],
-        "max_tokens" => $task === "flashcard" ? 1500 : 500,
-        "temperature" => $task === "flashcard" ? 0.8 : 0.8
-    ];
-    
-    // Call OpenAI API
-    $ch = curl_init("https://api.openai.com/v1/chat/completions");
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => json_encode($payload),
-        CURLOPT_HTTPHEADER => [
-            "Content-Type: application/json",
-            "Authorization: Bearer $apiKey"
-        ],
-        CURLOPT_TIMEOUT => 30
-    ]);
-    
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $error = curl_error($ch);
-    curl_close($ch);
-    
-    if ($error) {
-        sendJson(['error' => 'Connection failed: ' . $error], 500);
-    }
-    
-    if (!$response) {
-        sendJson(['error' => 'Empty response from API'], 500);
-    }
-    
-    $data = json_decode($response, true);
-    
-    if (!$data) {
-        sendJson(['error' => 'Invalid JSON response from API'], 500);
-    }
-    
-    // Handle API errors
-    if (isset($data['error'])) {
-        sendJson(['error' => $data['error']['message'] ?? 'OpenAI API error'], $httpCode);
-    }
-    
-    // Extract content
-    if (!isset($data['choices']) || !is_array($data['choices']) || empty($data['choices'])) {
-        sendJson(['error' => 'No response from AI'], 500);
-    }
-    
-    $content = $data['choices'][0]['message']['content'] ?? '';
-    $content = trim($content);
-    
-    if (empty($content)) {
-        sendJson(['error' => 'Empty content from AI'], 500);
-    }
-    
-    // Parse flashcards if task is flashcard
-    if ($task === "flashcard") {
-        $flashcards = parseFlashcards($content);
+    // ============================================
+    // ACTION: ANALYZE PROGRESS (AI-powered)
+    // ============================================
+    if ($action === 'analyze_progress') {
+        if (!$apiKey) {
+            sendJson([
+                'success' => true,
+                'analysis' => "I can see your progress data! You're making good progress in your nursing studies. Keep focusing on completing your pending modules and reviewing areas where you've had challenges.\n\n**Note:** For detailed AI-powered analysis, please configure the OpenAI API key in `/config/env.php`.",
+                'reply' => "Please configure API key for AI analysis."
+            ]);
+        }
+        
+        $progressData = getStudentProgress($conn, $studentId);
+        
+        // Get student name
+        $stmt = $conn->prepare("SELECT firstname FROM users WHERE id = ?");
+        $stmt->execute([$studentId]);
+        $studentName = $stmt->fetchColumn() ?: 'Student';
+        
+        // Build detailed context
+        $context = "Analyze this nursing student's ({$studentName}) learning progress:\n\n";
+        $context .= "Overall Statistics:\n";
+        $context .= "- Total Modules: {$progressData['total_modules']}\n";
+        $context .= "- Completed Modules: {$progressData['completed_modules']}\n";
+        $context .= "- Active Modules: {$progressData['active_modules']}\n";
+        $context .= "- Total Quizzes: {$progressData['total_quizzes']}\n";
+        $context .= "- Passed Quizzes: {$progressData['passed_quizzes']}\n";
+        $context .= "- Failed Quizzes: {$progressData['failed_quizzes']}\n";
+        $context .= "- Average Quiz Score: {$progressData['average_score']}%\n\n";
+        
+        if (!empty($progressData['weak_areas'])) {
+            $context .= "Weak Areas:\n";
+            foreach ($progressData['weak_areas'] as $area) {
+                $context .= "- {$area['subject']}: " . round($area['avg_score'], 1) . "% avg\n";
+            }
+            $context .= "\n";
+        }
+        
+        if (!empty($progressData['strong_areas'])) {
+            $context .= "Strong Areas:\n";
+            foreach ($progressData['strong_areas'] as $area) {
+                $context .= "- {$area['subject']}: " . round($area['avg_score'], 1) . "% avg\n";
+            }
+            $context .= "\n";
+        }
+        
+        $context .= $message ?: "Provide comprehensive analysis with strengths, areas for improvement, and specific recommendations.";
+        
+        $systemPrompt = "You are MedAce Assistant, an expert nursing education AI analyst. Provide detailed, personalized progress analysis based on actual student data. Be specific, encouraging, and actionable. Format with clear sections using bold headers (**Header:**) and bullet points. Make each analysis unique and data-driven. Keep response under 300 words.";
+        
+        $response = callOpenAI($apiKey, $systemPrompt, $context);
+        
         sendJson([
             'success' => true,
-            'reply' => $content,
-            'flashcards' => $flashcards,
-            'task' => 'flashcard'
+            'analysis' => $response,
+            'reply' => $response
         ]);
-    } else {
+    }
+    
+    // ============================================
+    // ACTION: GET STUDY TIPS (AI-powered)
+    // ============================================
+    if ($action === 'get_study_tips') {
+        if (!$apiKey) {
+            sendJson([
+                'success' => true,
+                'tips' => "Here are some evidence-based study tips:\n\n1. **Active Recall**: Test yourself regularly\n2. **Spaced Repetition**: Review at intervals\n3. **Practice Scenarios**: Apply to real situations\n4. **Study Groups**: Learn together\n5. **Concept Mapping**: Connect ideas visually\n\n**Note:** For personalized tips, configure API key in `/config/env.php`.",
+                'reply' => "Please configure API key for personalized tips."
+            ]);
+        }
+        
+        $progressData = getStudentProgress($conn, $studentId);
+        
+        $context = "Generate personalized study tips for nursing student:\n\n";
+        $context .= "Progress: {$progressData['completed_modules']}/{$progressData['total_modules']} modules, ";
+        $context .= "{$progressData['passed_quizzes']} passed quizzes, ";
+        $context .= "Avg score: {$progressData['average_score']}%\n\n";
+        $context .= $message ?: "Provide 5 specific, actionable study tips based on their progress.";
+        
+        $systemPrompt = "You are MedAce Assistant, expert nursing education AI. Generate personalized study tips based on student data. Be specific and actionable. Format clearly with numbered points. Keep under 250 words.";
+        
+        $response = callOpenAI($apiKey, $systemPrompt, $context);
+        
         sendJson([
             'success' => true,
-            'reply' => $content,
-            'task' => $task
+            'tips' => $response,
+            'reply' => $response
         ]);
+    }
+    
+    // ============================================
+    // CHAT/AI ACTIONS (general chat, flashcards)
+    // ============================================
+    if ($action === 'chat' || !$action) {
+        if (!$apiKey) {
+            sendJson(['error' => 'API key not configured'], 500);
+        }
+        
+        if (!$message || empty(trim($message))) {
+            sendJson(['error' => 'Missing message'], 400);
+        }
+        
+        $message = trim($message);
+        $task = $input["task"] ?? "chat";
+        $moduleId = $input["module_id"] ?? null;
+        
+        // Get student info
+        $stmt = $conn->prepare("SELECT firstname FROM users WHERE id = ?");
+        $stmt->execute([$studentId]);
+        $studentName = $stmt->fetchColumn() ?: "";
+        
+        // Get progress data
+        $progressData = getStudentProgress($conn, $studentId);
+        
+        // Get module content if flashcard task
+        $moduleContent = null;
+        if ($task === "flashcard" && $moduleId) {
+            $stmt = $conn->prepare("SELECT title, description, content FROM modules WHERE id = ?");
+            $stmt->execute([$moduleId]);
+            $module = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($module) {
+                $moduleContent = "MODULE: " . $module['title'] . "\n\n";
+                if (!empty($module['description'])) {
+                    $moduleContent .= "DESCRIPTION:\n" . $module['description'] . "\n\n";
+                }
+                if (!empty($module['content'])) {
+                    $moduleContent .= "CONTENT:\n" . substr($module['content'], 0, 3000) . "\n";
+                }
+            }
+        }
+        
+        // Build prompts
+        $systemPrompt = buildSystemPrompt($task, $studentName, $progressData);
+        $userPrompt = buildUserPrompt($task, $message, $progressData, $moduleContent);
+        
+        // Call AI
+        $payload = [
+            "model" => "gpt-3.5-turbo",
+            "messages" => [
+                ["role" => "system", "content" => $systemPrompt],
+                ["role" => "user", "content" => $userPrompt]
+            ],
+            "max_tokens" => $task === "flashcard" ? 1500 : 500,
+            "temperature" => 0.8
+        ];
+        
+        $ch = curl_init("https://api.openai.com/v1/chat/completions");
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($payload),
+            CURLOPT_HTTPHEADER => [
+                "Content-Type: application/json",
+                "Authorization: Bearer $apiKey"
+            ],
+            CURLOPT_TIMEOUT => 30
+        ]);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        if (!$response) {
+            sendJson(['error' => 'API connection failed'], 500);
+        }
+        
+        $data = json_decode($response, true);
+        
+        if (isset($data['error'])) {
+            sendJson(['error' => $data['error']['message'] ?? 'API error'], $httpCode);
+        }
+        
+        $content = $data['choices'][0]['message']['content'] ?? '';
+        $content = trim($content);
+        
+        if (empty($content)) {
+            sendJson(['error' => 'Empty AI response'], 500);
+        }
+        
+        // Parse flashcards if needed
+        if ($task === "flashcard") {
+            $flashcards = parseFlashcards($content);
+            sendJson([
+                'success' => true,
+                'reply' => $content,
+                'flashcards' => $flashcards,
+                'task' => 'flashcard'
+            ]);
+        } else {
+            sendJson([
+                'success' => true,
+                'reply' => $content,
+                'task' => $task
+            ]);
+        }
     }
     
 } catch (Exception $e) {
@@ -296,7 +414,7 @@ function getStudentProgress($conn, $studentId) {
     ];
     
     try {
-        // Get module stats - FIXED: Use correct table name
+        // Get module stats
         $stmt = $conn->prepare("
             SELECT 
                 COUNT(*) as total,
@@ -332,26 +450,9 @@ function getStudentProgress($conn, $studentId) {
         $data['failed_quizzes'] = (int)$quizStats['failed'];
         $data['average_score'] = round((float)$quizStats['avg_score'], 1);
         
-        // Get recent activity (last 5 items)
+        // Get weak/strong areas
         $stmt = $conn->prepare("
-            SELECT 'module' as type, m.title, sp.status, sp.updated_at as date
-            FROM student_progress sp
-            JOIN modules m ON m.id = sp.module_id
-            WHERE sp.student_id = ?
-            UNION ALL
-            SELECT 'quiz' as type, q.title, qp.status, qp.submitted_at as date
-            FROM quiz_participation qp
-            JOIN quizzes q ON q.id = qp.quiz_id
-            WHERE qp.student_id = ?
-            ORDER BY date DESC
-            LIMIT 5
-        ");
-        $stmt->execute([$studentId, $studentId]);
-        $data['recent_activity'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        // Identify weak areas (subjects with low average scores)
-        $stmt = $conn->prepare("
-            SELECT q.subject, AVG(qp.score) as avg_score, COUNT(*) as attempts
+            SELECT q.subject, AVG(qp.score) as avg_score
             FROM quiz_participation qp
             JOIN quizzes q ON q.id = qp.quiz_id
             WHERE qp.student_id = ? AND qp.score IS NOT NULL
@@ -363,9 +464,8 @@ function getStudentProgress($conn, $studentId) {
         $stmt->execute([$studentId]);
         $data['weak_areas'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        // Identify strong areas
         $stmt = $conn->prepare("
-            SELECT q.subject, AVG(qp.score) as avg_score, COUNT(*) as attempts
+            SELECT q.subject, AVG(qp.score) as avg_score
             FROM quiz_participation qp
             JOIN quizzes q ON q.id = qp.quiz_id
             WHERE qp.student_id = ? AND qp.score IS NOT NULL
@@ -378,11 +478,48 @@ function getStudentProgress($conn, $studentId) {
         $data['strong_areas'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
     } catch (Exception $e) {
-        // Return default data if queries fail
         error_log("Progress data error: " . $e->getMessage());
     }
     
     return $data;
+}
+
+/**
+ * Call OpenAI API
+ */
+function callOpenAI($apiKey, $systemPrompt, $userPrompt) {
+    $payload = [
+        "model" => "gpt-3.5-turbo",
+        "messages" => [
+            ["role" => "system", "content" => $systemPrompt],
+            ["role" => "user", "content" => $userPrompt]
+        ],
+        "max_tokens" => 800,
+        "temperature" => 0.8
+    ];
+    
+    $ch = curl_init("https://api.openai.com/v1/chat/completions");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($payload),
+        CURLOPT_HTTPHEADER => [
+            "Content-Type: application/json",
+            "Authorization: Bearer $apiKey"
+        ],
+        CURLOPT_TIMEOUT => 30
+    ]);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if (!$response || $httpCode !== 200) {
+        return "I'm currently unable to generate a personalized response. Please try again later.";
+    }
+    
+    $data = json_decode($response, true);
+    return $data['choices'][0]['message']['content'] ?? 'No response generated.';
 }
 
 /**
@@ -393,22 +530,13 @@ function buildSystemPrompt($task, $studentName, $progressData) {
     
     switch ($task) {
         case "progress":
-            return "You are MedAce AI Assistant, a helpful nursing tutor with access to the student's learning progress data.$baseName Your role is to provide personalized insights about their progress, identify strengths and areas for improvement, suggest next steps, and motivate them. Be encouraging and specific. Keep responses under 200 words.";
+            return "You are MedAce AI Assistant.$baseName Provide personalized insights about progress, identify strengths and areas for improvement, suggest next steps. Be encouraging. Under 200 words.";
             
         case "flashcard":
-            return "You are MedAce AI Assistant, a nursing education expert specialized in creating effective study flashcards.$baseName Generate exactly 8 flashcards in JSON format. Return ONLY a valid JSON array with this exact structure:
-
-[
-  {
-    \"question\": \"Clear, specific question testing key concept\",
-    \"answer\": \"Concise, accurate answer with key details\"
-  }
-]
-
-Make questions challenging but fair. Focus on clinical application and understanding. Use proper nursing terminology. Output ONLY the JSON array, no other text.";
+            return "You are MedAce AI Assistant.$baseName Generate exactly 8 flashcards in JSON format: [{\"question\":\"...\",\"answer\":\"...\"}]. Focus on clinical application. Output ONLY valid JSON.";
             
-        default: // chat
-            return "You are MedAce AI Assistant, a helpful nursing tutor.$baseName Be encouraging, concise (under 150 words), and use nursing terminology appropriately. If asked about progress, suggest they use the 'Progress' button. If asked for flashcards, suggest they use the 'Flashcards' button.";
+        default:
+            return "You are MedAce AI Assistant.$baseName Be encouraging, concise (under 150 words), use nursing terminology. If asked about progress/flashcards, suggest using the respective buttons.";
     }
 }
 
@@ -416,39 +544,10 @@ Make questions challenging but fair. Focus on clinical application and understan
  * Build user prompt with context
  */
 function buildUserPrompt($task, $userMessage, $progressData, $moduleContent = null) {
-    switch ($task) {
-        case "progress":
-            $context = "Current Progress Data:\n";
-            $context .= "- Modules: {$progressData['completed_modules']}/{$progressData['total_modules']} completed\n";
-            $context .= "- Quizzes: {$progressData['completed_quizzes']} completed ({$progressData['passed_quizzes']} passed, {$progressData['failed_quizzes']} failed)\n";
-            $context .= "- Average Score: {$progressData['average_score']}%\n";
-            
-            if (!empty($progressData['weak_areas'])) {
-                $context .= "\nAreas needing improvement:\n";
-                foreach ($progressData['weak_areas'] as $area) {
-                    $context .= "- {$area['subject']}: " . round($area['avg_score'], 1) . "% avg\n";
-                }
-            }
-            
-            if (!empty($progressData['strong_areas'])) {
-                $context .= "\nStrong areas:\n";
-                foreach ($progressData['strong_areas'] as $area) {
-                    $context .= "- {$area['subject']}: " . round($area['avg_score'], 1) . "% avg\n";
-                }
-            }
-            
-            return $context . "\n" . $userMessage;
-            
-        case "flashcard":
-            if ($moduleContent) {
-                return "Based on the following module content, generate 8 nursing flashcards in JSON format:\n\n$moduleContent\n\nGenerate flashcards that test key concepts, clinical applications, and important facts.";
-            } else {
-                return "Generate 8 nursing flashcards in JSON format for: " . $userMessage;
-            }
-            
-        default:
-            return $userMessage;
+    if ($task === "flashcard" && $moduleContent) {
+        return "Based on this module, generate 8 nursing flashcards in JSON:\n\n$moduleContent";
     }
+    return $userMessage;
 }
 
 /**
@@ -457,16 +556,14 @@ function buildUserPrompt($task, $userMessage, $progressData, $moduleContent = nu
 function parseFlashcards($content) {
     $flashcards = [];
     
-    // Try JSON parsing first
     try {
-        // Remove markdown code blocks if present
         $cleanContent = preg_replace('/```json\n?/i', '', $content);
         $cleanContent = preg_replace('/```\n?/', '', $cleanContent);
         $cleanContent = trim($cleanContent);
         
         $parsed = json_decode($cleanContent, true);
         
-        if (is_array($parsed) && !empty($parsed)) {
+        if (is_array($parsed)) {
             foreach ($parsed as $card) {
                 if (isset($card['question']) && isset($card['answer'])) {
                     $flashcards[] = [
@@ -477,27 +574,7 @@ function parseFlashcards($content) {
             }
         }
     } catch (Exception $e) {
-        // JSON parsing failed
-    }
-    
-    // If JSON parsing failed, try text parsing
-    if (empty($flashcards)) {
-        $cards = preg_split('/CARD\s+\d+/i', $content);
-        
-        foreach ($cards as $card) {
-            $card = trim($card);
-            if (empty($card)) continue;
-            
-            // Extract Q and A
-            if (preg_match('/Q:\s*(.+?)(?=A:)/s', $card, $qMatch) && 
-                preg_match('/A:\s*(.+?)(?=---|$)/s', $card, $aMatch)) {
-                
-                $flashcards[] = [
-                    'question' => trim($qMatch[1]),
-                    'answer' => trim($aMatch[1])
-                ];
-            }
-        }
+        // Fallback parsing
     }
     
     return $flashcards;

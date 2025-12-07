@@ -106,7 +106,149 @@ body {
 .question-nav button { transition: all 0.2s ease; }
 .question-nav button.answered { background-color: #3b82f6; color: #fff; }
 .question-nav button:hover { background-color: #2563eb; color: #fff; }
+/* Add these CSS rules to fix text compression issues */
 
+/* Question text - prevent compression and maintain natural spacing */
+.question-card p {
+  white-space: pre-wrap; /* Preserves line breaks and spaces */
+  word-wrap: break-word; /* Breaks long words if needed */
+  overflow-wrap: break-word; /* Modern alternative to word-wrap */
+  hyphens: none; /* Prevents automatic hyphenation */
+  line-height: 1.65 !important;
+  font-weight: 500;
+  color: #111827;
+  min-height: fit-content;
+}
+
+/* Answer options - prevent text compression */
+.radio-option span {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  flex: 1;
+  min-width: 0; /* Allows flex item to shrink below content size */
+  line-height: 1.5;
+}
+
+/* Text inputs - preserve spacing in user input */
+.text-answer-input {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.6;
+}
+
+/* Quiz title - prevent compression */
+.quiz-sidebar h1 {
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.4 !important;
+}
+
+/* Description text - maintain spacing */
+.quiz-sidebar .text-sm {
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.4;
+}
+
+/* MOBILE SPECIFIC FIXES */
+@media (max-width: 1024px) {
+  .question-card p {
+    font-size: 1.0625rem !important;
+    line-height: 1.65 !important;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    min-height: auto;
+  }
+  
+  .radio-option {
+    min-height: 52px;
+    height: auto; /* Allow height to expand with content */
+    padding: 1rem 1.125rem !important;
+  }
+  
+  .radio-option span {
+    line-height: 1.5;
+    padding: 0.125rem 0; /* Small padding for better spacing */
+  }
+  
+  .quiz-sidebar h1 {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: manual; /* Only break at manual hyphens */
+  }
+}
+
+@media (max-width: 640px) {
+  .question-card p {
+    font-size: 0.9375rem !important;
+    line-height: 1.55 !important;
+    white-space: pre-wrap;
+  }
+  
+  .radio-option {
+    min-height: 48px;
+    height: auto;
+    padding: 0.875rem 1rem !important;
+  }
+  
+  .radio-option span {
+    font-size: 0.875rem !important;
+    line-height: 1.45;
+  }
+}
+
+@media (max-width: 374px) {
+  .question-card p {
+    font-size: 0.875rem !important;
+    line-height: 1.5 !important;
+  }
+  
+  .radio-option span {
+    font-size: 0.8125rem !important;
+    line-height: 1.4;
+  }
+}
+
+/* TABLET SPECIFIC */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .question-card p {
+    font-size: 1.125rem !important;
+    line-height: 1.7 !important;
+    white-space: pre-wrap;
+  }
+  
+  .radio-option {
+    min-height: 56px;
+    height: auto;
+    padding: 1.125rem 1.25rem !important;
+  }
+  
+  .radio-option span {
+    font-size: 1rem !important;
+    line-height: 1.55;
+  }
+}
+
+/* DESKTOP */
+@media (min-width: 1025px) {
+  .question-card p {
+    white-space: pre-wrap;
+    line-height: 1.7;
+  }
+  
+  .radio-option {
+    height: auto;
+    min-height: 48px;
+  }
+  
+  .radio-option span {
+    line-height: 1.6;
+  }
+}
 .text-answer-input {
   width: 100%;
   padding: 0.75rem 1rem;
@@ -958,6 +1100,19 @@ aside .overflow-y-auto::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
             <p class="text-green-600 font-medium text-center">✅ No time limit</p>
             <?php endif; ?>
 
+     <?php if (isset($quiz['content']) && !empty($quiz['content'])): ?>
+<div class="p-4 bg-blue-50 rounded-lg border border-blue-200 shadow-sm">
+  <div class="flex items-start gap-2 mb-2">
+    <svg class="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+    </svg>
+    <h3 class="text-blue-800 font-semibold text-sm">Instructions</h3>
+  </div>
+  <div class="text-blue-700 text-sm leading-relaxed" style="white-space: pre-wrap; word-wrap: break-word;">
+    <?= nl2br(htmlspecialchars($quiz['content'])) ?>
+  </div>
+</div>
+<?php endif; ?>
             <!-- Progress -->
             <div>
               <p class="text-gray-500 text-sm mb-2 text-center">Progress</p>
@@ -1106,6 +1261,46 @@ document.addEventListener("DOMContentLoaded", () => {
   let fullscreenInitialized = false;
   let quizStarted = false;
 
+  // ---- FULLSCREEN SUPPORT CHECK (CROSS-BROWSER) ----
+  const fullscreenEnabled =
+    document.fullscreenEnabled ||
+    document.webkitFullscreenEnabled ||
+    document.mozFullScreenEnabled ||
+    document.msFullscreenEnabled ||
+    false;
+
+  function requestFullscreenCompat(element) {
+    return new Promise((resolve, reject) => {
+      if (!fullscreenEnabled) {
+        reject(new Error("Fullscreen API is not supported in this browser or in this view."));
+        return;
+      }
+
+      const request =
+        element.requestFullscreen ||
+        element.webkitRequestFullscreen ||
+        element.mozRequestFullScreen ||
+        element.msRequestFullscreen;
+
+      if (!request) {
+        reject(new Error("Fullscreen request method is not available on this element."));
+        return;
+      }
+
+      try {
+        const returnValue = request.call(element);
+        if (returnValue && typeof returnValue.then === "function") {
+          returnValue.then(resolve).catch(reject);
+        } else {
+          // Older browsers: requestFullscreen does not return a Promise
+          resolve();
+        }
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
   // Character counter
   textInputs.forEach(input => {
     const counter = input.closest('.question-card').querySelector('.char-count');
@@ -1129,47 +1324,38 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Fullscreen
-  function enterFullscreen() {
-    const elem = document.documentElement;
-    if (elem.requestFullscreen) {
-      return elem.requestFullscreen();
-    } else if (elem.webkitRequestFullscreen) {
-      return elem.webkitRequestFullscreen();
-    } else if (elem.msRequestFullscreen) {
-      return elem.msRequestFullscreen();
-    } else if (elem.mozRequestFullScreen) {
-      return elem.mozRequestFullScreen();
-    }
-    return Promise.reject(new Error('Fullscreen not supported'));
-  }
-
   enterFullscreenBtn.addEventListener('click', () => {
-    enterFullscreen()
+    const rootElement = document.documentElement || document.body;
+
+    requestFullscreenCompat(rootElement)
       .then(() => {
         setTimeout(() => {
-          const isFullscreen = !!(document.fullscreenElement || 
-                                  document.webkitFullscreenElement || 
-                                  document.mozFullScreenElement || 
-                                  document.msFullscreenElement);
+          const isFullscreen = !!(
+            document.fullscreenElement ||
+            document.webkitFullscreenElement ||
+            document.mozFullScreenElement ||
+            document.msFullscreenElement
+          );
           
-          if (isFullscreen) {
+          if (isFullscreen || !fullscreenEnabled) {
+            // If fullscreen succeeded OR browser doesn't support fullscreen but we still proceed
             fullscreenModal.style.display = 'none';
             quizContent.classList.add('active');
             warningBanner.style.display = 'block';
             quizStarted = true;
-            fullscreenInitialized = true;
-            
+            fullscreenInitialized = isFullscreen;
+
             <?php if ($timeLimit > 0): ?>
             startTimer();
             <?php endif; ?>
           } else {
-            alert('⚠️ Please allow fullscreen to start the quiz.');
+            alert('⚠️ Please allow fullscreen in your browser settings to take the quiz.');
           }
         }, 100);
       })
       .catch((error) => {
         console.error('Fullscreen error:', error);
-        alert('⚠️ Unable to enter fullscreen. Please allow fullscreen permissions to take the quiz.');
+        alert('⚠️ Unable to enter fullscreen. Your browser or this in-app view may be blocking fullscreen.');
       });
   });
 
@@ -1179,10 +1365,12 @@ document.addEventListener("DOMContentLoaded", () => {
   document.addEventListener("MSFullscreenChange", handleFullscreenChange);
 
   function handleFullscreenChange() {
-    const isFullscreen = !!(document.fullscreenElement || 
-                            document.webkitFullscreenElement || 
-                            document.mozFullScreenElement || 
-                            document.msFullscreenElement);
+    const isFullscreen = !!(
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement
+    );
     
     if (isFullscreen && !fullscreenInitialized) {
       fullscreenInitialized = true;

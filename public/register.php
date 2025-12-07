@@ -80,8 +80,12 @@ $sections_map = [
       <?php endif; ?>
 
       <?php if ($success): ?>
-        <div class="mb-3 p-2 text-sm text-green-700 bg-green-100 rounded text-center">
-          <?= htmlspecialchars($success) ?>
+        <div class="mb-3 p-3 text-sm text-green-700 bg-green-100 rounded-lg">
+          <div class="font-semibold mb-1">✓ Registration Successful!</div>
+          <div><?= htmlspecialchars($success) ?></div>
+          <div class="mt-2 text-xs">
+            Your account is <strong>pending approval</strong>. You'll be notified once approved.
+          </div>
         </div>
       <?php endif; ?>
 
@@ -99,12 +103,23 @@ $sections_map = [
                  class="px-3 py-2 border rounded-xl text-sm">
         </div>
 
-        <!-- Student ID -->
-        <div id="studentIdField" class="<?= (old('role') === 'student') ? '' : 'hidden' ?>">
-          <input name="student_id" type="text" placeholder="Student ID"
-                 value="<?= old('student_id') ?>"
-                 class="w-full px-3 py-2 border rounded-xl text-sm">
-        </div>
+        <!-- Email -->
+        <input type="email" name="email" required placeholder="Email"
+               value="<?= old('email') ?>"
+               class="w-full px-3 py-2 border rounded-xl text-sm">
+
+        <!-- Gender (NEW) -->
+        <select name="gender" required class="w-full px-3 py-2 border rounded-xl text-sm">
+          <option value="">Select Gender</option>
+          <option value="Male" <?= old('gender') === 'Male' ? 'selected' : '' ?>>Male</option>
+          <option value="Female" <?= old('gender') === 'Female' ? 'selected' : '' ?>>Female</option>
+          <option value="Other" <?= old('gender') === 'Other' ? 'selected' : '' ?>>Other</option>
+        </select>
+
+        <!-- Username -->
+        <input type="text" name="username" required placeholder="Username"
+               value="<?= old('username') ?>"
+               class="w-full px-3 py-2 border rounded-xl text-sm">
 
         <!-- Role -->
         <select id="role" name="role" required class="w-full px-3 py-2 border rounded-xl text-sm">
@@ -113,7 +128,14 @@ $sections_map = [
           <option value="professor" <?= old('role') === 'professor' ? 'selected' : '' ?>>Professor</option>
         </select>
 
-        <!-- Year + Section -->
+        <!-- Student ID (shows only for students) -->
+        <div id="studentIdField" class="<?= (old('role') === 'student') ? '' : 'hidden' ?>">
+          <input name="student_id" type="text" placeholder="Student ID"
+                 value="<?= old('student_id') ?>"
+                 class="w-full px-3 py-2 border rounded-xl text-sm">
+        </div>
+
+        <!-- Year + Section (shows only for students) -->
         <div id="studentFields"
              class="grid grid-cols-1 sm:grid-cols-2 gap-3 <?= (old('role') === 'student') ? '' : 'hidden' ?>">
 
@@ -130,25 +152,34 @@ $sections_map = [
           </select>
         </div>
 
-        <!-- Email -->
-        <input type="email" name="email" required placeholder="Email"
-               value="<?= old('email') ?>"
-               class="w-full px-3 py-2 border rounded-xl text-sm">
+        <!-- Password with Toggle -->
+        <div class="relative">
+          <input id="password" type="password" name="password" required placeholder="Password"
+                 class="w-full px-3 py-2 pr-10 border rounded-xl text-sm">
+          <button type="button" onclick="togglePassword('password', 'togglePassword1')" 
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700">
+            <svg id="togglePassword1" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+          </button>
+        </div>
 
-        <!-- Username -->
-        <input type="text" name="username" required placeholder="Username"
-               value="<?= old('username') ?>"
-               class="w-full px-3 py-2 border rounded-xl text-sm">
-
-        <!-- Password -->
-        <input type="password" name="password" required placeholder="Password"
-               class="w-full px-3 py-2 border rounded-xl text-sm">
-
-        <input type="password" name="confirm" required placeholder="Confirm Password"
-               class="w-full px-3 py-2 border rounded-xl text-sm">
+        <!-- Confirm Password with Toggle -->
+        <div class="relative">
+          <input id="confirm" type="password" name="confirm" required placeholder="Confirm Password"
+                 class="w-full px-3 py-2 pr-10 border rounded-xl text-sm">
+          <button type="button" onclick="togglePassword('confirm', 'togglePassword2')" 
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700">
+            <svg id="togglePassword2" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+          </button>
+        </div>
 
         <!-- Submit -->
-        <button class="w-full bg-gradient-to-r from-teal-600 to-blue-600 text-white font-semibold py-2 rounded-xl text-sm">
+        <button class="w-full bg-gradient-to-r from-teal-600 to-blue-600 text-white font-semibold py-2 rounded-xl text-sm hover:from-teal-700 hover:to-blue-700 transition">
           Sign Up
         </button>
       </form>
@@ -171,6 +202,25 @@ $sections_map = [
     const studentIdField = document.getElementById("studentIdField");
     const year = document.getElementById("year");
     const section = document.getElementById("section");
+
+    // Password toggle function
+    function togglePassword(inputId, iconId) {
+      const input = document.getElementById(inputId);
+      const icon = document.getElementById(iconId);
+      
+      if (input.type === "password") {
+        input.type = "text";
+        icon.innerHTML = `
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+        `;
+      } else {
+        input.type = "password";
+        icon.innerHTML = `
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        `;
+      }
+    }
 
     // Role toggle
     function toggleStudentFields() {

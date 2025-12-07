@@ -18,17 +18,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $firstname = trim($_POST['firstname']);
     $lastname  = trim($_POST['lastname']);
     $email     = filter_var(trim($_POST['email']), FILTER_SANITIZE_EMAIL);
+    $gender    = trim($_POST['gender']);
     $username  = trim($_POST['username']);
     $role      = trim($_POST['role']);
     $password  = $_POST['password'];
     $confirm   = $_POST['confirm'];
 
-    $year      = $_POST['year'] ?? null;
-    $section   = $_POST['section'] ?? null;
-    $student_id = $_POST['student_id'] ?? null;
+    // Convert empty strings to null for optional fields
+    $year      = !empty($_POST['year']) ? $_POST['year'] : null;
+    $section   = !empty($_POST['section']) ? $_POST['section'] : null;
+    $student_id = !empty($_POST['student_id']) ? trim($_POST['student_id']) : null;
 
-    // Required fields
-    if (empty($firstname) || empty($lastname) || empty($email) || empty($username) || empty($password) || empty($role)) {
+    // Required fields validation
+    if (empty($firstname) || empty($lastname) || empty($email) || empty($gender) || empty($username) || empty($password) || empty($role)) {
         returnWithError("All fields are required.");
     }
 
@@ -36,16 +38,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         returnWithError("Invalid email format.");
     }
 
+    // Validate gender
+    if (!in_array($gender, ['Male', 'Female', 'Other'])) {
+        returnWithError("Please select a valid gender.");
+    }
+
+    // Student-specific validation
     if ($role === "student") {
         if (empty($year) || empty($section) || empty($student_id)) {
             returnWithError("Year, Section, and Student ID are required for students.");
         }
+    } else {
+        // For professors, set student_id to empty string instead of null
+        $student_id = '';
+        $year = null;
+        $section = null;
     }
 
+    // Username validation
     if (!preg_match('/^[a-zA-Z0-9_]{3,20}$/', $username)) {
         returnWithError("Username must be 3–20 characters and contain only letters, numbers, and underscores.");
     }
 
+    // Password validation
     if ($password !== $confirm) {
         returnWithError("Passwords do not match.");
     }
@@ -70,7 +85,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt->execute([$username]);
     if ($stmt->fetch()) returnWithError("This username is already taken.");
 
-    if ($role === "student") {
+    // Only check student_id if user is a student and student_id is provided
+    if ($role === "student" && !empty($student_id)) {
         $stmt = $conn->prepare("SELECT id FROM users WHERE student_id = ?");
         $stmt->execute([$student_id]);
         if ($stmt->fetch()) returnWithError("This Student ID is already registered.");
@@ -81,10 +97,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $status = "pending";
 
     try {
+        // Database columns: firstname, lastname, email, gender, password, role, year, section, student_id, status, created_at
         $stmt = $conn->prepare("
             INSERT INTO users 
-            (firstname, lastname, email, username, year, section, student_id, password, role, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            (firstname, lastname, email, username, gender, password, role, year, section, student_id, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
         ");
 
         $stmt->execute([
@@ -92,11 +109,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $lastname,
             $email,
             $username,
-            $role === "student" ? $year : null,
-            $role === "student" ? $section : null,
-            $role === "student" ? $student_id : null,
+            $gender,
             $hashedPassword,
             $role,
+            $year,       // null for professors
+            $section,    // null for professors
+            $student_id, // empty string for professors, actual ID for students
             $status
         ]);
 
@@ -105,11 +123,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             : "Registration successful! Your professor account is pending dean approval.";
 
         unset($_SESSION['old']); // clear restored data
-        header("Location: ../public/index.php");
+        
+        header("Location: ../public/register.php");
         exit;
 
     } catch (PDOException $e) {
-        returnWithError("Registration failed. Please try again.");
+        // Log error for debugging
+        error_log("Registration error: " . $e->getMessage());
+        returnWithError("Registration failed: " . $e->getMessage());
     }
 
 } else {

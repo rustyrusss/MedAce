@@ -1,8 +1,9 @@
 <?php
 session_start();
 require_once '../config/db_conn.php';
+require_once '../config/email_config.php'; // ✅ For sendEmail()
 
-// Enable error reporting
+// Enable error reporting (optional; you can remove in production)
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -19,6 +20,8 @@ $stmt = $conn->prepare("SELECT firstname, lastname, email, profile_pic, gender F
 $stmt->execute([$deanId]);
 $dean = $stmt->fetch(PDO::FETCH_ASSOC);
 $deanName = $dean ? $dean['firstname'] . " " . $dean['lastname'] : "Dean";
+$deanEmail = $dean['email'] ?? null;
+
 
 // Default avatar
 if (!empty($dean['gender'])) {
@@ -34,6 +37,132 @@ if (!empty($dean['gender'])) {
 }
 
 $profilePic = !empty($dean['profile_pic']) ? "../" . $dean['profile_pic'] : $defaultAvatar;
+
+/* =======================================================
+   HANDLE ADMIN ADD (SEND CODE + CREATE ADMIN)
+   ======================================================= */
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+    // 1) Send Verification Code
+    if (isset($_POST['start_admin_add'])) {
+        if (!$deanEmail) {
+            $_SESSION['admin_error'] = "Admin email is not set. Cannot send verification code.";
+            header("Location: dashboard.php");
+            exit();
+        }
+
+        try {
+            $code = random_int(100000, 999999);
+        } catch (Exception $e) {
+            $code = mt_rand(100000, 999999);
+        }
+
+        // Save code & expiry (10 minutes)
+        $_SESSION['admin_add_code'] = [
+            'code' => (string)$code,
+            'expires' => time() + 600 // 10 minutes
+        ];
+
+        $subject = "MedAce - Admin Account Verification Code";
+        $message = "
+            <!DOCTYPE html>
+            <html>
+            <body style='font-family: Arial, sans-serif; background:#f3f4f6; padding:20px;'>
+                <div style='max-width:600px;margin:auto;background:white;padding:30px;border-radius:10px;'>
+                    <h2 style='margin-top:0;'>Admin Account Verification</h2>
+                    <p>Hello " . htmlspecialchars($deanName) . ",</p>
+                    <p>You requested to add a new admin account in MedAce.</p>
+                    <p>Please use the verification code below to proceed:</p>
+                    <p style='font-size:24px;font-weight:bold;letter-spacing:4px;margin:20px 0;'>" . $code . "</p>
+                    <p>This code will expire in <strong>10 minutes</strong>.</p>
+                    <p>If you did not request this, you can ignore this email.</p>
+                    <p style='margin-top:30px;'>Best regards,<br><strong>MedAce Team</strong></p>
+                </div>
+            </body>
+            </html>
+        ";
+
+        if (sendEmail($deanEmail, $subject, $message)) {
+            $_SESSION['admin_success'] = "Verification code sent to your email.";
+        } else {
+            $_SESSION['admin_error'] = "Failed to send verification code. Please check your email configuration.";
+        }
+
+        header("Location: dashboard.php");
+        exit();
+    }
+
+    // 2) Create Admin Account (after code)
+    if (isset($_POST['create_admin'])) {
+        $enteredCode = trim($_POST['verification_code'] ?? '');
+        $stored = $_SESSION['admin_add_code'] ?? null;
+
+        if (!$stored) {
+            $_SESSION['admin_error'] = "No verification code found. Please request a new code first.";
+            header("Location: dashboard.php");
+            exit();
+        }
+
+        if (time() > $stored['expires']) {
+            unset($_SESSION['admin_add_code']);
+            $_SESSION['admin_error'] = "Verification code has expired. Please request a new one.";
+            header("Location: dashboard.php");
+            exit();
+        }
+
+        if ($enteredCode !== $stored['code']) {
+            $_SESSION['admin_error'] = "Invalid verification code. Please try again.";
+            header("Location: dashboard.php");
+            exit();
+        }
+
+        // Collect new admin data
+        $afirstname = trim($_POST['admin_firstname'] ?? '');
+        $alastname  = trim($_POST['admin_lastname'] ?? '');
+        $aemail     = trim($_POST['admin_email'] ?? '');
+        $ausername  = trim($_POST['admin_username'] ?? '');
+        $apassword  = $_POST['admin_password'] ?? '';
+
+        if (!$afirstname || !$alastname || !$aemail || !$ausername || !$apassword) {
+            $_SESSION['admin_error'] = "Please fill in all fields to create a new admin.";
+            header("Location: dashboard.php");
+            exit();
+        }
+
+        // Hash password
+        $hashedPassword = password_hash($apassword, PASSWORD_DEFAULT);
+
+        try {
+            // Optional: check unique email/username
+            $checkStmt = $conn->prepare("SELECT COUNT(*) FROM users WHERE email = ? OR username = ?");
+            $checkStmt->execute([$aemail, $ausername]);
+            $exists = $checkStmt->fetchColumn();
+
+            if ($exists > 0) {
+                $_SESSION['admin_error'] = "Email or username already exists.";
+                header("Location: dashboard.php");
+                exit();
+            }
+
+            // Insert new admin (role 'dean' for now, same as current)
+            $insert = $conn->prepare("
+                INSERT INTO users (firstname, lastname, email, username, password, role, status, created_at)
+                VALUES (?, ?, ?, ?, ?, 'dean', 'approved', NOW())
+            ");
+            $insert->execute([$afirstname, $alastname, $aemail, $ausername, $hashedPassword]);
+
+            unset($_SESSION['admin_add_code']); // consume code
+
+            $_SESSION['admin_success'] = "New admin account created successfully.";
+        } catch (PDOException $e) {
+            error_log("Create admin error: " . $e->getMessage());
+            $_SESSION['admin_error'] = "Failed to create admin. Please try again.";
+        }
+
+        header("Location: dashboard.php");
+        exit();
+    }
+}
 
 // Stats
 $totalProfessors = $conn->query("SELECT COUNT(*) FROM users WHERE role='professor'")->fetchColumn();
@@ -65,6 +194,15 @@ $approvedProfessors = $conn->query("
     ORDER BY created_at DESC 
     LIMIT 5
 ")->fetchAll(PDO::FETCH_ASSOC);
+
+// Flash messages
+$successMessage = $_SESSION['success'] ?? null;   // from other actions (like professor_approval)
+$errorMessage   = $_SESSION['error'] ?? null;
+
+$adminSuccess   = $_SESSION['admin_success'] ?? null;
+$adminError     = $_SESSION['admin_error'] ?? null;
+
+unset($_SESSION['success'], $_SESSION['error'], $_SESSION['admin_success'], $_SESSION['admin_error']);
 ?>
 <!DOCTYPE html>
 <html lang="en" class="scroll-smooth">
@@ -101,339 +239,138 @@ $approvedProfessors = $conn->query("
         }
     </script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            background: #f8fafc;
-            overflow-x: hidden;
-        }
-
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #f1f5f9;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: #f8fafc; overflow-x: hidden; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
         @keyframes slideInRight {
-            from {
-                opacity: 0;
-                transform: translateX(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
         }
-
         @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-
         @keyframes scaleIn {
-            from {
-                opacity: 0;
-                transform: scale(0.9);
-            }
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
         }
-
-        .animate-slide-in {
-            animation: slideInRight 0.5s ease-out;
-        }
-
-        .animate-fade-in-up {
-            animation: fadeInUp 0.6s ease-out;
-        }
-
-        .animate-scale-in {
-            animation: scaleIn 0.4s ease-out;
-        }
+        .animate-slide-in { animation: slideInRight 0.5s ease-out; }
+        .animate-fade-in-up { animation: fadeInUp 0.6s ease-out; }
+        .animate-scale-in { animation: scaleIn 0.4s ease-out; }
 
         .shadow-custom {
-            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1),
+                        0 1px 2px -1px rgba(0, 0, 0, 0.1);
         }
-
         .shadow-custom-lg {
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+                        0 4px 6px -4px rgba(0, 0, 0, 0.1);
         }
-
         .gradient-bg {
             background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%);
         }
-
         .card-hover {
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-
         .card-hover:hover {
             transform: translateY(-4px);
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+                        0 8px 10px -6px rgba(0, 0, 0, 0.1);
         }
+        .stat-icon-1 { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+        .stat-icon-2 { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .stat-icon-3 { background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%); }
+        .stat-icon-4 { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
 
-        .stat-icon-1 {
-            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-        }
-
-        .stat-icon-2 {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-        }
-
-        .stat-icon-3 {
-            background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%);
-        }
-
-        .stat-icon-4 {
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-        }
-
-        .table-row-hover {
-            transition: background-color 0.2s ease;
-        }
-
-        .table-row-hover:hover {
-            background-color: #faf5ff;
-        }
+        .table-row-hover { transition: background-color 0.2s ease; }
+        .table-row-hover:hover { background-color: #faf5ff; }
 
         .sidebar-transition {
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-
         @media (min-width: 1024px) {
-            .sidebar-collapsed {
-                width: 5rem;
-                transform: translateX(0);
-            }
-
+            .sidebar-collapsed { width: 5rem; transform: translateX(0); }
             .sidebar-collapsed .nav-text,
-            .sidebar-collapsed .profile-info {
-                opacity: 0;
-                width: 0;
-                overflow: hidden;
-            }
-
-            .sidebar-expanded {
-                width: 18rem;
-                transform: translateX(0);
-            }
-
+            .sidebar-collapsed .profile-info { opacity: 0; width: 0; overflow: hidden; }
+            .sidebar-expanded { width: 18rem; transform: translateX(0); }
             .sidebar-expanded .nav-text,
-            .sidebar-expanded .profile-info {
-                opacity: 1;
-                width: auto;
-            }
+            .sidebar-expanded .profile-info { opacity: 1; width: auto; }
         }
-
         @media (max-width: 1023px) {
-            .sidebar-collapsed {
-                width: 18rem;
-                transform: translateX(-100%);
-            }
-
+            .sidebar-collapsed { width: 18rem; transform: translateX(-100%); }
             .sidebar-collapsed .nav-text,
-            .sidebar-collapsed .profile-info {
-                opacity: 1;
-                width: auto;
-            }
-            
-            .sidebar-expanded {
-                width: 18rem;
-                transform: translateX(0);
-            }
-
+            .sidebar-collapsed .profile-info { opacity: 1; width: auto; }
+            .sidebar-expanded { width: 18rem; transform: translateX(0); }
             .sidebar-expanded .nav-text,
-            .sidebar-expanded .profile-info {
-                opacity: 1;
-                width: auto;
-            }
+            .sidebar-expanded .profile-info { opacity: 1; width: auto; }
         }
 
         .sidebar-toggle-btn {
-            width: 40px;
-            height: 40px;
-            position: relative;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: transparent;
-            border: 2px solid #cbd5e1;
-            border-radius: 8px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            padding: 0;
-            flex-shrink: 0;
+            width: 40px; height: 40px; position: relative; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            background: transparent; border: 2px solid #cbd5e1; border-radius: 8px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 0; flex-shrink: 0;
         }
-
-        .sidebar-toggle-btn:hover {
-            border-color: #a855f7;
-            background: #faf5ff;
-        }
-
-        .sidebar-toggle-btn:active {
-            transform: scale(0.95);
-        }
+        .sidebar-toggle-btn:hover { border-color: #a855f7; background: #faf5ff; }
+        .sidebar-toggle-btn:active { transform: scale(0.95); }
 
         .sidebar-toggle-btn .toggle-icon {
-            width: 24px;
-            height: 24px;
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            width: 24px; height: 24px; position: relative;
+            display: flex; align-items: center; justify-content: center;
         }
-
         .sidebar-toggle-btn .toggle-icon::before {
-            content: '';
-            position: absolute;
-            left: 2px;
-            width: 3px;
-            height: 16px;
-            background-color: #64748b;
-            border-radius: 2px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            content: ''; position: absolute; left: 2px;
+            width: 3px; height: 16px; background-color: #64748b;
+            border-radius: 2px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-
         .sidebar-toggle-btn .toggle-icon::after {
-            content: '';
-            position: absolute;
-            right: 2px;
-            width: 6px;
-            height: 6px;
-            border-right: 2px solid #64748b;
-            border-bottom: 2px solid #64748b;
-            transform: rotate(-45deg);
+            content: ''; position: absolute; right: 2px;
+            width: 6px; height: 6px; border-right: 2px solid #64748b;
+            border-bottom: 2px solid #64748b; transform: rotate(-45deg);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-
         .sidebar-toggle-btn:hover .toggle-icon::before,
         .sidebar-toggle-btn:hover .toggle-icon::after {
-            border-color: #a855f7;
-            background-color: #a855f7;
+            border-color: #a855f7; background-color: #a855f7;
         }
-
-        .sidebar-toggle-btn.active .toggle-icon::after {
-            transform: rotate(135deg);
-            right: 4px;
-        }
-
-        .sidebar-toggle-btn.active .toggle-icon::before {
-            background-color: #a855f7;
-        }
-
-        .sidebar-toggle-btn.active {
-            border-color: #a855f7;
-            background: #faf5ff;
-        }
+        .sidebar-toggle-btn.active .toggle-icon::after { transform: rotate(135deg); right: 4px; }
+        .sidebar-toggle-btn.active .toggle-icon::before { background-color: #a855f7; }
+        .sidebar-toggle-btn.active { border-color: #a855f7; background: #faf5ff; }
 
         @media (max-width: 1023px) {
-            .sidebar-toggle-btn {
-                width: 36px;
-                height: 36px;
-            }
-
-            .sidebar-toggle-btn .toggle-icon {
-                width: 20px;
-                height: 20px;
-            }
-
-            .sidebar-toggle-btn .toggle-icon::before {
-                height: 14px;
-            }
-
-            .sidebar-toggle-btn .toggle-icon::after {
-                width: 5px;
-                height: 5px;
-            }
+            .sidebar-toggle-btn { width: 36px; height: 36px; }
+            .sidebar-toggle-btn .toggle-icon { width: 20px; height: 20px; }
+            .sidebar-toggle-btn .toggle-icon::before { height: 14px; }
+            .sidebar-toggle-btn .toggle-icon::after { width: 5px; height: 5px; }
         }
 
         #sidebar-overlay {
-            opacity: 0;
-            pointer-events: none;
+            opacity: 0; pointer-events: none;
             transition: opacity 0.3s ease-in-out;
         }
-
-        #sidebar-overlay.show {
-            opacity: 1;
-            pointer-events: auto;
-        }
+        #sidebar-overlay.show { opacity: 1; pointer-events: auto; }
 
         @media (max-width: 1023px) {
-            #main-content {
-                margin-left: 0 !important;
-            }
-
-            #sidebar-overlay {
-                display: none;
-            }
-
-            #sidebar-overlay.show {
-                display: block;
-            }
+            #main-content { margin-left: 0 !important; }
+            #sidebar-overlay { display: none; }
+            #sidebar-overlay.show { display: block; }
         }
 
         .badge {
-            display: inline-flex;
-            align-items: center;
-            padding: 0.25rem 0.75rem;
-            border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            letter-spacing: 0.025em;
+            display: inline-flex; align-items: center;
+            padding: 0.25rem 0.75rem; border-radius: 9999px;
+            font-size: 0.75rem; font-weight: 600; letter-spacing: 0.025em;
         }
 
-        body {
-            overflow-x: hidden;
-        }
-
-        #main-content {
-            max-width: 100vw;
-            overflow-x: hidden;
-        }
-
-        .table-container {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-        }
-
-        .table-container::-webkit-scrollbar {
-            height: 6px;
-        }
-
-        .table-container::-webkit-scrollbar-track {
-            background: #f1f5f9;
-            border-radius: 3px;
-        }
-
-        .table-container::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 3px;
-        }
+        #main-content { max-width: 100vw; overflow-x: hidden; }
+        .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .table-container::-webkit-scrollbar { height: 6px; }
+        .table-container::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 3px; }
+        .table-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 antialiased">
@@ -515,10 +452,52 @@ $approvedProfessors = $conn->query("
 
         <!-- Content -->
         <div class="px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 max-w-full">
+
+            <!-- Flash Messages -->
+            <?php if ($successMessage || $adminSuccess): ?>
+                <div class="mb-4 sm:mb-6">
+                    <div class="bg-green-50 border-l-4 border-green-500 rounded-lg p-4 flex items-start justify-between shadow-sm">
+                        <div class="flex items-start">
+                            <i class="fas fa-check-circle text-green-500 text-xl mr-3 mt-0.5"></i>
+                            <p class="text-green-800 text-sm font-medium">
+                                <?= htmlspecialchars($successMessage ?: $adminSuccess) ?>
+                            </p>
+                        </div>
+                        <button onclick="this.parentElement.parentElement.remove()" class="text-green-500 hover:text-green-700">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($errorMessage || $adminError): ?>
+                <div class="mb-4 sm:mb-6">
+                    <div class="bg-red-50 border-l-4 border-red-500 rounded-lg p-4 flex items-start justify-between shadow-sm">
+                        <div class="flex items-start">
+                            <i class="fas fa-exclamation-circle text-red-500 text-xl mr-3 mt-0.5"></i>
+                            <p class="text-red-800 text-sm font-medium">
+                                <?= htmlspecialchars($errorMessage ?: $adminError) ?>
+                            </p>
+                        </div>
+                        <button onclick="this.parentElement.parentElement.remove()" class="text-red-500 hover:text-red-700">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <!-- Welcome Banner -->
             <div class="gradient-bg rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8 text-white shadow-custom-lg animate-fade-in-up">
                 <h1 class="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-bold mb-1 sm:mb-2">Welcome back, Dean! 👋</h1>
                 <p class="text-purple-100 text-xs sm:text-sm lg:text-base">Here's an overview of your institution's activity and management.</p>
+            </div>
+
+            <!-- Add Admin Button -->
+            <div class="mb-6 sm:mb-8 animate-fade-in-up">
+                <button onclick="openAdminModal()" class="px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 transition shadow-custom flex items-center gap-2">
+                    <i class="fas fa-user-shield"></i>
+                    <span>Add Admin Account</span>
+                </button>
             </div>
 
             <!-- Stats Grid -->
@@ -736,8 +715,159 @@ $approvedProfessors = $conn->query("
     </main>
 </div>
 
+<!-- Admin Modal -->
+<div id="adminModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4" onclick="closeAdminModal(event)">
+    <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl animate-scale-in" onclick="event.stopPropagation()">
+        <!-- Modal Header -->
+        <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+            <div>
+                <h2 class="text-xl font-bold text-gray-900 flex items-center">
+                    <i class="fas fa-user-shield text-primary-600 mr-2"></i>
+                    Add Admin Account
+                </h2>
+                <p class="text-sm text-gray-500 mt-1">
+                    Before creating a new admin, a verification code will be sent to your registered email.
+                </p>
+            </div>
+            <button onclick="closeAdminModal()" class="text-gray-400 hover:text-gray-600 transition">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="p-6 space-y-6">
+            <!-- Step 1: Send Verification Code -->
+            <div class="bg-primary-50 border border-primary-100 rounded-xl p-4">
+                <div class="flex items-start gap-3 mb-4">
+                    <div class="w-8 h-8 flex items-center justify-center rounded-full bg-primary-500 text-white text-sm font-bold flex-shrink-0">1</div>
+                    <div class="flex-1">
+                        <p class="text-sm font-semibold text-gray-900">Send verification code</p>
+                        <p class="text-sm text-gray-600 mt-1">
+                            A 6-digit code will be sent to <strong><?= htmlspecialchars($deanEmail ?: 'your registered email') ?></strong>.
+                        </p>
+                    </div>
+                </div>
+                <form method="POST">
+                    <button type="submit" name="start_admin_add"
+                            class="w-full px-4 py-2.5 rounded-lg bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 transition flex items-center justify-center gap-2">
+                        <i class="fas fa-paper-plane"></i>
+                        <span>Send Code</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Step 2: Create Admin Form -->
+            <div class="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                <div class="flex items-start gap-3 mb-4">
+                    <div class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-700 text-white text-sm font-bold flex-shrink-0">2</div>
+                    <div class="flex-1">
+                        <p class="text-sm font-semibold text-gray-900">Enter code & admin details</p>
+                        <p class="text-sm text-gray-600 mt-1">
+                            Use the code from your email, then fill in the new admin account information.
+                        </p>
+                    </div>
+                </div>
+
+                <form method="POST" class="space-y-4">
+                    <input type="hidden" name="create_admin" value="1">
+
+                    <!-- Verification Code -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+                            Verification Code <span class="text-red-500">*</span>
+                        </label>
+                        <input type="text" name="verification_code" maxlength="6" required
+                               class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                               placeholder="Enter 6-digit code">
+                    </div>
+
+                    <!-- Name Fields -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                First Name <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" name="admin_firstname" required
+                                   class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                   placeholder="Enter first name">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                Last Name <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" name="admin_lastname" required
+                                   class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                   placeholder="Enter last name">
+                        </div>
+                    </div>
+
+                    <!-- Email & Username -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                Email <span class="text-red-500">*</span>
+                            </label>
+                            <input type="email" name="admin_email" required
+                                   class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                   placeholder="admin@example.com">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                Username <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" name="admin_username" required
+                                   class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                   placeholder="Enter username">
+                        </div>
+                    </div>
+
+                    <!-- Password -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+                            Password <span class="text-red-500">*</span>
+                        </label>
+                        <input type="password" name="admin_password" required
+                               class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                               placeholder="Enter secure password">
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div class="flex gap-3 pt-2">
+                        <button type="button" onclick="closeAdminModal()"
+                                class="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                                class="flex-1 px-4 py-2.5 rounded-lg bg-gray-800 text-white text-sm font-semibold hover:bg-gray-900 transition flex items-center justify-center gap-2">
+                            <i class="fas fa-user-plus"></i>
+                            <span>Create Admin Account</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     let sidebarExpanded = false;
+
+    function openAdminModal() {
+        const modal = document.getElementById('adminModal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeAdminModal(event) {
+        if (event && event.target !== event.currentTarget) return;
+        const modal = document.getElementById('adminModal');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        document.body.style.overflow = 'auto';
+    }
 
     function toggleSidebar() {
         const sidebar = document.getElementById('sidebar');
@@ -745,18 +875,18 @@ $approvedProfessors = $conn->query("
         const overlay = document.getElementById('sidebar-overlay');
         const hamburgerBtn = document.getElementById('hamburgerBtn');
         const mobileHamburgerBtn = document.getElementById('mobileHamburgerBtn');
-        
+
         sidebarExpanded = !sidebarExpanded;
-        
+
         hamburgerBtn.classList.toggle('active');
         mobileHamburgerBtn.classList.toggle('active');
-        
+
         if (window.innerWidth < 1024) {
             sidebar.classList.toggle('sidebar-expanded');
             sidebar.classList.toggle('sidebar-collapsed');
             overlay.classList.toggle('hidden');
             overlay.classList.toggle('show');
-            
+
             if (sidebarExpanded) {
                 document.body.style.overflow = 'hidden';
             } else {
@@ -765,7 +895,7 @@ $approvedProfessors = $conn->query("
         } else {
             sidebar.classList.toggle('sidebar-expanded');
             sidebar.classList.toggle('sidebar-collapsed');
-            
+
             if (sidebarExpanded) {
                 mainContent.style.marginLeft = '18rem';
             } else {
@@ -783,7 +913,7 @@ $approvedProfessors = $conn->query("
     document.addEventListener('DOMContentLoaded', function() {
         const sidebar = document.getElementById('sidebar');
         const mainContent = document.getElementById('main-content');
-        
+
         if (window.innerWidth >= 1024) {
             sidebar.classList.add('sidebar-collapsed');
             sidebar.classList.remove('sidebar-expanded');
@@ -805,17 +935,17 @@ $approvedProfessors = $conn->query("
                 const overlay = document.getElementById('sidebar-overlay');
                 const hamburgerBtn = document.getElementById('hamburgerBtn');
                 const mobileHamburgerBtn = document.getElementById('mobileHamburgerBtn');
-                
+
                 if (window.innerWidth >= 1024) {
                     overlay.classList.add('hidden');
                     overlay.classList.remove('show');
                     document.body.style.overflow = 'auto';
-                    
+
                     if (!sidebar.classList.contains('sidebar-collapsed') && !sidebar.classList.contains('sidebar-expanded')) {
                         sidebar.classList.add('sidebar-collapsed');
                         sidebarExpanded = false;
                     }
-                    
+
                     if (sidebarExpanded) {
                         mainContent.style.marginLeft = '18rem';
                     } else {
@@ -823,7 +953,7 @@ $approvedProfessors = $conn->query("
                     }
                 } else {
                     mainContent.style.marginLeft = '0';
-                    
+
                     if (sidebarExpanded) {
                         sidebar.classList.remove('sidebar-collapsed');
                         sidebar.classList.add('sidebar-expanded');
@@ -844,6 +974,7 @@ $approvedProfessors = $conn->query("
 
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
+                closeAdminModal();
                 if (sidebarExpanded && window.innerWidth < 1024) {
                     closeSidebar();
                 }
@@ -853,16 +984,16 @@ $approvedProfessors = $conn->query("
 
     let touchStartX = 0;
     let touchEndX = 0;
-    
+
     document.addEventListener('touchstart', function(e) {
         touchStartX = e.changedTouches[0].screenX;
     }, false);
-    
+
     document.addEventListener('touchend', function(e) {
         touchEndX = e.changedTouches[0].screenX;
         handleSwipe();
     }, false);
-    
+
     function handleSwipe() {
         if (window.innerWidth < 1024) {
             if (touchEndX - touchStartX > 50 && !sidebarExpanded) {

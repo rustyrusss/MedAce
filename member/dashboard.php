@@ -750,7 +750,7 @@ $dailyTip = $dailyTipStmt ? $dailyTipStmt->fetchColumn() : null;
                                 <input type="password" id="currentPassword" name="currentPassword" required 
                                        class="w-full px-3 lg:px-4 py-2 lg:py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm lg:text-base"
                                        placeholder="Enter your current password">
-                                <button type="button" onclick="togglePasswordVisibility('currentPassword')" 
+                                <button type="button" onclick="togglePasswordVisibility('currentPassword', event)" 
                                         class="absolute right-2 lg:right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 p-2">
                                     <i class="fas fa-eye text-sm"></i>
                                 </button>
@@ -765,7 +765,7 @@ $dailyTip = $dailyTipStmt ? $dailyTipStmt->fetchColumn() : null;
                                 <input type="password" id="newPassword" name="newPassword" required 
                                        class="w-full px-3 lg:px-4 py-2 lg:py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm lg:text-base"
                                        placeholder="Enter your new password">
-                                <button type="button" onclick="togglePasswordVisibility('newPassword')" 
+                                <button type="button" onclick="togglePasswordVisibility('newPassword', event)" 
                                         class="absolute right-2 lg:right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 p-2">
                                     <i class="fas fa-eye text-sm"></i>
                                 </button>
@@ -788,7 +788,7 @@ $dailyTip = $dailyTipStmt ? $dailyTipStmt->fetchColumn() : null;
                                 <input type="password" id="confirmPassword" name="confirmPassword" required 
                                        class="w-full px-3 lg:px-4 py-2 lg:py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm lg:text-base"
                                        placeholder="Confirm your new password">
-                                <button type="button" onclick="togglePasswordVisibility('confirmPassword')" 
+                                <button type="button" onclick="togglePasswordVisibility('confirmPassword', event)" 
                                         class="absolute right-2 lg:right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 p-2">
                                     <i class="fas fa-eye text-sm"></i>
                                 </button>
@@ -1048,50 +1048,643 @@ $dailyTip = $dailyTipStmt ? $dailyTipStmt->fetchColumn() : null;
 <?php include __DIR__ . '/../includes/chatbot.php'; ?>
 
 <script>
-    // ============================================
-    // GLOBAL VARIABLES
-    // ============================================
-    let sidebarExpanded = false;
-    let chatbotOpen = false;
-    let messageHistory = [];
+// ============================================
+// GLOBAL VARIABLES
+// ============================================
+let sidebarExpanded = false;
+let chatbotOpen = false;
+let messageHistory = [];
 
-    const API_CONFIG = {
-        url: '../config/chatbot_integration.php',
-        model: 'gpt-4o-nano',
-        maxTokens: 1024
-    };
+const API_CONFIG = {
+    url: '../config/chatbot_endpoint.php',
+    model: 'gpt-4o-nano',
+    maxTokens: 1024
+};
 
-    // ============================================
-    // SIDEBAR FUNCTIONS
-    // ============================================
+console.log('✅ Dashboard script loaded');
+
+// ============================================
+// SIDEBAR FUNCTIONS (GLOBAL)
+// ============================================
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const mainContent = document.getElementById('main-content');
+    const overlay = document.getElementById('sidebar-overlay');
     
-    function toggleSidebar() {
-        console.log('Toggle sidebar called');
+    if (!sidebar || !mainContent || !overlay) {
+        console.error('Sidebar elements not found!');
+        return;
+    }
+    
+    sidebarExpanded = !sidebarExpanded;
+    console.log('Toggling sidebar, expanded:', sidebarExpanded);
+    
+    if (window.innerWidth < 1024) {
+        // Mobile behavior: slide in/out
+        if (sidebarExpanded) {
+            sidebar.classList.remove('sidebar-collapsed');
+            sidebar.classList.add('sidebar-expanded');
+            overlay.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        } else {
+            sidebar.classList.remove('sidebar-expanded');
+            sidebar.classList.add('sidebar-collapsed');
+            overlay.classList.add('hidden');
+            document.body.style.overflow = 'auto';
+        }
+    } else {
+        // Desktop behavior: widen/narrow + content margin
+        if (sidebarExpanded) {
+            sidebar.classList.remove('sidebar-collapsed');
+            sidebar.classList.add('sidebar-expanded');
+            mainContent.classList.remove('lg:ml-20');
+            mainContent.classList.add('lg:ml-72');
+        } else {
+            sidebar.classList.remove('sidebar-expanded');
+            sidebar.classList.add('sidebar-collapsed');
+            mainContent.classList.remove('lg:ml-72');
+            mainContent.classList.add('lg:ml-20');
+        }
+    }
+}
+
+function closeSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const mainContent = document.getElementById('main-content');
+    const overlay = document.getElementById('sidebar-overlay');
+    
+    if (!sidebar || !mainContent || !overlay) return;
+
+    if (window.innerWidth < 1024) {
+        sidebarExpanded = false;
+        sidebar.classList.remove('sidebar-expanded');
+        sidebar.classList.add('sidebar-collapsed');
+        overlay.classList.add('hidden');
+        document.body.style.overflow = 'auto';
+    }
+}
+
+// ============================================
+// MODAL FUNCTIONS
+// ============================================
+function openUploadModal() {
+    console.log('Opening upload modal');
+    const modal = document.getElementById('uploadModal');
+    if (modal) {
+        modal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+    } else {
+        console.error('Upload modal not found!');
+    }
+}
+
+function closeUploadModal() {
+    const modal = document.getElementById('uploadModal');
+    if (modal) {
+        modal.classList.remove('show');
+        document.body.style.overflow = 'auto';
+    }
+}
+
+function previewProfilePicture(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const preview = document.getElementById('previewImage');
+            if (preview) {
+                preview.src = e.target.result;
+            }
+        }
+        reader.readAsDataURL(file);
+    }
+}
+
+function openProfileSettingsModal() {
+    console.log('Opening profile settings modal');
+    const modal = document.getElementById('profileSettingsModal');
+    if (modal) {
+        modal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+    } else {
+        console.error('Profile settings modal not found!');
+    }
+}
+
+function closeProfileSettingsModal() {
+    const modal = document.getElementById('profileSettingsModal');
+    if (modal) {
+        modal.classList.remove('show');
+        document.body.style.overflow = 'auto';
+        resetPasswordForm();
+    }
+}
+
+function switchTab(event, tabName) {
+    document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+
+    event.currentTarget.classList.add('active');
+    const tabContent = document.getElementById(tabName + '-tab');
+    if (tabContent) {
+        tabContent.classList.add('active');
+    }
+}
+
+function togglePasswordVisibility(fieldId, evt) {
+    const field = document.getElementById(fieldId);
+    const button = evt.currentTarget;
+    const icon = button.querySelector('i');
+    
+    if (field && icon) {
+        if (field.type === 'password') {
+            field.type = 'text';
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        } else {
+            field.type = 'password';
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        }
+    }
+}
+
+function resetPasswordForm() {
+    const form = document.getElementById('changePasswordForm');
+    if (form) {
+        form.reset();
+    }
+    document.getElementById('passwordStrength')?.classList.add('hidden');
+    document.getElementById('passwordMatch')?.classList.add('hidden');
+    document.getElementById('passwordError')?.classList.add('hidden');
+    document.getElementById('passwordSuccess')?.classList.add('hidden');
+}
+
+// ============================================
+// CHATBOT FUNCTIONS
+// ============================================
+function toggleChatbot() {
+    const windowEl = document.getElementById('chatbotWindow');
+    const icon = document.getElementById('chatbotIcon');
+    const quickActions = document.getElementById('quickActions');
+    
+    if (!windowEl || !icon) {
+        console.error('Chatbot elements not found!');
+        return;
+    }
+    
+    chatbotOpen = !chatbotOpen;
+    console.log('Chatbot toggled:', chatbotOpen);
+    
+    if (chatbotOpen) {
+        windowEl.classList.remove('hidden');
+        windowEl.classList.add('animate-scale-in');
+        icon.classList.remove('fa-robot');
+        icon.classList.add('fa-times');
+        if (quickActions) {
+            quickActions.classList.add('hidden');
+        }
+        
+        setTimeout(() => {
+            const input = document.getElementById('chatInput');
+            if (input) input.focus();
+        }, 300);
+    } else {
+        windowEl.classList.add('hidden');
+        windowEl.classList.remove('animate-scale-in');
+        icon.classList.remove('fa-times');
+        icon.classList.add('fa-robot');
+    }
+}
+
+function handleInputKeydown(event) {
+    const textarea = event.target;
+    
+    // Auto-resize
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+    
+    // Send on Enter (without Shift)
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage(event);
+    }
+}
+
+async function sendMessage(event) {
+    if (event && event.preventDefault) {
+        event.preventDefault();
+    }
+    
+    const input = document.getElementById('chatInput');
+    if (!input) {
+        console.error('Chat input not found!');
+        return;
+    }
+    
+    const message = input.value.trim();
+    
+    if (!message) {
+        console.log('Empty message, not sending');
+        return;
+    }
+    
+    console.log('Sending message:', message);
+    
+    addMessage(message, 'user');
+    input.value = '';
+    input.style.height = 'auto';
+    
+    showTypingIndicator(true);
+    
+    try {
+        const response = await callChatAPI(message);
+        showTypingIndicator(false);
+        addMessage(response, 'bot');
+    } catch (error) {
+        showTypingIndicator(false);
+        console.error('Chat API error:', error);
+        addMessage('Sorry, I encountered an error: ' + error.message, 'bot', true);
+    }
+}
+
+function addMessage(text, sender, isError = false) {
+    const messagesContainer = document.getElementById('chatMessages');
+    if (!messagesContainer) {
+        console.error('Messages container not found!');
+        return;
+    }
+    
+    const messageDiv = document.createElement('div');
+    
+    const timestamp = new Date().toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit' 
+    });
+    
+    if (sender === 'user') {
+        messageDiv.className = 'flex items-start space-x-2 justify-end message-slide-in mb-4';
+        messageDiv.innerHTML = `
+            <div class="flex-1 flex flex-col items-end">
+                <div class="bg-primary-600 text-white rounded-2xl rounded-tr-none px-4 py-3 shadow-sm max-w-[85%]">
+                    <p class="text-sm break-words">${escapeHtml(text)}</p>
+                </div>
+                <span class="text-xs text-gray-500 mt-1">${timestamp}</span>
+            </div>
+            <div class="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-user text-white text-sm"></i>
+            </div>
+        `;
+    } else {
+        messageDiv.className = 'flex items-start space-x-2 message-slide-in mb-4';
+        messageDiv.innerHTML = `
+            <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-robot text-primary-600 text-sm"></i>
+            </div>
+            <div class="flex-1">
+                <div class="bg-white ${isError ? 'border-2 border-red-300' : ''} rounded-2xl rounded-tl-none px-4 py-3 shadow-sm">
+                    <p class="text-gray-800 text-sm break-words whitespace-pre-wrap">${isError ? escapeHtml(text) : formatBotMessage(text)}</p>
+                </div>
+                <span class="text-xs text-gray-500 mt-1 block">${timestamp}</span>
+            </div>
+        `;
+    }
+    
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    
+    messageHistory.push({ role: sender === 'user' ? 'user' : 'assistant', content: text });
+}
+
+function showTypingIndicator(show) {
+    const indicator = document.getElementById('typingIndicator');
+    const messagesContainer = document.getElementById('chatMessages');
+    
+    if (!indicator) {
+        console.error('Typing indicator not found!');
+        return;
+    }
+    
+    if (show) {
+        indicator.classList.remove('hidden');
+        if (messagesContainer) {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+    } else {
+        indicator.classList.add('hidden');
+    }
+}
+
+async function callChatAPI(userMessage) {
+    try {
+        const response = await fetch(API_CONFIG.url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: 'chat',
+                message: userMessage
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('API Error Response:', errorText);
+            throw new Error(`API request failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        if (data.reply) {
+            return data.reply;
+        }
+        
+        throw new Error('Invalid API response format');
+    } catch (error) {
+        console.error('Chat API Error:', error);
+        throw error;
+    }
+}
+
+function quickQuestion(question) {
+    const input = document.getElementById('chatInput');
+    if (input) {
+        input.value = question;
+    }
+    if (!chatbotOpen) {
+        toggleChatbot();
+    }
+    setTimeout(() => {
+        const form = document.getElementById('chatForm');
+        if (form) {
+            form.dispatchEvent(new Event('submit'));
+        }
+    }, 300);
+}
+
+// ============================================
+// UTILITY FUNCTIONS
+// ============================================
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatBotMessage(text) {
+    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/^\d+\.\s+(.+)$/gm, '<div class="ml-2 mb-1">• $1</div>');
+    text = text.replace(/^[•\-]\s+(.+)$/gm, '<div class="ml-2 mb-1">• $1</div>');
+    return text;
+}
+
+function displayCurrentDate() {
+    const dateElement = document.getElementById('currentDate');
+    if (dateElement) {
+        const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
+        const today = new Date();
+        dateElement.textContent = today.toLocaleDateString('en-US', options);
+    }
+}
+
+// ============================================
+// PASSWORD HELPERS
+// ============================================
+function checkPasswordStrength() {
+    const passwordInput = document.getElementById('newPassword');
+    if (!passwordInput) return;
+
+    passwordInput.addEventListener('input', function() {
+        const password = this.value;
+        const strengthContainer = document.getElementById('passwordStrength');
+        const strengthBar = document.getElementById('strengthBar');
+        const strengthText = document.getElementById('strengthText');
+        
+        if (!strengthContainer || !strengthBar || !strengthText) return;
+        
+        if (password.length === 0) {
+            strengthContainer.classList.add('hidden');
+            return;
+        }
+        
+        strengthContainer.classList.remove('hidden');
+        
+        let strength = 0;
+        if (password.length >= 8) strength++;
+        if (password.match(/[a-z]+/)) strength++;
+        if (password.match(/[A-Z]+/)) strength++;
+        if (password.match(/[0-9]+/)) strength++;
+        if (password.match(/[$@#&!]+/)) strength++;
+        
+        const strengthLevels = [
+            { width: '20%', color: 'bg-red-500', text: 'Very Weak', textColor: 'text-red-600' },
+            { width: '40%', color: 'bg-orange-500', text: 'Weak', textColor: 'text-orange-600' },
+            { width: '60%', color: 'bg-yellow-500', text: 'Fair', textColor: 'text-yellow-600' },
+            { width: '80%', color: 'bg-blue-500', text: 'Good', textColor: 'text-blue-600' },
+            { width: '100%', color: 'bg-green-500', text: 'Strong', textColor: 'text-green-600' }
+        ];
+        
+        const level = strengthLevels[strength - 1] || strengthLevels[0];
+        strengthBar.style.width = level.width;
+        strengthBar.className = 'h-full transition-all duration-300 ' + level.color;
+        strengthText.textContent = level.text;
+        strengthText.className = 'text-xs lg:text-sm font-medium ' + level.textColor;
+    });
+}
+
+function checkPasswordMatch() {
+    const confirmInput = document.getElementById('confirmPassword');
+    if (!confirmInput) return;
+
+    confirmInput.addEventListener('input', function() {
+        const newPassword = document.getElementById('newPassword')?.value;
+        const confirmPassword = this.value;
+        const matchIndicator = document.getElementById('passwordMatch');
+        
+        if (!matchIndicator) return;
+        
+        if (confirmPassword.length === 0) {
+            matchIndicator.classList.add('hidden');
+            return;
+        }
+        
+        matchIndicator.classList.remove('hidden');
+        
+        if (newPassword === confirmPassword) {
+            matchIndicator.textContent = '✓ Passwords match';
+            matchIndicator.className = 'mt-2 text-xs lg:text-sm text-green-600 font-medium';
+        } else {
+            matchIndicator.textContent = '✗ Passwords do not match';
+            matchIndicator.className = 'mt-2 text-xs lg:text-sm text-red-600 font-medium';
+        }
+    });
+}
+
+function handlePasswordChange() {
+    const form = document.getElementById('changePasswordForm');
+    if (!form) return;
+
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const currentPassword = document.getElementById('currentPassword')?.value;
+        const newPassword = document.getElementById('newPassword')?.value;
+        const confirmPassword = document.getElementById('confirmPassword')?.value;
+        
+        const errorDiv = document.getElementById('passwordError');
+        const errorText = document.getElementById('passwordErrorText');
+        const successDiv = document.getElementById('passwordSuccess');
+        
+        if (errorDiv) errorDiv.classList.add('hidden');
+        if (successDiv) successDiv.classList.add('hidden');
+        
+        if (newPassword !== confirmPassword) {
+            if (errorText) errorText.textContent = 'New passwords do not match!';
+            if (errorDiv) errorDiv.classList.remove('hidden');
+            return;
+        }
+        
+        if (newPassword.length < 8) {
+            if (errorText) errorText.textContent = 'Password must be at least 8 characters long!';
+            if (errorDiv) errorDiv.classList.remove('hidden');
+            return;
+        }
+        
+        if (newPassword === currentPassword) {
+            if (errorText) errorText.textContent = 'New password must be different from current password!';
+            if (errorDiv) errorDiv.classList.remove('hidden');
+            return;
+        }
+        
+        try {
+            const formData = new FormData();
+            formData.append('currentPassword', currentPassword);
+            formData.append('newPassword', newPassword);
+            
+            const response = await fetch('../actions/change_password_action.php', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                if (successDiv) successDiv.classList.remove('hidden');
+                setTimeout(() => {
+                    resetPasswordForm();
+                    if (successDiv) successDiv.classList.add('hidden');
+                }, 3000);
+            } else {
+                if (errorText) errorText.textContent = result.message || 'Failed to change password. Please try again.';
+                if (errorDiv) errorDiv.classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error('Password change error:', error);
+            if (errorText) errorText.textContent = 'An error occurred. Please try again.';
+            if (errorDiv) errorDiv.classList.remove('hidden');
+        }
+    });
+}
+
+// ============================================
+// INITIALIZATION
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Initializing dashboard...');
+    
+    // Initialize sidebar state
+    const sidebar = document.getElementById('sidebar');
+    const mainContent = document.getElementById('main-content');
+    const overlay = document.getElementById('sidebar-overlay');
+    
+    if (sidebar && mainContent && overlay) {
+        sidebar.classList.add('sidebar-collapsed');
+        sidebar.classList.remove('sidebar-expanded');
+        overlay.classList.add('hidden');
+        
+        if (window.innerWidth >= 1024) {
+            mainContent.classList.add('lg:ml-20');
+            mainContent.classList.remove('lg:ml-72');
+        } else {
+            mainContent.classList.remove('lg:ml-20', 'lg:ml-72');
+        }
+        
+        sidebarExpanded = false;
+    }
+    
+    displayCurrentDate();
+    checkPasswordStrength();
+    checkPasswordMatch();
+    handlePasswordChange();
+    
+    // Show quick actions after delay
+    setTimeout(() => {
+        if (!chatbotOpen) {
+            const quickActions = document.getElementById('quickActions');
+            if (quickActions) {
+                quickActions.classList.remove('hidden');
+                quickActions.classList.add('animate-fade-in-up');
+            }
+        }
+    }, 3000);
+
+    // Close modals on escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeUploadModal();
+            closeProfileSettingsModal();
+            if (chatbotOpen) toggleChatbot();
+        }
+    });
+
+    // Close modals when clicking outside
+    document.getElementById('uploadModal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeUploadModal();
+        }
+    });
+
+    document.getElementById('profileSettingsModal')?.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeProfileSettingsModal();
+        }
+    });
+
+    // Prevent zoom on double tap for iOS
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', function(event) {
+        const now = Date.now();
+        if (now - lastTouchEnd <= 300) {
+            event.preventDefault();
+        }
+        lastTouchEnd = now;
+    }, false);
+});
+
+// Handle window resize
+let resizeTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function() {
         const sidebar = document.getElementById('sidebar');
         const mainContent = document.getElementById('main-content');
         const overlay = document.getElementById('sidebar-overlay');
         
-        if (!sidebar || !mainContent || !overlay) {
-            console.error('Sidebar elements not found!');
-            return;
-        }
+        if (!sidebar || !mainContent || !overlay) return;
         
-        sidebarExpanded = !sidebarExpanded;
-        console.log('Sidebar expanded:', sidebarExpanded);
-        
-        if (window.innerWidth < 1024) {
-            // Mobile behavior
-            if (sidebarExpanded) {
-                sidebar.classList.remove('sidebar-collapsed');
-                sidebar.classList.add('sidebar-expanded');
-                overlay.classList.remove('hidden');
-            } else {
-                sidebar.classList.remove('sidebar-expanded');
-                sidebar.classList.add('sidebar-collapsed');
-                overlay.classList.add('hidden');
-            }
-        } else {
-            // Desktop behavior
+        if (window.innerWidth >= 1024) {
+            overlay.classList.add('hidden');
+            document.body.style.overflow = 'auto';
+            
             if (sidebarExpanded) {
                 sidebar.classList.remove('sidebar-collapsed');
                 sidebar.classList.add('sidebar-expanded');
@@ -1103,603 +1696,21 @@ $dailyTip = $dailyTipStmt ? $dailyTipStmt->fetchColumn() : null;
                 mainContent.classList.remove('lg:ml-72');
                 mainContent.classList.add('lg:ml-20');
             }
-        }
-    }
-
-    function closeSidebar() {
-        if (window.innerWidth < 1024 && sidebarExpanded) {
-            toggleSidebar();
-        }
-    }
-
-    // ============================================
-    // MODAL FUNCTIONS
-    // ============================================
-    
-    function openUploadModal() {
-        console.log('Opening upload modal');
-        const modal = document.getElementById('uploadModal');
-        if (modal) {
-            modal.classList.add('show');
-            document.body.style.overflow = 'hidden';
         } else {
-            console.error('Upload modal not found!');
-        }
-    }
-
-    function closeUploadModal() {
-        const modal = document.getElementById('uploadModal');
-        if (modal) {
-            modal.classList.remove('show');
-            document.body.style.overflow = 'auto';
-        }
-    }
-
-    function previewProfilePicture(event) {
-        const file = event.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const preview = document.getElementById('previewImage');
-                if (preview) {
-                    preview.src = e.target.result;
-                }
-            }
-            reader.readAsDataURL(file);
-        }
-    }
-
-    function openProfileSettingsModal() {
-        console.log('Opening profile settings modal');
-        const modal = document.getElementById('profileSettingsModal');
-        if (modal) {
-            modal.classList.add('show');
-            document.body.style.overflow = 'hidden';
-        } else {
-            console.error('Profile settings modal not found!');
-        }
-    }
-
-    function closeProfileSettingsModal() {
-        const modal = document.getElementById('profileSettingsModal');
-        if (modal) {
-            modal.classList.remove('show');
-            document.body.style.overflow = 'auto';
-            resetPasswordForm();
-        }
-    }
-
-    function switchTab(event, tabName) {
-        // Remove active class from all buttons and contents
-        document.querySelectorAll('.tab-button').forEach(btn => {
-            btn.classList.remove('active');
-        });
-        document.querySelectorAll('.tab-content').forEach(content => {
-            content.classList.remove('active');
-        });
-
-        // Add active class to clicked button and corresponding content
-        event.currentTarget.classList.add('active');
-        const tabContent = document.getElementById(tabName + '-tab');
-        if (tabContent) {
-            tabContent.classList.add('active');
-        }
-    }
-
-    function togglePasswordVisibility(fieldId) {
-        const field = document.getElementById(fieldId);
-        const button = event.currentTarget;
-        const icon = button.querySelector('i');
-        
-        if (field && icon) {
-            if (field.type === 'password') {
-                field.type = 'text';
-                icon.classList.remove('fa-eye');
-                icon.classList.add('fa-eye-slash');
+            mainContent.classList.remove('lg:ml-20', 'lg:ml-72');
+            
+            if (sidebarExpanded) {
+                sidebar.classList.remove('sidebar-collapsed');
+                sidebar.classList.add('sidebar-expanded');
+                overlay.classList.remove('hidden');
             } else {
-                field.type = 'password';
-                icon.classList.remove('fa-eye-slash');
-                icon.classList.add('fa-eye');
+                sidebar.classList.remove('sidebar-expanded');
+                sidebar.classList.add('sidebar-collapsed');
+                overlay.classList.add('hidden');
             }
         }
-    }
-
-    function resetPasswordForm() {
-        const form = document.getElementById('changePasswordForm');
-        if (form) {
-            form.reset();
-        }
-        document.getElementById('passwordStrength')?.classList.add('hidden');
-        document.getElementById('passwordMatch')?.classList.add('hidden');
-        document.getElementById('passwordError')?.classList.add('hidden');
-        document.getElementById('passwordSuccess')?.classList.add('hidden');
-    }
-
-    // ============================================
-    // PASSWORD STRENGTH CHECKER
-    // ============================================
-    
-    function checkPasswordStrength() {
-        const passwordInput = document.getElementById('newPassword');
-        if (!passwordInput) return;
-
-        passwordInput.addEventListener('input', function() {
-            const password = this.value;
-            const strengthContainer = document.getElementById('passwordStrength');
-            const strengthBar = document.getElementById('strengthBar');
-            const strengthText = document.getElementById('strengthText');
-            
-            if (!strengthContainer || !strengthBar || !strengthText) return;
-            
-            if (password.length === 0) {
-                strengthContainer.classList.add('hidden');
-                return;
-            }
-            
-            strengthContainer.classList.remove('hidden');
-            
-            let strength = 0;
-            if (password.length >= 8) strength++;
-            if (password.match(/[a-z]+/)) strength++;
-            if (password.match(/[A-Z]+/)) strength++;
-            if (password.match(/[0-9]+/)) strength++;
-            if (password.match(/[$@#&!]+/)) strength++;
-            
-            const strengthLevels = [
-                { width: '20%', color: 'bg-red-500', text: 'Very Weak', textColor: 'text-red-600' },
-                { width: '40%', color: 'bg-orange-500', text: 'Weak', textColor: 'text-orange-600' },
-                { width: '60%', color: 'bg-yellow-500', text: 'Fair', textColor: 'text-yellow-600' },
-                { width: '80%', color: 'bg-blue-500', text: 'Good', textColor: 'text-blue-600' },
-                { width: '100%', color: 'bg-green-500', text: 'Strong', textColor: 'text-green-600' }
-            ];
-            
-            const level = strengthLevels[strength - 1] || strengthLevels[0];
-            strengthBar.style.width = level.width;
-            strengthBar.className = 'h-full transition-all duration-300 ' + level.color;
-            strengthText.textContent = level.text;
-            strengthText.className = 'text-xs lg:text-sm font-medium ' + level.textColor;
-        });
-    }
-
-    // ============================================
-    // PASSWORD MATCH CHECKER
-    // ============================================
-    
-    function checkPasswordMatch() {
-        const confirmInput = document.getElementById('confirmPassword');
-        if (!confirmInput) return;
-
-        confirmInput.addEventListener('input', function() {
-            const newPassword = document.getElementById('newPassword')?.value;
-            const confirmPassword = this.value;
-            const matchIndicator = document.getElementById('passwordMatch');
-            
-            if (!matchIndicator) return;
-            
-            if (confirmPassword.length === 0) {
-                matchIndicator.classList.add('hidden');
-                return;
-            }
-            
-            matchIndicator.classList.remove('hidden');
-            
-            if (newPassword === confirmPassword) {
-                matchIndicator.textContent = '✓ Passwords match';
-                matchIndicator.className = 'mt-2 text-xs lg:text-sm text-green-600 font-medium';
-            } else {
-                matchIndicator.textContent = '✗ Passwords do not match';
-                matchIndicator.className = 'mt-2 text-xs lg:text-sm text-red-600 font-medium';
-            }
-        });
-    }
-
-    // ============================================
-    // CHANGE PASSWORD FORM
-    // ============================================
-    
-    function handlePasswordChange() {
-        const form = document.getElementById('changePasswordForm');
-        if (!form) return;
-
-        form.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const currentPassword = document.getElementById('currentPassword')?.value;
-            const newPassword = document.getElementById('newPassword')?.value;
-            const confirmPassword = document.getElementById('confirmPassword')?.value;
-            
-            const errorDiv = document.getElementById('passwordError');
-            const errorText = document.getElementById('passwordErrorText');
-            const successDiv = document.getElementById('passwordSuccess');
-            
-            if (errorDiv) errorDiv.classList.add('hidden');
-            if (successDiv) successDiv.classList.add('hidden');
-            
-            // Validation
-            if (newPassword !== confirmPassword) {
-                if (errorText) errorText.textContent = 'New passwords do not match!';
-                if (errorDiv) errorDiv.classList.remove('hidden');
-                return;
-            }
-            
-            if (newPassword.length < 8) {
-                if (errorText) errorText.textContent = 'Password must be at least 8 characters long!';
-                if (errorDiv) errorDiv.classList.remove('hidden');
-                return;
-            }
-            
-            if (newPassword === currentPassword) {
-                if (errorText) errorText.textContent = 'New password must be different from current password!';
-                if (errorDiv) errorDiv.classList.remove('hidden');
-                return;
-            }
-            
-            try {
-                const formData = new FormData();
-                formData.append('currentPassword', currentPassword);
-                formData.append('newPassword', newPassword);
-                
-                const response = await fetch('../actions/change_password_action.php', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    if (successDiv) successDiv.classList.remove('hidden');
-                    setTimeout(() => {
-                        resetPasswordForm();
-                        if (successDiv) successDiv.classList.add('hidden');
-                    }, 3000);
-                } else {
-                    if (errorText) errorText.textContent = result.message || 'Failed to change password. Please try again.';
-                    if (errorDiv) errorDiv.classList.remove('hidden');
-                }
-            } catch (error) {
-                console.error('Password change error:', error);
-                if (errorText) errorText.textContent = 'An error occurred. Please try again.';
-                if (errorDiv) errorDiv.classList.remove('hidden');
-            }
-        });
-    }
-
-    // ============================================
-    // CHATBOT FUNCTIONS
-    // ============================================
-    
-    function toggleChatbot() {
-        const window = document.getElementById('chatbotWindow');
-        const icon = document.getElementById('chatbotIcon');
-        const quickActions = document.getElementById('quickActions');
-        
-        if (!window || !icon) {
-            console.error('Chatbot elements not found!');
-            return;
-        }
-        
-        chatbotOpen = !chatbotOpen;
-        console.log('Chatbot toggled:', chatbotOpen);
-        
-        if (chatbotOpen) {
-            window.classList.remove('hidden');
-            window.classList.add('animate-scale-in');
-            icon.classList.remove('fa-robot');
-            icon.classList.add('fa-times');
-            if (quickActions) {
-                quickActions.classList.add('hidden');
-            }
-            
-            setTimeout(() => {
-                const input = document.getElementById('chatInput');
-                if (input) input.focus();
-            }, 300);
-        } else {
-            window.classList.add('hidden');
-            window.classList.remove('animate-scale-in');
-            icon.classList.remove('fa-times');
-            icon.classList.add('fa-robot');
-        }
-    }
-
-    function handleInputKeydown(event) {
-        const textarea = event.target;
-        
-        // Auto-resize
-        textarea.style.height = 'auto';
-        textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
-        
-        // Send on Enter (without Shift)
-        if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault();
-            sendMessage(event);
-        }
-    }
-
-    async function sendMessage(event) {
-        if (event && event.preventDefault) {
-            event.preventDefault();
-        }
-        
-        const input = document.getElementById('chatInput');
-        if (!input) {
-            console.error('Chat input not found!');
-            return;
-        }
-        
-        const message = input.value.trim();
-        
-        if (!message) {
-            console.log('Empty message, not sending');
-            return;
-        }
-        
-        console.log('Sending message:', message);
-        
-        addMessage(message, 'user');
-        input.value = '';
-        input.style.height = 'auto';
-        
-        showTypingIndicator(true);
-        
-        try {
-            const response = await callChatAPI(message);
-            showTypingIndicator(false);
-            addMessage(response, 'bot');
-        } catch (error) {
-            showTypingIndicator(false);
-            console.error('Chat API error:', error);
-            addMessage('Sorry, I encountered an error: ' + error.message, 'bot', true);
-        }
-    }
-
-    function addMessage(text, sender, isError = false) {
-        const messagesContainer = document.getElementById('chatMessages');
-        if (!messagesContainer) {
-            console.error('Messages container not found!');
-            return;
-        }
-        
-        const messageDiv = document.createElement('div');
-        
-        const timestamp = new Date().toLocaleTimeString('en-US', { 
-            hour: 'numeric', 
-            minute: '2-digit' 
-        });
-        
-        if (sender === 'user') {
-            messageDiv.className = 'flex items-start space-x-2 justify-end message-slide-in mb-4';
-            messageDiv.innerHTML = `
-                <div class="flex-1 flex flex-col items-end">
-                    <div class="bg-primary-600 text-white rounded-2xl rounded-tr-none px-4 py-3 shadow-sm max-w-[85%]">
-                        <p class="text-sm break-words">${escapeHtml(text)}</p>
-                    </div>
-                    <span class="text-xs text-gray-500 mt-1">${timestamp}</span>
-                </div>
-                <div class="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center flex-shrink-0">
-                    <i class="fas fa-user text-white text-sm"></i>
-                </div>
-            `;
-        } else {
-            messageDiv.className = 'flex items-start space-x-2 message-slide-in mb-4';
-            messageDiv.innerHTML = `
-                <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
-                    <i class="fas fa-robot text-primary-600 text-sm"></i>
-                </div>
-                <div class="flex-1">
-                    <div class="bg-white ${isError ? 'border-2 border-red-300' : ''} rounded-2xl rounded-tl-none px-4 py-3 shadow-sm">
-                        <p class="text-gray-800 text-sm break-words whitespace-pre-wrap">${isError ? escapeHtml(text) : formatBotMessage(text)}</p>
-                    </div>
-                    <span class="text-xs text-gray-500 mt-1 block">${timestamp}</span>
-                </div>
-            `;
-        }
-        
-        messagesContainer.appendChild(messageDiv);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        
-        messageHistory.push({ role: sender === 'user' ? 'user' : 'assistant', content: text });
-    }
-
-    function showTypingIndicator(show) {
-        const indicator = document.getElementById('typingIndicator');
-        const messagesContainer = document.getElementById('chatMessages');
-        
-        if (!indicator) {
-            console.error('Typing indicator not found!');
-            return;
-        }
-        
-        if (show) {
-            indicator.classList.remove('hidden');
-            if (messagesContainer) {
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }
-        } else {
-            indicator.classList.add('hidden');
-        }
-    }
-
-    async function callChatAPI(userMessage) {
-        try {
-            const response = await fetch(API_CONFIG.url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    message: userMessage
-                })
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('API Error Response:', errorText);
-                throw new Error(`API request failed: ${response.status}`);
-            }
-
-            const data = await response.json();
-            
-            if (data.error) {
-                throw new Error(data.error);
-            }
-            
-            if (data.reply) {
-                return data.reply;
-            }
-            
-            throw new Error('Invalid API response format');
-        } catch (error) {
-            console.error('Chat API Error:', error);
-            throw error;
-        }
-    }
-
-    function quickQuestion(question) {
-        const input = document.getElementById('chatInput');
-        if (input) {
-            input.value = question;
-        }
-        if (!chatbotOpen) {
-            toggleChatbot();
-        }
-        setTimeout(() => {
-            const form = document.getElementById('chatForm');
-            if (form) {
-                form.dispatchEvent(new Event('submit'));
-            }
-        }, 300);
-    }
-
-    // ============================================
-    // UTILITY FUNCTIONS
-    // ============================================
-    
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    function formatBotMessage(text) {
-        text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-        text = text.replace(/^\d+\.\s+(.+)$/gm, '<div class="ml-2 mb-1">• $1</div>');
-        text = text.replace(/^[•\-]\s+(.+)$/gm, '<div class="ml-2 mb-1">• $1</div>');
-        return text;
-    }
-
-    function displayCurrentDate() {
-        const dateElement = document.getElementById('currentDate');
-        if (dateElement) {
-            const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
-            const today = new Date();
-            dateElement.textContent = today.toLocaleDateString('en-US', options);
-        }
-    }
-
-    // ============================================
-    // INITIALIZATION
-    // ============================================
-    
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log('🚀 Initializing dashboard...');
-        
-        // Initialize date
-        displayCurrentDate();
-        
-        // Initialize password checkers
-        checkPasswordStrength();
-        checkPasswordMatch();
-        handlePasswordChange();
-        
-        // Verify chatbot elements
-        const chatWindow = document.getElementById('chatbotWindow');
-        const chatInput = document.getElementById('chatInput');
-        const chatToggle = document.getElementById('chatbotToggle');
-        
-        console.log('Chatbot Window:', chatWindow ? '✅ Found' : '❌ NOT FOUND');
-        console.log('Chat Input:', chatInput ? '✅ Found' : '❌ NOT FOUND');
-        console.log('Chat Toggle:', chatToggle ? '✅ Found' : '❌ NOT FOUND');
-        
-        if (!chatWindow || !chatInput || !chatToggle) {
-            console.error('⚠️ Chatbot elements missing!');
-        } else {
-            console.log('✅ Chatbot initialized successfully');
-        }
-        
-        // Show quick actions after delay
-        setTimeout(() => {
-            if (!chatbotOpen) {
-                const quickActions = document.getElementById('quickActions');
-                if (quickActions) {
-                    quickActions.classList.remove('hidden');
-                    quickActions.classList.add('animate-fade-in-up');
-                }
-            }
-        }, 3000);
-
-        // Close modals on escape key
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                closeUploadModal();
-                closeProfileSettingsModal();
-                if (chatbotOpen) toggleChatbot();
-            }
-        });
-
-        // Close modals when clicking outside
-        document.getElementById('uploadModal')?.addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeUploadModal();
-            }
-        });
-
-        document.getElementById('profileSettingsModal')?.addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeProfileSettingsModal();
-            }
-        });
-
-        // Prevent zoom on double tap for iOS
-        let lastTouchEnd = 0;
-        document.addEventListener('touchend', function(event) {
-            const now = Date.now();
-            if (now - lastTouchEnd <= 300) {
-                event.preventDefault();
-            }
-            lastTouchEnd = now;
-        }, false);
-    });
-
-    // Handle window resize
-    let resizeTimer;
-    window.addEventListener('resize', function() {
-        clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(function() {
-            const sidebar = document.getElementById('sidebar');
-            const mainContent = document.getElementById('main-content');
-            const overlay = document.getElementById('sidebar-overlay');
-            
-            if (window.innerWidth >= 1024) {
-                if (overlay) overlay.classList.add('hidden');
-                if (sidebarExpanded && mainContent) {
-                    mainContent.classList.remove('lg:ml-20');
-                    mainContent.classList.add('lg:ml-72');
-                } else if (mainContent) {
-                    mainContent.classList.remove('lg:ml-72');
-                    mainContent.classList.add('lg:ml-20');
-                }
-            } else {
-                if (mainContent) {
-                    mainContent.classList.remove('lg:ml-20', 'lg:ml-72');
-                }
-                if (!sidebarExpanded && sidebar) {
-                    sidebar.classList.add('sidebar-collapsed');
-                    sidebar.classList.remove('sidebar-expanded');
-                }
-            }
-        }, 250);
-    });
+    }, 250);
+});
 </script>
 
 </body>

@@ -35,6 +35,83 @@ if (!empty($dean['gender'])) {
 
 $profilePic = !empty($dean['profile_pic']) ? "../" . $dean['profile_pic'] : $defaultAvatar;
 
+// Handle suspend request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['suspend_student'])) {
+    $studentId = intval($_POST['student_id']);
+    
+    $suspendStmt = $conn->prepare("UPDATE users SET status = 'suspended' WHERE id = ? AND role = 'student'");
+    if ($suspendStmt->execute([$studentId])) {
+        $_SESSION['success_message'] = "Student account suspended successfully!";
+    } else {
+        $_SESSION['error_message'] = "Failed to suspend student.";
+    }
+    header("Location: students.php");
+    exit();
+}
+
+// Handle unsuspend request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['unsuspend_student'])) {
+    $studentId = intval($_POST['student_id']);
+    
+    $unsuspendStmt = $conn->prepare("UPDATE users SET status = 'approved' WHERE id = ? AND role = 'student'");
+    if ($unsuspendStmt->execute([$studentId])) {
+        $_SESSION['success_message'] = "Student account re-approved successfully!";
+    } else {
+        $_SESSION['error_message'] = "Failed to re-approve student.";
+    }
+    header("Location: students.php");
+    exit();
+}
+
+// Handle delete request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_student'])) {
+    $studentId = intval($_POST['student_id']);
+    
+    // Optional: Check if student has related data (quizzes, results, etc.) before deleting
+    // You might want to use CASCADE DELETE in your database or handle related records here
+    
+    $deleteStmt = $conn->prepare("DELETE FROM users WHERE id = ? AND role = 'student'");
+    if ($deleteStmt->execute([$studentId])) {
+        $_SESSION['success_message'] = "Student deleted successfully!";
+    } else {
+        $_SESSION['error_message'] = "Failed to delete student.";
+    }
+    header("Location: students.php");
+    exit();
+}
+
+// Handle bulk suspend
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_suspend'])) {
+    $studentIds = $_POST['student_ids'] ?? [];
+    if (!empty($studentIds)) {
+        $placeholders = implode(',', array_fill(0, count($studentIds), '?'));
+        $bulkSuspendStmt = $conn->prepare("UPDATE users SET status = 'suspended' WHERE id IN ($placeholders) AND role = 'student'");
+        if ($bulkSuspendStmt->execute($studentIds)) {
+            $_SESSION['success_message'] = count($studentIds) . " student(s) suspended successfully!";
+        } else {
+            $_SESSION['error_message'] = "Failed to suspend students.";
+        }
+    }
+    header("Location: students.php");
+    exit();
+}
+
+// Handle bulk delete
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_delete'])) {
+    $studentIds = $_POST['student_ids'] ?? [];
+    if (!empty($studentIds)) {
+        $placeholders = implode(',', array_fill(0, count($studentIds), '?'));
+        $bulkDeleteStmt = $conn->prepare("DELETE FROM users WHERE id IN ($placeholders) AND role = 'student'");
+        if ($bulkDeleteStmt->execute($studentIds)) {
+            $_SESSION['success_message'] = count($studentIds) . " student(s) deleted successfully!";
+        } else {
+            $_SESSION['error_message'] = "Failed to delete students.";
+        }
+    }
+    header("Location: students.php");
+    exit();
+}
+
 // Handle update request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_student'])) {
     $studentId = intval($_POST['student_id']);
@@ -54,13 +131,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_student'])) {
 // Handle approve request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve_student'])) {
     $studentId = intval($_POST['student_id']);
-    
+
+    // 1. Get student information BEFORE approving
+    $stmt = $conn->prepare("SELECT firstname, lastname, email FROM users WHERE id = ? AND role = 'student'");
+    $stmt->execute([$studentId]);
+    $student = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$student) {
+        $_SESSION['error_message'] = "Student not found.";
+        header("Location: students.php");
+        exit();
+    }
+
+    // 2. Approve student
     $approveStmt = $conn->prepare("UPDATE users SET status = 'approved' WHERE id = ? AND role = 'student'");
     if ($approveStmt->execute([$studentId])) {
-        $_SESSION['success_message'] = "Student approved successfully!";
+        
+        // 3. Load email functions
+        require_once '../config/email_config.php';
+
+        // 4. Prepare email
+        $subject = "MedAce - Student Account Approved!";
+        $body = getApprovalEmailHTML(
+            $student['firstname'],
+            $student['lastname'],
+            $student['email']
+        );
+
+        // 5. Send email
+        $emailSent = sendEmail($student['email'], $subject, $body);
+
+        // 6. Success message
+        if ($emailSent) {
+            $_SESSION['success_message'] = "Student approved successfully! Email sent.";
+        } else {
+            $_SESSION['success_message'] = "Student approved successfully — but email could NOT be sent.";
+        }
+
     } else {
         $_SESSION['error_message'] = "Failed to approve student.";
     }
+
     header("Location: students.php");
     exit();
 }
@@ -121,15 +232,30 @@ $pendingStudents = $conn->query("
 
 $pendingCount = count($pendingStudents);
 
-// Get all approved students with their details
+// Get all approved and suspended students with their details
 $students = $conn->query("
     SELECT id, firstname, lastname, email, section, student_id, year, created_at, status
     FROM users 
-    WHERE role='student' AND status='approved'
-    ORDER BY section ASC, lastname ASC, firstname ASC
+    WHERE role='student' AND status IN ('approved', 'suspended')
+    ORDER BY 
+        CASE 
+            WHEN status = 'approved' THEN 1 
+            WHEN status = 'suspended' THEN 2 
+        END,
+        section ASC, 
+        lastname ASC, 
+        firstname ASC
 ")->fetchAll(PDO::FETCH_ASSOC);
 
-$totalStudents = count($students);
+$totalStudents = 0;
+$suspendedCount = 0;
+foreach($students as $student) {
+    if($student['status'] === 'approved') {
+        $totalStudents++;
+    } elseif($student['status'] === 'suspended') {
+        $suspendedCount++;
+    }
+}
 
 // Get rejected students count
 $rejectedCount = $conn->query("SELECT COUNT(*) FROM users WHERE role='student' AND status='rejected'")->fetchColumn();
@@ -548,7 +674,6 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
             border-radius: 3px;
         }
 
-        /* Modal styles */
         .modal {
             display: none;
             position: fixed;
@@ -597,7 +722,6 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
             }
         }
 
-        /* Pending card styles */
         .pending-card {
             transition: all 0.3s ease;
         }
@@ -607,7 +731,6 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
         }
 
-        /* Checkbox styling */
         .custom-checkbox {
             width: 1.25rem;
             height: 1.25rem;
@@ -627,7 +750,6 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
     <!-- Sidebar -->
     <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 sidebar-transition sidebar-collapsed">
         <div class="flex flex-col h-full">
-            <!-- Sidebar Header -->
             <div class="flex items-center justify-between px-4 py-5 border-b border-gray-200">
                 <div class="flex items-center space-x-3 min-w-0 flex-1">
                     <div class="relative flex-shrink-0">
@@ -641,14 +763,12 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                 </div>
             </div>
 
-            <!-- Toggle Button -->
             <div class="px-4 py-3 border-b border-gray-200">
                 <button onclick="toggleSidebar()" class="sidebar-toggle-btn w-full" id="hamburgerBtn" aria-label="Toggle sidebar">
                     <div class="toggle-icon"></div>
                 </button>
             </div>
 
-            <!-- Navigation -->
             <nav class="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
                 <a href="dashboard.php" class="flex items-center space-x-3 px-3 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg font-medium transition-all">
                     <i class="fas fa-home text-gray-400 w-5 text-center flex-shrink-0"></i>
@@ -664,6 +784,9 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                     <?php if($pendingCount > 0): ?>
                     <span class="nav-text sidebar-transition ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full"><?= $pendingCount ?></span>
                     <?php endif; ?>
+
+            
+            
                 </a>
                 <a href="quizzes.php" class="flex items-center space-x-3 px-3 py-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg font-medium transition-all">
                     <i class="fas fa-clipboard-list text-gray-400 w-5 text-center flex-shrink-0"></i>
@@ -671,7 +794,6 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                 </a>
             </nav>
 
-            <!-- Logout Button -->
             <div class="px-3 py-4 border-t border-gray-200">
                 <a href="../actions/logout_action.php" class="flex items-center space-x-3 px-3 py-3 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-all">
                     <i class="fas fa-sign-out-alt w-5 text-center flex-shrink-0"></i>
@@ -681,7 +803,6 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
         </div>
     </aside>
 
-    <!-- Sidebar Overlay (Mobile) -->
     <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden transition-opacity duration-300" onclick="closeSidebar()"></div>
 
     <!-- Edit Student Modal -->
@@ -704,7 +825,6 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                 <input type="hidden" name="student_id" id="edit_student_id">
 
                 <div class="space-y-4">
-                    <!-- Student Name (Read-only) -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">
                             <i class="fas fa-user text-primary-500 mr-2"></i>Student Name
@@ -713,7 +833,6 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                                class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed">
                     </div>
 
-                    <!-- Student ID (Read-only) -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">
                             <i class="fas fa-id-card text-primary-500 mr-2"></i>Student ID
@@ -722,7 +841,6 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                                class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-gray-700 cursor-not-allowed">
                     </div>
 
-                    <!-- Section -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">
                             <i class="fas fa-users text-primary-500 mr-2"></i>Section
@@ -732,7 +850,6 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                                placeholder="Enter section (e.g., A, B, 1A)">
                     </div>
 
-                    <!-- Year -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">
                             <i class="fas fa-calendar-alt text-primary-500 mr-2"></i>Year Level
@@ -762,7 +879,6 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
 
     <!-- Main Content -->
     <main id="main-content" class="flex-1 w-full transition-all duration-300 lg:ml-20">
-        <!-- Top Bar -->
         <header class="sticky top-0 z-30 bg-white border-b border-gray-200 px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
             <div class="flex items-center justify-between gap-3">
                 <button onclick="toggleSidebar()" class="sidebar-toggle-btn lg:hidden" id="mobileHamburgerBtn" aria-label="Toggle sidebar">
@@ -777,9 +893,7 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
             </div>
         </header>
 
-        <!-- Content -->
         <div class="px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 max-w-full">
-            <!-- Success/Error Messages -->
             <?php if ($successMessage): ?>
             <div class="mb-6 animate-slide-down">
                 <div class="bg-green-50 border-l-4 border-green-500 rounded-lg p-4 flex items-start justify-between shadow-sm">
@@ -808,13 +922,11 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
             </div>
             <?php endif; ?>
 
-            <!-- Title -->
             <div class="mb-6 sm:mb-8 animate-fade-in-up">
                 <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Students Management</h1>
                 <p class="text-gray-600 text-sm sm:text-base">Manage student registrations and approvals</p>
             </div>
 
-            <!-- Stats Summary -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
                 <div class="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-custom card-hover animate-scale-in border border-gray-100">
                     <div class="flex items-center justify-between mb-3 sm:mb-4">
@@ -843,7 +955,22 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                     </div>
                 </div>
 
-                <div class="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-custom card-hover animate-scale-in border border-gray-100" style="animation-delay: 0.2s;">
+                <div class="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-custom card-hover animate-scale-in border border-gray-100 <?= $suspendedCount > 0 ? 'ring-2 ring-red-400' : '' ?>" style="animation-delay: 0.2s;">
+                    <div class="flex items-center justify-between mb-3 sm:mb-4">
+                        <div class="stat-icon-5 w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center text-white shadow-lg relative">
+                            <i class="fas fa-ban text-xl sm:text-2xl"></i>
+                            <?php if($suspendedCount > 0): ?>
+                            <span class="absolute -top-1 -right-1 w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center text-xs font-bold text-white pulse-badge"><?= $suspendedCount ?></span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <h3 class="text-gray-500 text-xs sm:text-sm font-medium mb-1">Suspended</h3>
+                    <div class="flex items-baseline space-x-2">
+                        <p class="text-3xl sm:text-4xl font-bold <?= $suspendedCount > 0 ? 'text-red-600' : 'text-gray-900' ?>"><?= $suspendedCount ?></p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-custom card-hover animate-scale-in border border-gray-100" style="animation-delay: 0.3s;">
                     <div class="flex items-center justify-between mb-3 sm:mb-4">
                         <div class="stat-icon-2 w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center text-white shadow-lg">
                             <i class="fas fa-users text-xl sm:text-2xl"></i>
@@ -854,21 +981,9 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                         <p class="text-3xl sm:text-4xl font-bold text-gray-900"><?= count($sections) ?></p>
                     </div>
                 </div>
-
-                <div class="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-custom card-hover animate-scale-in border border-gray-100" style="animation-delay: 0.3s;">
-                    <div class="flex items-center justify-between mb-3 sm:mb-4">
-                        <div class="stat-icon-5 w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center text-white shadow-lg">
-                            <i class="fas fa-times-circle text-xl sm:text-2xl"></i>
-                        </div>
-                    </div>
-                    <h3 class="text-gray-500 text-xs sm:text-sm font-medium mb-1">Rejected</h3>
-                    <div class="flex items-baseline space-x-2">
-                        <p class="text-3xl sm:text-4xl font-bold text-gray-900"><?= $rejectedCount ?></p>
-                    </div>
-                </div>
+                            </div>
             </div>
 
-            <!-- Pending Approvals Section -->
             <?php if($pendingCount > 0): ?>
             <div class="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl sm:rounded-2xl shadow-custom p-4 sm:p-6 mb-6 sm:mb-8 border border-amber-200 animate-fade-in-up">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
@@ -950,7 +1065,6 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
             </div>
             <?php endif; ?>
 
-            <!-- Search and Filter Section -->
             <div class="bg-white rounded-xl sm:rounded-2xl shadow-custom p-4 sm:p-6 mb-6 sm:mb-8 border border-gray-100 animate-fade-in-up">
                 <div class="flex flex-col gap-3 sm:gap-4">
                     <div class="flex-1">
@@ -988,20 +1102,35 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                 </div>
             </div>
 
-            <!-- Students Table -->
             <div class="bg-white rounded-xl sm:rounded-2xl shadow-custom border border-gray-100 animate-fade-in-up overflow-hidden">
-                <div class="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-200">
+                <div class="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-200 flex items-center justify-between">
                     <h2 class="text-lg sm:text-xl font-semibold text-gray-900">
-                        <i class="fas fa-check-circle text-green-500 mr-2"></i>Approved Students
-                        <span class="text-sm font-normal text-gray-500 ml-2">(<?= $totalStudents ?>)</span>
+                        <i class="fas fa-users text-primary-500 mr-2"></i>All Students
+                        <span class="text-sm font-normal text-gray-500 ml-2">(<?= count($students) ?>)</span>
                     </h2>
+                    <form method="POST" id="bulkActionForm" class="flex gap-2">
+                        <button type="submit" name="bulk_suspend" onclick="return confirmBulkSuspend()" 
+                                class="bg-orange-500 hover:bg-orange-600 text-white px-3 sm:px-4 py-2 rounded-lg font-medium text-xs sm:text-sm transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" 
+                                id="bulkSuspendBtn" disabled>
+                            <i class="fas fa-ban mr-1"></i> <span class="hidden sm:inline">Suspend</span>
+                        </button>
+                        <button type="submit" name="bulk_delete" onclick="return confirmBulkDelete()" 
+                                class="bg-red-500 hover:bg-red-600 text-white px-3 sm:px-4 py-2 rounded-lg font-medium text-xs sm:text-sm transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" 
+                                id="bulkDeleteBtn" disabled>
+                            <i class="fas fa-trash-alt mr-1"></i> <span class="hidden sm:inline">Delete</span>
+                        </button>
+                    </form>
                 </div>
                 
-                <?php if($totalStudents > 0): ?>
+                <?php if(count($students) > 0): ?>
                 <div class="table-container">
                     <table class="min-w-full bg-white" id="studentsTable">
                         <thead class="bg-gray-50">
                             <tr>
+                                <th class="text-left p-3 sm:p-4">
+                                    <input type="checkbox" id="selectAll" class="custom-checkbox" onchange="toggleSelectAll()">
+                                </th>
+                                <th class="text-left p-3 sm:p-4 font-semibold text-gray-700 text-xs uppercase tracking-wider">Status</th>
                                 <th class="text-left p-3 sm:p-4 font-semibold text-gray-700 text-xs uppercase tracking-wider">Student ID</th>
                                 <th class="text-left p-3 sm:p-4 font-semibold text-gray-700 text-xs uppercase tracking-wider">Name</th>
                                 <th class="text-left p-3 sm:p-4 font-semibold text-gray-700 text-xs uppercase tracking-wider hidden md:table-cell">Email</th>
@@ -1012,44 +1141,89 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                         </thead>
                         <tbody class="divide-y divide-gray-100">
                             <?php foreach($students as $student): ?>
-<tr class="table-row-hover"
-    data-student="<?= htmlspecialchars(json_encode($student), ENT_QUOTES, 'UTF-8') ?>">
-    
-    <td class="p-3 sm:p-4 text-gray-800 font-medium text-sm sm:text-base">
-        <?= htmlspecialchars($student['student_id'] ?? 'N/A') ?>
-    </td>
-
-    <td class="p-3 sm:p-4 text-gray-900 font-medium text-sm sm:text-base">
-        <?= htmlspecialchars($student['firstname'].' '.$student['lastname']) ?>
-    </td>
-
-    <td class="p-3 sm:p-4 text-gray-600 text-sm sm:text-base hidden md:table-cell">
-        <a href="mailto:<?= htmlspecialchars($student['email']) ?>" 
-           class="hover:text-primary-600 hover:underline">
-           <?= htmlspecialchars($student['email']) ?>
-        </a>
-    </td>
-
-    <td class="p-3 sm:p-4">
-        <span class="badge bg-blue-100 text-blue-700 text-xs">
-            <?= htmlspecialchars($student['section'] ?? 'N/A') ?>
-        </span>
-    </td>
-
-    <td class="p-3 sm:p-4 text-gray-700 text-sm sm:text-base hidden sm:table-cell">
-        <?= htmlspecialchars($student['year'] ?? 'N/A') ?>
-    </td>
-
-    <td class="p-3 sm:p-4">
+                            <tr class="table-row-hover <?= $student['status'] === 'suspended' ? 'bg-red-50' : '' ?>" data-student="<?= htmlspecialchars(json_encode($student), ENT_QUOTES, 'UTF-8') ?>">
+                                <td class="p-3 sm:p-4">
+                                    <input type="checkbox" name="student_ids[]" value="<?= $student['id'] ?>" 
+                                           form="bulkActionForm" class="custom-checkbox student-checkbox" onchange="updateBulkButtons()">
+                                </td>
+                                <td class="p-3 sm:p-4">
+                                    <?php if($student['status'] === 'suspended'): ?>
+                                        <span class="badge bg-red-100 text-red-700 text-xs">
+                                            <i class="fas fa-ban mr-1"></i>Suspended
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="badge bg-green-100 text-green-700 text-xs">
+                                            <i class="fas fa-check-circle mr-1"></i>Active
+                                        </span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="p-3 sm:p-4 text-gray-800 font-medium text-sm sm:text-base">
+                                    <?= htmlspecialchars($student['student_id'] ?? 'N/A') ?>
+                                </td>
+                                <td class="p-3 sm:p-4 text-gray-900 font-medium text-sm sm:text-base">
+                                    <?= htmlspecialchars($student['firstname'].' '.$student['lastname']) ?>
+                                </td>
+                                <td class="p-3 sm:p-4 text-gray-600 text-sm sm:text-base hidden md:table-cell">
+                                    <a href="mailto:<?= htmlspecialchars($student['email']) ?>" 
+                                       class="hover:text-primary-600 hover:underline">
+                                       <?= htmlspecialchars($student['email']) ?>
+                                    </a>
+                                </td>
+                                <td class="p-3 sm:p-4">
+                                    <span class="badge bg-blue-100 text-blue-700 text-xs">
+                                        <?= htmlspecialchars($student['section'] ?? 'N/A') ?>
+                                    </span>
+                                </td>
+                                <td class="p-3 sm:p-4 text-gray-700 text-sm sm:text-base hidden sm:table-cell">
+                                    <?= htmlspecialchars($student['year'] ?? 'N/A') ?>
+                                </td>
+                                <td class="p-3 sm:p-4">
+    <div class="flex gap-2">
         <button onclick='openEditModal(<?= htmlspecialchars(json_encode($student), ENT_QUOTES, "UTF-8") ?>)'
-                class="bg-primary-500 text-white px-3 py-1.5 rounded-lg hover:bg-primary-600 transition text-xs font-medium">
+                class="bg-primary-500 text-white px-3 py-1.5 rounded-lg hover:bg-primary-600 transition text-xs font-medium"
+                title="Edit Student">
             <i class="fas fa-edit"></i>
-            <span class="hidden sm:inline ml-1">Edit</span>
+            <span class="hidden lg:inline ml-1">Edit</span>
         </button>
-    </td>
-</tr>
-<?php endforeach; ?>
+        
+        <?php if($student['status'] === 'suspended'): ?>
+            <!-- Show Re-approve button for suspended students -->
+            <form method="POST" class="inline" onsubmit="return confirm('Re-approve this student account?')">
+                <input type="hidden" name="student_id" value="<?= $student['id'] ?>">
+                <button type="submit" name="unsuspend_student"
+                        class="bg-green-500 text-white px-3 py-1.5 rounded-lg hover:bg-green-600 transition text-xs font-medium"
+                        title="Re-approve Student">
+                    <i class="fas fa-check-circle"></i>
+                    <span class="hidden lg:inline ml-1">Re-approve</span>
+                </button>
+            </form>
+        <?php else: ?>
+            <!-- Show Suspend button for approved students -->
+            <form method="POST" class="inline" onsubmit="return confirmSuspend('<?= htmlspecialchars($student['firstname'] . ' ' . $student['lastname']) ?>')">
+                <input type="hidden" name="student_id" value="<?= $student['id'] ?>">
+                <button type="submit" name="suspend_student"
+                        class="bg-orange-500 text-white px-3 py-1.5 rounded-lg hover:bg-orange-600 transition text-xs font-medium"
+                        title="Suspend Student">
+                    <i class="fas fa-ban"></i>
+                    <span class="hidden lg:inline ml-1">Suspend</span>
+                </button>
+            </form>
+        <?php endif; ?>
+        
+        <form method="POST" class="inline" onsubmit="return confirmDelete('<?= htmlspecialchars($student['firstname'] . ' ' . $student['lastname']) ?>')">
+            <input type="hidden" name="student_id" value="<?= $student['id'] ?>">
+            <button type="submit" name="delete_student"
+                    class="bg-red-500 text-white px-3 py-1.5 rounded-lg hover:bg-red-600 transition text-xs font-medium"
+                    title="Delete Student">
+                <i class="fas fa-trash-alt"></i>
+                <span class="hidden lg:inline ml-1">Delete</span>
+            </button>
+        </form>
+    </div>
+</td>
 
+                            </tr>
+                            <?php endforeach; ?>
                         </tbody>
                     </table>
                 </div>
@@ -1058,12 +1232,12 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                     <div class="text-gray-400 mb-4">
                         <i class="fas fa-user-graduate text-5xl sm:text-6xl"></i>
                     </div>
-                    <h3 class="text-lg sm:text-xl font-semibold text-gray-700 mb-2">No Approved Students</h3>
+                    <h3 class="text-lg sm:text-xl font-semibold text-gray-700 mb-2">No Students</h3>
                     <p class="text-sm sm:text-base text-gray-500">
                         <?php if($pendingCount > 0): ?>
                         There are <?= $pendingCount ?> student(s) waiting for approval above.
                         <?php else: ?>
-                        There are currently no enrolled students in the system.
+                        There are currently no students in the system.
                         <?php endif; ?>
                     </p>
                 </div>
@@ -1117,7 +1291,6 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
         }
     }
 
-    // Edit Modal Functions
     function openEditModal(student) {
         document.getElementById('edit_student_id').value = student.id;
         document.getElementById('edit_student_name').value = student.firstname + ' ' + student.lastname;
@@ -1133,7 +1306,64 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
         document.body.style.overflow = 'auto';
     }
 
-    // Close modal on escape key
+    function confirmDelete(studentName) {
+        return confirm(`Are you sure you want to delete ${studentName}? This action cannot be undone and will remove all associated data.`);
+    }
+
+    function confirmSuspend(studentName) {
+        return confirm(`Are you sure you want to suspend ${studentName}? They will not be able to access their account until reactivated.`);
+    }
+
+    function confirmBulkSuspend() {
+        const checkboxes = document.querySelectorAll('.student-checkbox:checked');
+        const count = checkboxes.length;
+        
+        if (count === 0) {
+            alert('Please select at least one student to suspend.');
+            return false;
+        }
+        
+        return confirm(`Are you sure you want to suspend ${count} student(s)? They will not be able to access their accounts until reactivated.`);
+    }
+
+    function confirmBulkDelete() {
+        const checkboxes = document.querySelectorAll('.student-checkbox:checked');
+        const count = checkboxes.length;
+        
+        if (count === 0) {
+            alert('Please select at least one student to delete.');
+            return false;
+        }
+        
+        return confirm(`Are you sure you want to delete ${count} student(s)? This action cannot be undone and will remove all associated data.`);
+    }
+
+    function toggleSelectAll() {
+        const selectAll = document.getElementById('selectAll');
+        const checkboxes = document.querySelectorAll('.student-checkbox');
+        checkboxes.forEach(cb => cb.checked = selectAll.checked);
+        updateBulkButtons();
+    }
+
+    function updateBulkButtons() {
+        const checkboxes = document.querySelectorAll('.student-checkbox:checked');
+        const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+        const bulkSuspendBtn = document.getElementById('bulkSuspendBtn');
+        const selectAll = document.getElementById('selectAll');
+        
+        if (bulkDeleteBtn && bulkSuspendBtn) {
+            const hasSelected = checkboxes.length > 0;
+            bulkDeleteBtn.disabled = !hasSelected;
+            bulkSuspendBtn.disabled = !hasSelected;
+        }
+        
+        // Update select all checkbox
+        const allCheckboxes = document.querySelectorAll('.student-checkbox');
+        if (selectAll && allCheckboxes.length > 0) {
+            selectAll.checked = checkboxes.length === allCheckboxes.length;
+        }
+    }
+
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             closeEditModal();
@@ -1143,14 +1373,12 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
         }
     });
 
-    // Close modal when clicking outside
     document.getElementById('editModal').addEventListener('click', function(e) {
         if (e.target === this) {
             closeEditModal();
         }
     });
 
-    // Bulk action functions
     function updateBulkButtons() {
         const checkboxes = document.querySelectorAll('input[name="student_ids[]"]:checked');
         const bulkApproveBtn = document.getElementById('bulkApproveBtn');
@@ -1176,7 +1404,6 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
         return confirm(`Are you sure you want to ${actionText} ${count} student(s)?`);
     }
 
-    // Search and filter functionality
     const searchInput = document.getElementById('searchInput');
     const sectionFilter = document.getElementById('sectionFilter');
     const yearFilter = document.getElementById('yearFilter');

@@ -53,17 +53,7 @@ if (isset($_SESSION['message'])) {
                   class="w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
       </div>
 
-      <!-- Lesson Dropdown -->
-      <div>
-        <label for="lesson_id" class="block font-medium text-gray-700 mb-1">Select Lesson <span class="text-red-500">*</span></label>
-        <select id="lesson_id" name="lesson_id" required
-                class="w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none">
-          <option value="" disabled selected>-- Choose a lesson --</option>
-          <?php foreach ($lessons as $lesson): ?>
-            <option value="<?= $lesson['id'] ?>"><?= htmlspecialchars($lesson['title']) ?></option>
-          <?php endforeach; ?>
-        </select>
-      </div>
+
 
       <!-- Content -->
       <div>

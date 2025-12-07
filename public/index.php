@@ -730,9 +730,10 @@ session_start();
                  class="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500 transition cursor-pointer">
           <span class="ml-2 text-gray-600 group-hover:text-gray-800 transition">Remember me</span>
         </label>
-        <a href="#" class="text-teal-600 hover:text-teal-700 font-medium transition hover:underline">
-          Forgot Password?
-        </a>
+        <a href="forgot_password.php" class="text-teal-600 hover:text-teal-700 font-medium transition hover:underline">
+  Forgot Password?
+</a>
+
       </div>
 
       <!-- Login Button -->

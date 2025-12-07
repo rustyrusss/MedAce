@@ -1115,10 +1115,10 @@ unset($_SESSION['success_message'], $_SESSION['error_message']);
                                     </td>
                                     <td class="px-4 sm:px-6 py-4 text-center">
                                         <div class="flex items-center justify-center gap-2">
-                                            <button onclick='viewModuleDetails(<?= htmlspecialchars(json_encode($module), ENT_QUOTES, "UTF-8") ?>)'
-                                                    class="bg-blue-100 text-blue-600 hover:bg-blue-200 px-3 py-1.5 rounded-lg text-xs font-medium transition">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
+                                            <button onclick="window.location.href='view_module.php?id=<?= $module['id'] ?>'"
+        class="bg-blue-100 text-blue-600 hover:bg-blue-200 px-3 py-1.5 rounded-lg text-xs font-medium transition">
+    <i class="fas fa-eye"></i>
+</button>
                                             <form method="POST" class="inline">
                                                 <input type="hidden" name="toggle_module_status" value="1">
                                                 <input type="hidden" name="module_id" value="<?= $module['id'] ?>">

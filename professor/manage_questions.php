@@ -241,7 +241,17 @@ $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
             padding: 0;
             box-sizing: border-box;
         }
-
+textarea {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+textarea, .question-text {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.whitespace-pre-wrap {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
         body {
             font-family: 'Inter', sans-serif;
             background: #f8fafc;
@@ -518,15 +528,21 @@ $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <input type="hidden" name="options_json" id="options_json">
                     <input type="hidden" name="action" value="add">
 
-                    <div>
-                        <label for="question_text" class="block text-sm font-semibold text-gray-700 mb-2">
-                            <i class="fas fa-question text-primary-500 mr-1"></i>
-                            Question Text *
-                        </label>
-                        <textarea id="question_text" name="question_text" required 
-                                  class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all resize-none" 
-                                  rows="3" placeholder="Enter your question here..."></textarea>
-                    </div>
+                   <div>
+    <label for="question_text" class="block text-sm font-semibold text-gray-700 mb-2">
+        <i class="fas fa-question text-primary-500 mr-1"></i>
+        Question Text *
+    </label>
+    <textarea id="question_text" name="question_text" required 
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all resize-none font-sans" 
+              rows="6" 
+              placeholder="Enter your question here..."
+              style="white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;"></textarea>
+    <p class="text-xs text-gray-500 mt-1 italic">
+        <i class="fas fa-info-circle mr-1"></i>
+        Press Enter to create new paragraphs. Spacing will be preserved.
+    </p>
+</div>
 
                     <div>
                         <label for="question_type" class="block text-sm font-semibold text-gray-700 mb-2">
@@ -679,9 +695,10 @@ $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                                         </span>
                                                     <?php endif; ?>
                                                 </div>
-                                                <p class="text-xl font-semibold text-gray-900 leading-relaxed">
-                                                    <?= htmlspecialchars($q['question_text']) ?>
-                                                </p>
+                                                <p class="text-xl font-semibold text-gray-900 leading-relaxed whitespace-pre-wrap" 
+   style="word-wrap: break-word; line-height: 1.8;">
+    <?= htmlspecialchars($q['question_text']) ?>
+</p>
                                             </div>
                                         </div>
                                     </div>
@@ -754,11 +771,16 @@ $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
                                         <div class="space-y-5">
                                             <div>
-                                                <label class="block text-sm font-semibold text-gray-700 mb-2">Question Text</label>
-                                                <textarea name="question_text" required 
-                                                          class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all text-lg resize-none" 
-                                                          rows="3"><?= htmlspecialchars($q['question_text']) ?></textarea>
-                                            </div>
+    <label class="block text-sm font-semibold text-gray-700 mb-2">Question Text</label>
+    <textarea name="question_text" required 
+              class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all text-lg resize-none font-sans" 
+              rows="6"
+              style="white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;"><?= htmlspecialchars($q['question_text']) ?></textarea>
+    <p class="text-xs text-gray-500 mt-1 italic">
+        <i class="fas fa-info-circle mr-1"></i>
+        Press Enter to create new paragraphs. Spacing will be preserved.
+    </p>
+</div>
 
                                             <div>
                                                 <label class="block text-sm font-semibold text-gray-700 mb-2">Question Type</label>

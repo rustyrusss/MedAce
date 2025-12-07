@@ -765,7 +765,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                             <i class="fas fa-file-alt text-primary-600"></i>
                                         </div>
                                         <div>
-                                            <p class="text-sm font-semibold text-gray-900"><?= htmlspecialchars($module['title']) ?></p>
+                                            <a href="view_module.php?id=<?= $module['id'] ?>" class="text-sm font-semibold text-gray-900 hover:text-primary-600 transition-colors">
+    <?= htmlspecialchars($module['title']) ?>
+</a>
                                             <p class="text-xs text-gray-500 sm:hidden truncate max-w-xs">
                                                 <?php if (!empty($module['subject'])): ?>
                                                     <span class="font-medium"><?= htmlspecialchars($module['subject']) ?></span>
@@ -809,7 +811,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                 </td>
                                 <td class="px-6 py-4 text-center">
                                     <div class="flex items-center justify-center space-x-2">
-                                        <button onclick='openEditModal(<?= json_encode($module) ?>)' 
+                                         <a href="view_module.php?id=<?= $module['id'] ?>" 
+           class="inline-flex items-center px-3 py-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 font-medium transition-colors text-sm"
+           title="View Module">
+            <i class="fas fa-eye"></i>
+        </a>
+                                    <button onclick='openEditModal(<?= json_encode($module) ?>)' 
                                                 class="inline-flex items-center px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 font-medium transition-colors text-sm">
                                             <i class="fas fa-edit"></i>
                                         </button>

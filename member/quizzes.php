@@ -30,7 +30,18 @@ if (!empty($student['gender'])) {
 }
 $profilePic = !empty($student['profile_pic']) ? "../" . $student['profile_pic'] : $defaultAvatar;
 
-// ✅ FIXED: Get quizzes with case-insensitive status check
+// ✅ Fetch distinct subjects for dropdown
+$subjectsStmt = $conn->query("
+    SELECT DISTINCT subject 
+    FROM quizzes 
+    WHERE subject IS NOT NULL 
+      AND subject != '' 
+      AND status = 'active'
+    ORDER BY subject ASC
+");
+$subjects = $subjectsStmt->fetchAll(PDO::FETCH_COLUMN);
+
+// ✅ Get quizzes with case-insensitive status check
 $stmt = $conn->prepare("
   SELECT q.id, q.title, q.publish_time, q.deadline_time, q.subject, q.prerequisite_module_id,
          pm.title AS prerequisite_module_title,
@@ -225,20 +236,45 @@ function calculatePercentage($score, $total) {
             }
         }
 
+        /* Responsive Quiz Grid */
+        .quiz-grid {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        /* Mobile: 1 column */
         @media (max-width: 640px) {
-            .quiz-grid { grid-template-columns: 1fr; }
+            .quiz-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
+        /* Tablet: 2 columns */
         @media (min-width: 641px) and (max-width: 1024px) {
-            .quiz-grid { grid-template-columns: repeat(2, 1fr); }
+            .quiz-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
         }
 
+        /* Desktop Small: 2 columns */
         @media (min-width: 1025px) and (max-width: 1280px) {
-            .quiz-grid { grid-template-columns: repeat(3, 1fr); }
+            .quiz-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
         }
 
-        @media (min-width: 1281px) {
-            .quiz-grid { grid-template-columns: repeat(4, 1fr); }
+        /* Desktop Medium: 3 columns */
+        @media (min-width: 1281px) and (max-width: 1536px) {
+            .quiz-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        /* Desktop Large: 4 columns */
+        @media (min-width: 1537px) {
+            .quiz-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
         }
 
         .locked-quiz {
@@ -262,57 +298,18 @@ function calculatePercentage($score, $total) {
         body.sidebar-open { overflow: hidden; }
         @media (min-width: 1025px) { body.sidebar-open { overflow: auto; } }
 
-        /* Chatbot Styles - Right Side */
-        #chatbotContainer {
-            position: fixed;
-            bottom: 2rem;
-            right: 2rem;
-            z-index: 45;
-        }
-        
-        #chatbotWindow {
-            position: fixed;
-            bottom: 6rem;
-            right: 2rem;
-            width: 380px;
-            max-width: calc(100vw - 2rem);
-            z-index: 44;
-        }
-        
-        #quickActions {
-            position: fixed;
-            bottom: 6rem;
-            right: 2rem;
-            z-index: 43;
-        }
-        
-        @media (min-width: 1025px) {
-            #chatbotContainer { right: 2rem; }
-            #chatbotWindow { right: 2rem; width: 400px; }
-            #quickActions { right: 2rem; }
-        }
-        
-        @media (max-width: 640px) {
-            #chatbotContainer { right: 1rem; bottom: 1rem; }
-            #chatbotWindow {
-                left: 0;
-                bottom: 0;
-                right: 0;
-                width: 100%;
-                max-width: 100%;
-                height: calc(100vh - 60px);
-                border-radius: 1rem 1rem 0 0;
-            }
-            #quickActions { right: 1rem; bottom: 5rem; }
-            
-            /* Hide the toggle button when chat is open on mobile */
-            #chatbotContainer.chat-open {
-                display: none;
-            }
+        /* Custom select */
+        select.custom-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+            padding-right: 2.5rem;
         }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800 antialiased" x-data="{ filter: 'all', search: '', openModal: null }">
+<body class="bg-gray-50 text-gray-800 antialiased" x-data="{ filter: 'all', search: '', selectedSubject: 'All', openModal: null }">
 
 <div class="flex min-h-screen">
     <!-- Sidebar -->
@@ -339,7 +336,7 @@ function calculatePercentage($score, $total) {
             </div>
 
             <!-- Desktop Toggle Button INSIDE SIDEBAR -->
-          <div class="px-3 lg:px-4 py-2 lg:py-3 border-b border-gray-200 hidden lg:block">
+            <div class="px-3 lg:px-4 py-2 lg:py-3 border-b border-gray-200 hidden lg:block">
                 <button onclick="toggleSidebar()" class="w-full flex items-center justify-center p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600">
                     <i class="fas fa-bars text-lg"></i>
                 </button>
@@ -399,14 +396,30 @@ function calculatePercentage($score, $total) {
 
         <!-- Content -->
         <div class="px-4 sm:px-6 lg:px-8 py-8">
-            <!-- Search and Filters -->
-            <div class="flex flex-col sm:flex-row gap-4 mb-6 animate-fade-in-up">
-                <div class="relative flex-1">
-                    <input type="text" x-model="search" placeholder="Search quizzes..." 
-                           class="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all">
-                    <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+            <!-- Search & Subject + Status Filters -->
+            <div class="flex flex-col gap-4 mb-6 animate-fade-in-up">
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <!-- Search -->
+                    <div class="relative flex-1">
+                        <input type="text" x-model="search" placeholder="Search quizzes..." 
+                               class="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all">
+                        <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                    </div>
+
+                    <!-- Subject Dropdown -->
+                    <div class="relative sm:w-64">
+                        <select x-model="selectedSubject" 
+                                class="custom-select w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all bg-white text-sm">
+                            <option value="All">All Subjects</option>
+                            <?php foreach ($subjects as $subject): ?>
+                                <option value="<?= htmlspecialchars($subject) ?>">
+                                    <?= htmlspecialchars($subject) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 </div>
-                
+
                 <!-- Status Filters -->
                 <div class="flex gap-2 flex-wrap">
                     <button @click="filter = 'all'" :class="filter === 'all' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'" 
@@ -438,7 +451,7 @@ function calculatePercentage($score, $total) {
                 <p class="text-gray-600">Check back later for new quizzes</p>
             </div>
             <?php else: ?>
-            <div class="quiz-grid grid gap-6">
+            <div class="quiz-grid">
                 <?php foreach ($quizzes as $quiz): 
                     $status = strtolower($quiz['status']);
                     $statusConfig = match($status) {
@@ -457,9 +470,17 @@ function calculatePercentage($score, $total) {
                     }
                     
                     $canRetake = ($status === 'failed' || ($status === 'completed' && $quiz['attempt_count'] > 0));
+
+                    $subjectDisplay = !empty($quiz['subject']) ? $quiz['subject'] : 'General';
                 ?>
-                <div x-show="(filter === 'all' || filter === '<?= $status ?>') && ('<?= strtolower(htmlspecialchars($quiz['title'])) ?>'.includes(search.toLowerCase()))"
-                     class="bg-white border border-gray-200 rounded-xl overflow-hidden card-hover animate-fade-in-up <?= !$prerequisiteMet ? 'locked-quiz' : '' ?>">
+                <div 
+                    x-show="
+                        (filter === 'all' || filter === '<?= $status ?>') &&
+                        (selectedSubject === 'All' || selectedSubject === '<?= htmlspecialchars($subjectDisplay) ?>') &&
+                        ('<?= strtolower(htmlspecialchars($quiz['title'])) ?>'.includes(search.toLowerCase()))
+                    "
+                    x-cloak
+                    class="bg-white border border-gray-200 rounded-xl overflow-hidden card-hover animate-fade-in-up <?= !$prerequisiteMet ? 'locked-quiz' : '' ?>">
                     
                     <?php if (!$prerequisiteMet): ?>
                     <div class="locked-overlay"></div>
@@ -489,7 +510,6 @@ function calculatePercentage($score, $total) {
                         
                         <!-- Subject Badge -->
                         <?php 
-                        $subjectDisplay = !empty($quiz['subject']) ? $quiz['subject'] : 'General';
                         $subjectColors = [
                             'Anatomy' => 'bg-pink-100 text-pink-700',
                             'Physiology' => 'bg-green-100 text-green-700',
@@ -754,314 +774,11 @@ function calculatePercentage($score, $total) {
     </main>
 </div>
 
-<!-- ========================================== -->
-<!-- CHATBOT UI - COMPLETE VERSION - RIGHT SIDE -->
-<!-- ========================================== -->
-
-<!-- Quick Action Buttons (shown when chatbot is closed) -->
-<div id="quickActions" class="hidden">
-    <div class="bg-white rounded-2xl shadow-xl border border-gray-200 p-3 mb-3 max-w-xs">
-        <p class="text-xs text-gray-500 mb-2 font-medium">Quick Actions:</p>
-        <div class="flex flex-wrap gap-2">
-            <button onclick="quickQuestion('Show my progress')" class="px-3 py-1.5 bg-primary-50 text-primary-700 rounded-full text-xs font-medium hover:bg-primary-100 transition-colors flex items-center gap-1">
-                <i class="fas fa-chart-line text-xs"></i> My Progress
-            </button>
-            <button onclick="quickQuestion('Create flashcards')" class="px-3 py-1.5 bg-green-50 text-green-700 rounded-full text-xs font-medium hover:bg-green-100 transition-colors flex items-center gap-1">
-                <i class="fas fa-layer-group text-xs"></i> Flashcards
-            </button>
-            <button onclick="quickQuestion('Give me study tips')" class="px-3 py-1.5 bg-amber-50 text-amber-700 rounded-full text-xs font-medium hover:bg-amber-100 transition-colors flex items-center gap-1">
-                <i class="fas fa-lightbulb text-xs"></i> Study Tips
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- Chatbot Toggle Button -->
-<div id="chatbotContainer">
-    <button id="chatbotToggleBtn" onclick="toggleChatbot()" class="w-14 h-14 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center group">
-        <i id="chatbotIcon" class="fas fa-robot text-xl group-hover:scale-110 transition-transform"></i>
-    </button>
-</div>
-
-<!-- Chatbot Window -->
-<div id="chatbotWindow" class="hidden bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col" style="height: 500px;">
-    <!-- Chat Header -->
-    <div class="bg-gradient-to-r from-primary-600 to-primary-700 text-white px-4 py-3 flex items-center justify-between flex-shrink-0">
-        <div class="flex items-center space-x-3">
-            <div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                <i class="fas fa-robot text-lg"></i>
-            </div>
-            <div>
-                <h3 class="font-semibold text-sm">MedAce Assistant</h3>
-                <p class="text-xs text-primary-100 flex items-center">
-                    <span class="w-2 h-2 bg-green-400 rounded-full mr-1.5 animate-pulse"></span>
-                    Online
-                </p>
-            </div>
-        </div>
-        <button onclick="toggleChatbot()" class="w-8 h-8 hover:bg-white/20 rounded-full flex items-center justify-center transition-colors">
-            <i class="fas fa-times"></i>
-        </button>
-    </div>
-    
-    <!-- Quick Action Pills -->
-    <div class="px-4 py-2 border-b border-gray-100 flex-shrink-0">
-        <div class="flex gap-2 overflow-x-auto pb-1">
-            <button onclick="quickQuestion('Show my progress')" class="px-3 py-1 bg-primary-50 text-primary-700 rounded-full text-xs font-medium hover:bg-primary-100 transition-colors whitespace-nowrap flex items-center gap-1">
-                <i class="fas fa-chart-line"></i> My Progress
-            </button>
-            <button onclick="quickQuestion('Create flashcards')" class="px-3 py-1 bg-green-50 text-green-700 rounded-full text-xs font-medium hover:bg-green-100 transition-colors whitespace-nowrap flex items-center gap-1">
-                <i class="fas fa-layer-group"></i> Flashcards
-            </button>
-            <button onclick="quickQuestion('Give me study tips')" class="px-3 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-medium hover:bg-amber-100 transition-colors whitespace-nowrap flex items-center gap-1">
-                <i class="fas fa-lightbulb"></i> Study Tips
-            </button>
-        </div>
-    </div>
-    
-    <!-- Chat Messages -->
-    <div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-4" style="min-height: 0;">
-        <!-- Welcome Message -->
-        <div class="flex items-start space-x-2 message-slide-in">
-            <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <i class="fas fa-robot text-primary-600 text-sm"></i>
-            </div>
-            <div class="flex-1">
-                <div class="bg-gray-100 rounded-2xl rounded-tl-none px-4 py-3 shadow-sm">
-                    <p class="text-gray-800 text-sm">Hi <?= htmlspecialchars($student['firstname'] ?? 'there') ?>! 👋</p>
-                    <p class="text-gray-600 text-sm mt-1">I'm your AI study assistant. I can help you with:</p>
-                    <ul class="text-gray-600 text-sm mt-2 space-y-1">
-                        <li>• Flashcard quizzes</li>
-                        <li>• Track learning progress</li>
-                        <li>• Nursing questions</li>
-                        <li>• Study tips</li>
-                    </ul>
-                </div>
-                <span class="text-xs text-gray-500 mt-1 block">Just now</span>
-            </div>
-        </div>
-        
-        <!-- Typing Indicator (hidden by default) -->
-        <div id="typingIndicator" class="hidden flex items-start space-x-2">
-            <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <i class="fas fa-robot text-primary-600 text-sm"></i>
-            </div>
-            <div class="bg-gray-100 rounded-2xl rounded-tl-none px-4 py-3">
-                <div class="flex space-x-1">
-                    <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0ms;"></span>
-                    <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 150ms;"></span>
-                    <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 300ms;"></span>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Chat Input -->
-    <div class="p-3 border-t border-gray-200 bg-gray-50 flex-shrink-0">
-        <form id="chatForm" onsubmit="sendMessage(event)" class="flex items-end gap-2">
-            <div class="flex-1 relative">
-                <textarea 
-                    id="chatInput" 
-                    placeholder="Type your message..." 
-                    class="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none text-sm"
-                    rows="1"
-                    style="max-height: 120px;"
-                    onkeydown="handleInputKeydown(event)"
-                ></textarea>
-            </div>
-            <button type="submit" class="w-10 h-10 bg-primary-600 hover:bg-primary-700 text-white rounded-xl flex items-center justify-center transition-colors flex-shrink-0">
-                <i class="fas fa-paper-plane text-sm"></i>
-            </button>
-        </form>
-    </div>
-</div>
-
 <script>
     // ============================================
     // GLOBAL VARIABLES
     // ============================================
     let sidebarExpanded = false;
-    let chatbotOpen = false;
-    let messageHistory = [];
-
-    const API_CONFIG = {
-        url: '../config/chatbot_integration.php',
-        model: 'gpt-4o-nano',
-        maxTokens: 1024
-    };
-
-    // ============================================
-    // CHATBOT FUNCTIONS
-    // ============================================
-    function toggleChatbot() {
-        const chatWindow = document.getElementById('chatbotWindow');
-        const icon = document.getElementById('chatbotIcon');
-        const quickActions = document.getElementById('quickActions');
-        const chatbotContainer = document.getElementById('chatbotContainer');
-        
-        if (!chatWindow || !icon) {
-            console.error('Chatbot elements not found!');
-            return;
-        }
-        
-        chatbotOpen = !chatbotOpen;
-        
-        if (chatbotOpen) {
-            chatWindow.classList.remove('hidden');
-            chatWindow.classList.add('animate-scale-in');
-            icon.classList.remove('fa-robot');
-            icon.classList.add('fa-times');
-            if (quickActions) quickActions.classList.add('hidden');
-            
-            if (chatbotContainer && window.innerWidth <= 640) {
-                chatbotContainer.classList.add('chat-open');
-            }
-            
-            setTimeout(() => {
-                const input = document.getElementById('chatInput');
-                if (input) input.focus();
-            }, 300);
-        } else {
-            chatWindow.classList.add('hidden');
-            chatWindow.classList.remove('animate-scale-in');
-            icon.classList.remove('fa-times');
-            icon.classList.add('fa-robot');
-
-            if (chatbotContainer) {
-                chatbotContainer.classList.remove('chat-open');
-            }
-        }
-    }
-
-    function handleInputKeydown(event) {
-        const textarea = event.target;
-        textarea.style.height = 'auto';
-        textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
-        if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault();
-            sendMessage(event);
-        }
-    }
-
-    async function sendMessage(event) {
-        if (event && event.preventDefault) event.preventDefault();
-        
-        const input = document.getElementById('chatInput');
-        if (!input) return;
-        
-        const message = input.value.trim();
-        if (!message) return;
-        
-        addMessage(message, 'user');
-        input.value = '';
-        input.style.height = 'auto';
-        showTypingIndicator(true);
-        
-        try {
-            const response = await callChatAPI(message);
-            showTypingIndicator(false);
-            addMessage(response, 'bot');
-        } catch (error) {
-            showTypingIndicator(false);
-            addMessage('Sorry, I encountered an error: ' + error.message, 'bot', true);
-        }
-    }
-
-    function addMessage(text, sender, isError = false) {
-        const messagesContainer = document.getElementById('chatMessages');
-        if (!messagesContainer) return;
-        
-        const messageDiv = document.createElement('div');
-        const timestamp = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-        
-        if (sender === 'user') {
-            messageDiv.className = 'flex items-start space-x-2 justify-end message-slide-in mb-4';
-            messageDiv.innerHTML = `
-                <div class="flex-1 flex flex-col items-end">
-                    <div class="bg-primary-600 text-white rounded-2xl rounded-tr-none px-4 py-3 shadow-sm max-w-[85%]">
-                        <p class="text-sm break-words">${escapeHtml(text)}</p>
-                    </div>
-                    <span class="text-xs text-gray-500 mt-1">${timestamp}</span>
-                </div>
-                <div class="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center flex-shrink-0">
-                    <i class="fas fa-user text-white text-sm"></i>
-                </div>
-            `;
-        } else {
-            messageDiv.className = 'flex items-start space-x-2 message-slide-in mb-4';
-            messageDiv.innerHTML = `
-                <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
-                    <i class="fas fa-robot text-primary-600 text-sm"></i>
-                </div>
-                <div class="flex-1">
-                    <div class="bg-gray-100 ${isError ? 'border-2 border-red-300' : ''} rounded-2xl rounded-tl-none px-4 py-3 shadow-sm">
-                        <p class="text-gray-800 text-sm break-words whitespace-pre-wrap">${isError ? escapeHtml(text) : formatBotMessage(text)}</p>
-                    </div>
-                    <span class="text-xs text-gray-500 mt-1 block">${timestamp}</span>
-                </div>
-            `;
-        }
-        
-        messagesContainer.appendChild(messageDiv);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        messageHistory.push({ role: sender === 'user' ? 'user' : 'assistant', content: text });
-    }
-
-    function showTypingIndicator(show) {
-        const indicator = document.getElementById('typingIndicator');
-        const messagesContainer = document.getElementById('chatMessages');
-        if (!indicator) return;
-        
-        if (show) {
-            indicator.classList.remove('hidden');
-            if (messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        } else {
-            indicator.classList.add('hidden');
-        }
-    }
-
-    async function callChatAPI(userMessage) {
-        try {
-            const response = await fetch(API_CONFIG.url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: userMessage })
-            });
-
-            if (!response.ok) throw new Error(`API request failed: ${response.status}`);
-
-            const data = await response.json();
-            if (data.error) throw new Error(data.error);
-            if (data.reply) return data.reply;
-            throw new Error('Invalid API response format');
-        } catch (error) {
-            console.error('Chat API Error:', error);
-            throw error;
-        }
-    }
-
-    function quickQuestion(question) {
-        const input = document.getElementById('chatInput');
-        if (input) input.value = question;
-        if (!chatbotOpen) toggleChatbot();
-        setTimeout(() => {
-            const form = document.getElementById('chatForm');
-            if (form) form.dispatchEvent(new Event('submit'));
-        }, 300);
-    }
-
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    function formatBotMessage(text) {
-        text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-        text = text.replace(/^\d+\.\s+(.+)$/gm, '<div class="ml-2 mb-1">• $1</div>');
-        text = text.replace(/^[•\-]\s+(.+)$/gm, '<div class="ml-2 mb-1">• $1</div>');
-        return text;
-    }
 
     // ============================================
     // SIDEBAR FUNCTIONS
@@ -1113,7 +830,6 @@ function calculatePercentage($score, $total) {
             const sidebar = document.getElementById('sidebar');
             const mainContent = document.getElementById('main-content');
             const overlay = document.getElementById('sidebar-overlay');
-            const chatbotContainer = document.getElementById('chatbotContainer');
             
             if (window.innerWidth >= 1025) {
                 overlay.classList.add('hidden');
@@ -1136,14 +852,6 @@ function calculatePercentage($score, $total) {
                     document.body.classList.remove('sidebar-open');
                 }
             }
-            
-            if (chatbotContainer) {
-                if (window.innerWidth > 640) {
-                    chatbotContainer.classList.remove('chat-open');
-                } else if (chatbotOpen) {
-                    chatbotContainer.classList.add('chat-open');
-                }
-            }
         }, 250);
     });
 
@@ -1162,25 +870,14 @@ function calculatePercentage($score, $total) {
             mainContent.style.marginLeft = '0';
         }
 
-        // ✅ FIX: Restore proper toggle state on desktop
         sidebarExpanded = false;
-
-        setTimeout(() => {
-            if (!chatbotOpen) {
-                const quickActions = document.getElementById('quickActions');
-                if (quickActions) {
-                    quickActions.classList.remove('hidden');
-                    quickActions.classList.add('animate-fade-in-up');
-                }
-            }
-        }, 3000);
         
-        console.log('📋 Quizzes page initialized with chatbot');
+        console.log('📋 Quizzes page initialized');
     });
 
     document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && chatbotOpen) {
-            toggleChatbot();
+        if (e.key === 'Escape' && sidebarExpanded && window.innerWidth < 1025) {
+            closeSidebar();
         }
     });
 </script>

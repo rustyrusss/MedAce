@@ -1,17 +1,22 @@
 <?php
 /**
- * Chatbot Endpoint - Handles all chatbot requests
- * Enhanced with accurate progress calculations and comprehensive graphs
+ * Chatbot Endpoint - Complete Working Version
+ * Handles: Chat, Progress Analysis, Study Tips, Flashcards, Modules
  */
 
+// Disable error display, enable logging
 ini_set('display_errors', 0);
 error_reporting(0);
 ob_start();
 
+// Start session if not already started
 if (session_status() === PHP_SESSION_NONE) {
     @session_start();
 }
 
+/**
+ * Send JSON response and exit
+ */
 function sendJson($data, $code = 200) {
     ob_clean();
     header('Content-Type: application/json');
@@ -19,229 +24,46 @@ function sendJson($data, $code = 200) {
     die(json_encode($data));
 }
 
-// Security check
+// Security check - must be logged in as student
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
-    sendJson(['error' => 'Unauthorized'], 403);
+    sendJson(['error' => 'Unauthorized - Please log in'], 403);
 }
 
+// Only accept POST requests
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     sendJson(['error' => 'Method not allowed'], 405);
 }
 
-// Get input
+// Get and parse input
 $input = json_decode(file_get_contents("php://input"), true);
+if (!$input) {
+    sendJson(['error' => 'Invalid JSON'], 400);
+}
 
 $studentId = $_SESSION['user_id'];
-$action = $input["action"] ?? "chat";
-
-/**
- * ChatAPI Class - Included directly to avoid file path issues
- */
-class ChatAPI
-{
-    private $apiKey;
-    private $apiUrl = "https://api.openai.com/v1/chat/completions";
-    private $model = "gpt-3.5-turbo";
-
-    public function __construct()
-    {
-        // Try multiple sources for API key
-        $this->apiKey = getenv("API_KEY") ?: ($_ENV["API_KEY"] ?? ($_SERVER["API_KEY"] ?? null));
-        
-        if (!$this->apiKey) {
-            $this->apiKey = getenv("OPENAI_API_KEY") ?: ($_ENV["OPENAI_API_KEY"] ?? ($_SERVER["OPENAI_API_KEY"] ?? null));
-        }
-
-        // Manual .env load if still not found
-        if (!$this->apiKey && file_exists(__DIR__ . '/../.env')) {
-            $lines = file(__DIR__ . '/../.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-            foreach ($lines as $line) {
-                $line = trim($line);
-                if (empty($line) || $line[0] === '#') continue;
-                if (strpos($line, '=') !== false) {
-                    list($k, $v) = explode('=', $line, 2);
-                    $k = trim($k);
-                    $v = trim($v, " \t\n\r\0\x0B\"'");
-                    if ($k === 'API_KEY' || $k === 'OPENAI_API_KEY') {
-                        $this->apiKey = $v;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (!$this->apiKey) {
-            throw new Exception("API_KEY is missing. Please add it to your .env file.");
-        }
-    }
-
-    public function sendMessage($userMessage, $systemMessage = "You are a helpful assistant.", $maxTokens = 500)
-    {
-        $payload = [
-            "model" => $this->model,
-            "messages" => [
-                ["role" => "system", "content" => $systemMessage],
-                ["role" => "user", "content" => $userMessage]
-            ],
-            "max_tokens" => $maxTokens,
-            "temperature" => 0.8
-        ];
-
-        $ch = curl_init($this->apiUrl);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_HTTPHEADER => [
-                "Content-Type: application/json",
-                "Authorization: Bearer " . $this->apiKey
-            ],
-            CURLOPT_POSTFIELDS => json_encode($payload),
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_SSL_VERIFYPEER => true
-        ]);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
-
-        if ($error) {
-            return ["error" => "Connection failed: " . $error];
-        }
-
-        if (!$response) {
-            return ["error" => "No response from API"];
-        }
-
-        $json = json_decode($response, true);
-
-        if (!$json) {
-            return ["error" => "Invalid JSON response"];
-        }
-
-        if (isset($json["error"])) {
-            return ["error" => $json["error"]["message"] ?? "API error"];
-        }
-
-        if (isset($json["choices"][0]["message"]["content"])) {
-            return [
-                "success" => true,
-                "content" => trim($json["choices"][0]["message"]["content"])
-            ];
-        }
-
-        return ["error" => "Invalid API response format"];
-    }
-
-    private function getStudentProgress($conn, $studentId)
-    {
-        $data = [
-            'total_modules' => 0, 'completed_modules' => 0, 'active_modules' => 0,
-            'total_quizzes' => 0, 'completed_quizzes' => 0, 'passed_quizzes' => 0,
-            'failed_quizzes' => 0, 'average_score' => 0, 'weak_areas' => [], 'strong_areas' => []
-        ];
-
-        try {
-            $stmt = $conn->prepare("
-                SELECT COUNT(*) as total,
-                    SUM(CASE WHEN LOWER(status) = 'completed' THEN 1 ELSE 0 END) as completed,
-                    SUM(CASE WHEN LOWER(status) = 'in progress' THEN 1 ELSE 0 END) as active
-                FROM student_progress WHERE student_id = ?
-            ");
-            $stmt->execute([$studentId]);
-            $moduleStats = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if ($moduleStats) {
-                $data['total_modules'] = (int)($moduleStats['total'] ?? 0);
-                $data['completed_modules'] = (int)($moduleStats['completed'] ?? 0);
-                $data['active_modules'] = (int)($moduleStats['active'] ?? 0);
-            }
-
-            $stmt = $conn->prepare("
-                SELECT COUNT(DISTINCT quiz_id) as total,
-                    SUM(CASE WHEN LOWER(status) IN ('completed', 'passed') THEN 1 ELSE 0 END) as passed,
-                    SUM(CASE WHEN LOWER(status) = 'failed' THEN 1 ELSE 0 END) as failed,
-                    AVG(score) as avg_score
-                FROM quiz_attempts WHERE student_id = ?
-            ");
-            $stmt->execute([$studentId]);
-            $quizStats = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if ($quizStats) {
-                $data['total_quizzes'] = (int)($quizStats['total'] ?? 0);
-                $data['passed_quizzes'] = (int)($quizStats['passed'] ?? 0);
-                $data['failed_quizzes'] = (int)($quizStats['failed'] ?? 0);
-                $data['completed_quizzes'] = $data['passed_quizzes'] + $data['failed_quizzes'];
-                $data['average_score'] = round((float)($quizStats['avg_score'] ?? 0), 1);
-            }
-        } catch (Exception $e) {
-            // Return default data
-        }
-
-        return $data;
-    }
-
-    private function buildSystemPrompt($task, $studentName)
-    {
-        $baseName = $studentName ? " Student's name is $studentName." : "";
-
-        switch ($task) {
-            case "progress":
-                return "You are MedAce AI Assistant, a helpful nursing tutor.$baseName Analyze the student's progress data and provide personalized insights. Celebrate achievements, identify areas for improvement, and suggest next steps. Be encouraging and specific. Keep response under 200 words.";
-            case "flashcard":
-                return "You are MedAce AI Assistant, a nursing education expert.$baseName Create exactly 5 flashcards. Format: CARD [number]\nQ: [Question]\nA: [Answer]\n---";
-            default:
-                return "You are MedAce AI Assistant, a friendly nursing tutor.$baseName Be helpful, concise (under 150 words), and use nursing terminology appropriately.";
-        }
-    }
-
-    private function buildUserPrompt($task, $userMessage, $progressData)
-    {
-        if ($task === "progress") {
-            $context = "=== STUDENT PROGRESS ===\n";
-            $context .= "Modules: {$progressData['completed_modules']}/{$progressData['total_modules']} completed, {$progressData['active_modules']} in progress\n";
-            $context .= "Quizzes: {$progressData['passed_quizzes']} passed, {$progressData['failed_quizzes']} failed\n";
-            $context .= "Average Score: {$progressData['average_score']}%\n";
-            $context .= "=== END ===\n\n" . $userMessage;
-            return $context;
-        }
-        return $userMessage;
-    }
-
-    public function handleChatRequest($conn, $studentId, $userMessage, $task = "chat", $moduleId = null)
-    {
-        $studentName = "";
-        try {
-            $stmt = $conn->prepare("SELECT firstname FROM users WHERE id = ?");
-            $stmt->execute([$studentId]);
-            $user = $stmt->fetch(PDO::FETCH_ASSOC);
-            $studentName = $user['firstname'] ?? "";
-        } catch (Exception $e) {}
-
-        $progressData = $this->getStudentProgress($conn, $studentId);
-        $systemPrompt = $this->buildSystemPrompt($task, $studentName);
-        $userPrompt = $this->buildUserPrompt($task, $userMessage, $progressData);
-        
-        $maxTokens = $task === 'progress' ? 600 : 400;
-        $response = $this->sendMessage($userPrompt, $systemPrompt, $maxTokens);
-
-        if (isset($response['error'])) {
-            return ['error' => $response['error']];
-        }
-
-        return ['reply' => $response['content'], 'task' => $task];
-    }
-}
+$action = $input['action'] ?? 'chat';
 
 try {
     // Load database connection
     require_once __DIR__ . '/db_conn.php';
-
-    // Handle different actions
+    
+    // Load OpenAI API key from multiple sources
+    $apiKey = loadApiKey();
+    
+    // ============================================
+    // HANDLE DIFFERENT ACTIONS
+    // ============================================
+    
     switch ($action) {
-        case "get_modules":
+        
+        // GET MODULES LIST
+        case 'get_modules':
             $stmt = $conn->prepare("
-                SELECT m.id, m.title, m.description, COALESCE(sp.status, 'Pending') AS status
+                SELECT 
+                    m.id, 
+                    m.title, 
+                    m.description,
+                    COALESCE(sp.status, 'Pending') AS status
                 FROM modules m
                 LEFT JOIN student_progress sp ON sp.module_id = m.id AND sp.student_id = ?
                 WHERE m.status IN ('active', 'published')
@@ -249,368 +71,453 @@ try {
             ");
             $stmt->execute([$studentId]);
             $modules = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            sendJson(['success' => true, 'modules' => $modules]);
-            break;
-
-        case "get_flashcard_questions":
-            $quizId = intval($input["quiz_id"] ?? 0);
-            $moduleId = intval($input["module_id"] ?? 0);
-            $limit = max(1, min(50, intval($input["limit"] ?? 20)));
             
-            if (!$quizId && !$moduleId) {
-                sendJson(['error' => 'Missing quiz_id or module_id'], 400);
-            }
-            
-            if ($quizId > 0) {
-                $stmt = $conn->prepare("SELECT id, title, description FROM quizzes WHERE id = ?");
-                $stmt->execute([$quizId]);
-                $source = $stmt->fetch(PDO::FETCH_ASSOC);
-                if (!$source) sendJson(['error' => 'Quiz not found'], 404);
-                
-                $stmt = $conn->prepare("SELECT id, question_text, question_type, points FROM questions WHERE quiz_id = ? AND question_type IN ('multiple_choice', 'true_false') ORDER BY RAND() LIMIT {$limit}");
-                $stmt->execute([$quizId]);
-                $sourceInfo = ['type' => 'quiz', 'id' => $source['id'], 'title' => $source['title']];
-            } else {
-                $stmt = $conn->prepare("SELECT id, title, description FROM modules WHERE id = ?");
-                $stmt->execute([$moduleId]);
-                $source = $stmt->fetch(PDO::FETCH_ASSOC);
-                if (!$source) sendJson(['error' => 'Module not found'], 404);
-                
-                $stmt = $conn->prepare("SELECT q.id, q.question_text, q.question_type, q.points FROM questions q JOIN quizzes qz ON q.quiz_id = qz.id WHERE qz.module_id = ? AND q.question_type IN ('multiple_choice', 'true_false') ORDER BY RAND() LIMIT {$limit}");
-                $stmt->execute([$moduleId]);
-                $sourceInfo = ['type' => 'module', 'id' => $source['id'], 'title' => $source['title']];
-            }
-            
-            $questions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            $flashcards = [];
-            
-            foreach ($questions as $q) {
-                $stmt = $conn->prepare("SELECT answer_text, is_correct FROM answers WHERE question_id = ?");
-                $stmt->execute([$q['id']]);
-                $answers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                
-                $choices = []; $correct = [];
-                foreach ($answers as $a) {
-                    $choices[] = $a['answer_text'];
-                    if ($a['is_correct']) $correct[] = $a['answer_text'];
-                }
-                
-                $flashcards[] = [
-                    'id' => $q['id'], 'question' => $q['question_text'],
-                    'choices' => $choices, 'answer' => implode(", ", $correct),
-                    'correct_answers' => $correct
-                ];
-            }
-            
-            sendJson(['success' => true, 'source' => $sourceInfo, 'flashcards' => $flashcards, 'total_questions' => count($flashcards)]);
-            break;
-
-        case "get_progress":
-            // ACCURATE Progress Calculation
-            
-            // 1. Get ALL available modules (not just enrolled ones)
-            $stmt = $conn->prepare("
-                SELECT COUNT(*) as total_available_modules
-                FROM modules 
-                WHERE status IN ('active', 'published')
-            ");
-            $stmt->execute();
-            $availableModules = $stmt->fetch(PDO::FETCH_ASSOC);
-            $totalAvailableModules = (int)($availableModules['total_available_modules'] ?? 0);
-
-            // 2. Get student's module progress
-            $stmt = $conn->prepare("
-                SELECT 
-                    COUNT(*) as enrolled_modules,
-                    SUM(CASE WHEN LOWER(status) = 'completed' THEN 1 ELSE 0 END) as completed_modules,
-                    SUM(CASE WHEN LOWER(status) = 'in progress' THEN 1 ELSE 0 END) as in_progress_modules,
-                    SUM(CASE WHEN LOWER(status) = 'pending' THEN 1 ELSE 0 END) as pending_modules
-                FROM student_progress 
-                WHERE student_id = ?
-            ");
-            $stmt->execute([$studentId]);
-            $moduleStats = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            $enrolledModules = (int)($moduleStats['enrolled_modules'] ?? 0);
-            $completedModules = (int)($moduleStats['completed_modules'] ?? 0);
-            $inProgressModules = (int)($moduleStats['in_progress_modules'] ?? 0);
-            $pendingModules = (int)($moduleStats['pending_modules'] ?? 0);
-            
-            // Calculate not started modules
-            $notStartedModules = $totalAvailableModules - $enrolledModules;
-
-            // 3. Get ALL quizzes from enrolled modules
-            $stmt = $conn->prepare("
-                SELECT COUNT(DISTINCT q.id) as total_available_quizzes
-                FROM quizzes q
-                JOIN student_progress sp ON q.module_id = sp.module_id
-                WHERE sp.student_id = ?
-            ");
-            $stmt->execute([$studentId]);
-            $availableQuizzes = $stmt->fetch(PDO::FETCH_ASSOC);
-            $totalAvailableQuizzes = (int)($availableQuizzes['total_available_quizzes'] ?? 0);
-
-            // 4. Get quiz attempts (count each quiz once - get latest attempt)
-            $stmt = $conn->prepare("
-                SELECT 
-                    quiz_id,
-                    MAX(id) as latest_attempt_id,
-                    MAX(score) as best_score
-                FROM quiz_attempts 
-                WHERE student_id = ?
-                GROUP BY quiz_id
-            ");
-            $stmt->execute([$studentId]);
-            $latestAttempts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            $attemptedQuizIds = array_column($latestAttempts, 'quiz_id');
-
-            // 5. Get detailed quiz statistics (only latest attempts)
-            if (!empty($attemptedQuizIds)) {
-                $placeholders = implode(',', array_fill(0, count($attemptedQuizIds), '?'));
-                $stmt = $conn->prepare("
-                    SELECT 
-                        qa.quiz_id,
-                        qa.score,
-                        qa.status,
-                        qa.completed_at
-                    FROM quiz_attempts qa
-                    INNER JOIN (
-                        SELECT quiz_id, MAX(id) as max_id
-                        FROM quiz_attempts
-                        WHERE student_id = ?
-                        GROUP BY quiz_id
-                    ) latest ON qa.id = latest.max_id
-                    WHERE qa.quiz_id IN ($placeholders)
-                ");
-                $params = array_merge([$studentId], $attemptedQuizIds);
-                $stmt->execute($params);
-                $quizDetails = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            } else {
-                $quizDetails = [];
-            }
-
-            // Calculate quiz stats
-            $passedQuizzes = 0;
-            $failedQuizzes = 0;
-            $totalScore = 0;
-            $scoreCount = 0;
-            
-            foreach ($quizDetails as $quiz) {
-                if (strtolower($quiz['status']) === 'passed') {
-                    $passedQuizzes++;
-                } elseif (strtolower($quiz['status']) === 'failed') {
-                    $failedQuizzes++;
-                }
-                
-                if ($quiz['score'] !== null) {
-                    $totalScore += (float)$quiz['score'];
-                    $scoreCount++;
-                }
-            }
-            
-            $attemptedQuizzes = count($quizDetails);
-            $notAttemptedQuizzes = $totalAvailableQuizzes - $attemptedQuizzes;
-            $avgScore = $scoreCount > 0 ? round($totalScore / $scoreCount, 1) : 0;
-
-            // 6. Calculate overall completion rate
-            $totalItems = $totalAvailableModules + $totalAvailableQuizzes;
-            $completedItems = $completedModules + $passedQuizzes;
-            $completionRate = $totalItems > 0 ? round(($completedItems / $totalItems) * 100, 1) : 0;
-
-            // 7. Graph Data: Daily Activity (Last 30 days)
-            $stmt = $conn->prepare("
-                SELECT DATE(completed_at) as date, 
-                       COUNT(*) as quiz_count,
-                       AVG(score) as avg_score
-                FROM quiz_attempts
-                WHERE student_id = ? 
-                  AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-                GROUP BY DATE(completed_at)
-                ORDER BY date ASC
-            ");
-            $stmt->execute([$studentId]);
-            $dailyActivity = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // 8. Graph Data: Weekly Progress (Last 12 weeks)
-            $stmt = $conn->prepare("
-                SELECT YEARWEEK(completed_at, 1) as week,
-                       DATE(DATE_SUB(completed_at, INTERVAL WEEKDAY(completed_at) DAY)) as week_start,
-                       COUNT(*) as quiz_count,
-                       AVG(score) as avg_score,
-                       SUM(CASE WHEN LOWER(status) = 'passed' THEN 1 ELSE 0 END) as passed_count
-                FROM quiz_attempts
-                WHERE student_id = ? 
-                  AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 12 WEEK)
-                GROUP BY YEARWEEK(completed_at, 1), week_start
-                ORDER BY week ASC
-            ");
-            $stmt->execute([$studentId]);
-            $weeklyProgress = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // 9. Graph Data: Monthly Performance (Last 6 months)
-            $stmt = $conn->prepare("
-                SELECT DATE_FORMAT(completed_at, '%Y-%m') as month,
-                       DATE_FORMAT(completed_at, '%b %Y') as month_label,
-                       COUNT(*) as quiz_count,
-                       AVG(score) as avg_score,
-                       SUM(CASE WHEN LOWER(status) = 'passed' THEN 1 ELSE 0 END) as passed_count,
-                       SUM(CASE WHEN LOWER(status) = 'failed' THEN 1 ELSE 0 END) as failed_count
-                FROM quiz_attempts
-                WHERE student_id = ? 
-                  AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
-                GROUP BY DATE_FORMAT(completed_at, '%Y-%m'), month_label
-                ORDER BY month ASC
-            ");
-            $stmt->execute([$studentId]);
-            $monthlyPerformance = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // 10. Graph Data: Score Distribution
-            $stmt = $conn->prepare("
-                SELECT 
-                    CASE 
-                        WHEN score >= 90 THEN '90-100'
-                        WHEN score >= 80 THEN '80-89'
-                        WHEN score >= 70 THEN '70-79'
-                        WHEN score >= 60 THEN '60-69'
-                        ELSE 'Below 60'
-                    END as score_range,
-                    COUNT(*) as count
-                FROM quiz_attempts
-                WHERE student_id = ?
-                GROUP BY score_range
-                ORDER BY score_range DESC
-            ");
-            $stmt->execute([$studentId]);
-            $scoreDistribution = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // 11. Performance by Module
-            $stmt = $conn->prepare("
-                SELECT m.title as module_title, 
-                       COUNT(DISTINCT qa.quiz_id) as quizzes_taken,
-                       AVG(qa.score) as avg_score,
-                       SUM(CASE WHEN LOWER(qa.status) = 'passed' THEN 1 ELSE 0 END) as passed_count
-                FROM quiz_attempts qa
-                JOIN quizzes q ON qa.quiz_id = q.id
-                JOIN modules m ON q.module_id = m.id
-                WHERE qa.student_id = ?
-                GROUP BY m.id, m.title
-                ORDER BY avg_score DESC
-            ");
-            $stmt->execute([$studentId]);
-            $performanceByModule = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // 12. Recent Activity
-            $stmt = $conn->prepare("
-                SELECT qa.quiz_id, q.title as quiz_title, qa.score, qa.status, 
-                       qa.completed_at, m.title as module_title
-                FROM quiz_attempts qa
-                JOIN quizzes q ON qa.quiz_id = q.id
-                LEFT JOIN modules m ON q.module_id = m.id
-                WHERE qa.student_id = ?
-                ORDER BY qa.completed_at DESC
-                LIMIT 10
-            ");
-            $stmt->execute([$studentId]);
-            $recentActivity = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // 13. Module Details
-            $stmt = $conn->prepare("
-                SELECT m.id, m.title, COALESCE(sp.status, 'Not Started') as status, 
-                       sp.progress_percentage, sp.started_at, sp.completed_at
-                FROM modules m
-                LEFT JOIN student_progress sp ON sp.module_id = m.id AND sp.student_id = ?
-                WHERE m.status IN ('active', 'published')
-                ORDER BY m.display_order ASC
-            ");
-            $stmt->execute([$studentId]);
-            $moduleDetails = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // Build response with accurate calculations
             sendJson([
                 'success' => true,
-                'progress' => [
-                    'overview' => [
-                        'completion_rate' => $completionRate,
-                        'total_items' => $totalItems,
-                        'completed_items' => $completedItems
-                    ],
-                    'modules' => [
-                        'total_available' => $totalAvailableModules,
-                        'enrolled' => $enrolledModules,
-                        'completed' => $completedModules,
-                        'in_progress' => $inProgressModules,
-                        'pending' => $pendingModules,
-                        'not_started' => $notStartedModules,
-                        'completion_percentage' => $totalAvailableModules > 0 ? round(($completedModules / $totalAvailableModules) * 100, 1) : 0,
-                        'details' => $moduleDetails
-                    ],
-                    'quizzes' => [
-                        'total_available' => $totalAvailableQuizzes,
-                        'attempted' => $attemptedQuizzes,
-                        'not_attempted' => $notAttemptedQuizzes,
-                        'passed' => $passedQuizzes,
-                        'failed' => $failedQuizzes,
-                        'avg_score' => $avgScore,
-                        'pass_rate' => $attemptedQuizzes > 0 ? round(($passedQuizzes / $attemptedQuizzes) * 100, 1) : 0
-                    ],
-                    'performance_by_module' => $performanceByModule,
-                    'recent_activity' => $recentActivity,
-                    'strengths' => array_slice($performanceByModule, 0, 3),
-                    'needs_improvement' => array_slice(array_reverse($performanceByModule), 0, 3),
-                    'graphs' => [
-                        'daily_activity' => $dailyActivity,
-                        'weekly_progress' => $weeklyProgress,
-                        'monthly_performance' => $monthlyPerformance,
-                        'score_distribution' => $scoreDistribution
-                    ]
-                ]
+                'modules' => $modules
             ]);
             break;
-
-        case "chat":
-        case "progress":
-        case "flashcard":
-            // Load dotenv if available
-            if (file_exists(__DIR__ . "/../vendor/autoload.php")) {
-                require_once __DIR__ . "/../vendor/autoload.php";
-                if (class_exists('Dotenv\Dotenv')) {
-                    $dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . "/../");
-                    $dotenv->safeLoad();
-                }
-            }
-            
+        
+        // GET PROGRESS DATA
+        case 'get_progress':
+            $progressData = getStudentProgress($conn, $studentId);
+            sendJson([
+                'success' => true,
+                'progress' => $progressData
+            ]);
+            break;
+        
+        // GET DAILY TIP
+        case 'get_daily_tip':
             try {
-                $chatAPI = new ChatAPI();
+                $tip = $conn->query("SELECT tip_text FROM nursing_tips ORDER BY RAND() LIMIT 1")->fetchColumn();
+                sendJson([
+                    'success' => true,
+                    'tip' => $tip ?: 'Stay consistent with your studies and practice regularly!'
+                ]);
             } catch (Exception $e) {
-                sendJson(['error' => $e->getMessage()], 500);
+                sendJson([
+                    'success' => true,
+                    'tip' => 'Stay consistent with your studies and practice regularly!'
+                ]);
             }
-            
-            $userMessage = trim($input["message"] ?? '');
-            if (empty($userMessage)) {
-                $userMessage = ($action === 'progress') 
-                    ? 'Analyze my learning progress and give me personalized recommendations.'
-                    : '';
-                if (empty($userMessage)) sendJson(['error' => 'Message is required'], 400);
-            }
-
-            $task = $input["task"] ?? $action;
-            $moduleId = $input["module_id"] ?? null;
-
-            $result = $chatAPI->handleChatRequest($conn, $studentId, $userMessage, $task, $moduleId);
-
-            if (isset($result['error'])) {
-                sendJson(['error' => $result['error']], 500);
-            }
-
+            break;
+        
+        // ANALYZE PROGRESS (AI-powered)
+        case 'analyze_progress':
+            $message = $input['message'] ?? 'Analyze my learning progress and give me personalized recommendations.';
+            $result = analyzeProgressWithAI($conn, $studentId, $apiKey, $message);
             sendJson($result);
             break;
-
+        
+        // GET STUDY TIPS (AI-powered)
+        case 'get_study_tips':
+            $message = $input['message'] ?? 'Give me 5 personalized study tips based on my progress.';
+            $result = getStudyTipsWithAI($conn, $studentId, $apiKey, $message);
+            sendJson($result);
+            break;
+        
+        // CHAT (general AI chat)
+        case 'chat':
+            $message = trim($input['message'] ?? '');
+            
+            if (empty($message)) {
+                sendJson(['error' => 'Message is required'], 400);
+            }
+            
+            // Detect if this is a progress analysis request
+            if (preg_match('/(analyze|progress|insight|recommend|Total=|Completed=)/i', $message)) {
+                $result = analyzeProgressWithAI($conn, $studentId, $apiKey, $message);
+            }
+            // Detect if this is a study tips request
+            elseif (preg_match('/(tip|tips|study|advice|help me study)/i', $message)) {
+                $result = getStudyTipsWithAI($conn, $studentId, $apiKey, $message);
+            }
+            // General chat
+            else {
+                $result = handleGeneralChat($conn, $studentId, $apiKey, $message);
+            }
+            
+            sendJson($result);
+            break;
+        
         default:
             sendJson(['error' => 'Invalid action: ' . $action], 400);
     }
-
+    
 } catch (PDOException $e) {
-    sendJson(['error' => 'Database error'], 500);
+    error_log("Database error in chatbot_endpoint: " . $e->getMessage());
+    sendJson(['error' => 'Database error occurred'], 500);
 } catch (Exception $e) {
-    sendJson(['error' => $e->getMessage()], 500);
+    error_log("Server error in chatbot_endpoint: " . $e->getMessage());
+    sendJson(['error' => 'Server error: ' . $e->getMessage()], 500);
+}
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+/**
+ * Load OpenAI API key from multiple sources
+ */
+function loadApiKey() {
+    $apiKey = null;
+    
+    // Try env.php first
+    if (file_exists(__DIR__ . '/env.php')) {
+        require_once __DIR__ . '/env.php';
+        if (defined('OPENAI_API_KEY')) {
+            $apiKey = OPENAI_API_KEY;
+        }
+    }
+    
+    // Try environment variables
+    if (!$apiKey) {
+        $apiKey = getenv("OPENAI_API_KEY") ?: ($_ENV["OPENAI_API_KEY"] ?? ($_SERVER["OPENAI_API_KEY"] ?? null));
+    }
+    
+    // Try .env file
+    if (!$apiKey && file_exists(__DIR__ . '/../.env')) {
+        $lines = file(__DIR__ . '/../.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (empty($line) || $line[0] === '#') continue;
+            if (strpos($line, '=') !== false) {
+                list($k, $v) = explode('=', $line, 2);
+                $k = trim($k);
+                $v = trim($v, " \t\n\r\0\x0B\"'");
+                if ($k === 'OPENAI_API_KEY' || $k === 'API_KEY') {
+                    $apiKey = $v;
+                    break;
+                }
+            }
+        }
+    }
+    
+    return $apiKey;
+}
+
+/**
+ * Get comprehensive student progress data
+ */
+function getStudentProgress($conn, $studentId) {
+    $data = [
+        'modules' => [
+            'total_available' => 0,
+            'completed' => 0,
+            'in_progress' => 0,
+            'pending' => 0
+        ],
+        'quizzes' => [
+            'total_available' => 0,
+            'passed' => 0,
+            'failed' => 0,
+            'pending' => 0
+        ],
+        'overall_percent' => 0,
+        'total_items' => 0,
+        'completed_items' => 0
+    ];
+    
+    try {
+        // Get module stats
+        $stmt = $conn->prepare("
+            SELECT 
+                COUNT(DISTINCT m.id) as total,
+                SUM(CASE WHEN sp.status = 'Completed' THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN sp.status = 'In Progress' THEN 1 ELSE 0 END) as in_progress
+            FROM modules m
+            LEFT JOIN student_progress sp ON m.id = sp.module_id AND sp.student_id = ?
+        ");
+        $stmt->execute([$studentId]);
+        $moduleStats = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        $data['modules']['total_available'] = (int)$moduleStats['total'];
+        $data['modules']['completed'] = (int)$moduleStats['completed'];
+        $data['modules']['in_progress'] = (int)$moduleStats['in_progress'];
+        $data['modules']['pending'] = $data['modules']['total_available'] - $data['modules']['completed'] - $data['modules']['in_progress'];
+        
+        // Get quiz stats
+        $stmt = $conn->prepare("
+            SELECT 
+                COUNT(DISTINCT q.id) as total,
+                SUM(CASE WHEN qa.status = 'Passed' THEN 1 ELSE 0 END) as passed,
+                SUM(CASE WHEN qa.status = 'Failed' THEN 1 ELSE 0 END) as failed
+            FROM quizzes q
+            LEFT JOIN (
+                SELECT quiz_id, student_id, status, MAX(score) as score
+                FROM quiz_attempts
+                WHERE student_id = ?
+                GROUP BY quiz_id
+            ) qa ON q.id = qa.quiz_id
+        ");
+        $stmt->execute([$studentId]);
+        $quizStats = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        $data['quizzes']['total_available'] = (int)$quizStats['total'];
+        $data['quizzes']['passed'] = (int)$quizStats['passed'];
+        $data['quizzes']['failed'] = (int)$quizStats['failed'];
+        $data['quizzes']['pending'] = $data['quizzes']['total_available'] - $data['quizzes']['passed'] - $data['quizzes']['failed'];
+        
+        // Calculate overall progress
+        $data['total_items'] = $data['modules']['total_available'] + $data['quizzes']['total_available'];
+        $data['completed_items'] = $data['modules']['completed'] + $data['quizzes']['passed'];
+        $data['overall_percent'] = $data['total_items'] > 0 ? round(($data['completed_items'] / $data['total_items']) * 100) : 0;
+        
+    } catch (Exception $e) {
+        error_log("Progress data error: " . $e->getMessage());
+    }
+    
+    return $data;
+}
+
+/**
+ * Analyze progress with AI
+ */
+function analyzeProgressWithAI($conn, $studentId, $apiKey, $message) {
+    // Get progress data
+    $progressData = getStudentProgress($conn, $studentId);
+    $modules = $progressData['modules'];
+    $quizzes = $progressData['quizzes'];
+    
+    // Get student name
+    $stmt = $conn->prepare("SELECT firstname FROM users WHERE id = ?");
+    $stmt->execute([$studentId]);
+    $studentName = $stmt->fetchColumn() ?: 'Student';
+    
+    // Build detailed analysis context
+    $context = "Analyze this nursing student's ({$studentName}) learning progress:\n\n";
+    $context .= "**Overall Statistics:**\n";
+    $context .= "- Overall Completion: {$progressData['overall_percent']}%\n";
+    $context .= "- Total Items: {$progressData['total_items']} (Completed: {$progressData['completed_items']})\n\n";
+    
+    $context .= "**Module Progress:**\n";
+    $context .= "- Total: {$modules['total_available']}\n";
+    $context .= "- Completed: {$modules['completed']}\n";
+    $context .= "- In Progress: {$modules['in_progress']}\n";
+    $context .= "- Pending: {$modules['pending']}\n\n";
+    
+    $context .= "**Quiz Performance:**\n";
+    $context .= "- Total: {$quizzes['total_available']}\n";
+    $context .= "- Passed: {$quizzes['passed']}\n";
+    $context .= "- Failed: {$quizzes['failed']}\n";
+    $context .= "- Pending: {$quizzes['pending']}\n\n";
+    
+    $context .= "User request: {$message}\n\n";
+    $context .= "Provide a comprehensive analysis with:\n";
+    $context .= "1. **Strengths** - What they're doing well\n";
+    $context .= "2. **Areas for Improvement** - Specific weaknesses\n";
+    $context .= "3. **Recommendations** - 3-5 actionable next steps\n";
+    $context .= "4. **Encouragement** - Motivating message\n\n";
+    $context .= "Use the actual numbers. Be specific, encouraging, and conversational.";
+    
+    $systemPrompt = "You are MedAce Assistant, an expert nursing education AI. Provide detailed, personalized progress analysis based on actual student data. Use bold headers (**Header:**) and bullet points. Be encouraging and specific. Keep under 300 words.";
+    
+    // Call AI or return fallback
+    if (empty($apiKey)) {
+        return [
+            'success' => true,
+            'reply' => generateProgressFallback($progressData, $studentName),
+            'progress_data' => $progressData
+        ];
+    }
+    
+    $response = callOpenAI($apiKey, $systemPrompt, $context);
+    
+    return [
+        'success' => true,
+        'reply' => $response,
+        'analysis' => $response,
+        'progress_data' => $progressData
+    ];
+}
+
+/**
+ * Get study tips with AI
+ */
+function getStudyTipsWithAI($conn, $studentId, $apiKey, $message) {
+    // Get progress data
+    $progressData = getStudentProgress($conn, $studentId);
+    $modules = $progressData['modules'];
+    $quizzes = $progressData['quizzes'];
+    
+    // Build context
+    $context = "Generate personalized study tips for this nursing student:\n\n";
+    $context .= "**Progress Data:**\n";
+    $context .= "- Overall Progress: {$progressData['overall_percent']}%\n";
+    $context .= "- Modules: {$modules['completed']}/{$modules['total_available']} completed\n";
+    $context .= "- Quizzes: {$quizzes['passed']} passed, {$quizzes['failed']} failed\n\n";
+    $context .= "User request: {$message}\n\n";
+    $context .= "Provide 5 specific, actionable study tips based on their progress. Be encouraging and practical.";
+    
+    $systemPrompt = "You are MedAce Assistant, an expert nursing education AI. Generate personalized study tips based on student progress. Be specific and actionable. Format with numbered points. Keep under 250 words.";
+    
+    // Call AI or return fallback
+    if (empty($apiKey)) {
+        return [
+            'success' => true,
+            'reply' => generateStudyTipsFallback($progressData),
+            'progress_summary' => [
+                'overall_percent' => $progressData['overall_percent'],
+                'avg_score' => $quizzes['avg_score']
+            ]
+        ];
+    }
+    
+    $response = callOpenAI($apiKey, $systemPrompt, $context);
+    
+    return [
+        'success' => true,
+        'reply' => $response,
+        'tips' => $response,
+        'progress_summary' => [
+            'overall_percent' => $progressData['overall_percent']
+        ]
+    ];
+}
+
+/**
+ * Handle general chat
+ */
+function handleGeneralChat($conn, $studentId, $apiKey, $message) {
+    // Get progress for context
+    $progressData = getStudentProgress($conn, $studentId);
+    
+    $context = "Student Progress: {$progressData['overall_percent']}% overall, ";
+    $context .= "{$progressData['modules']['completed']} modules completed, ";
+    $context .= "{$progressData['quizzes']['passed']} quizzes passed\n\n";
+    $context .= "User message: {$message}";
+    
+    $systemPrompt = "You are MedAce Assistant, a helpful nursing education AI. Answer questions about nursing topics, study strategies, and learning techniques. Be concise (under 150 words), helpful, and encouraging.";
+    
+    // Call AI or return fallback
+    if (empty($apiKey)) {
+        return [
+            'success' => true,
+            'reply' => "I'm here to help with your nursing studies! I can analyze your progress, provide study tips, or answer questions. **Note:** For AI-powered responses, configure the OpenAI API key in `/config/env.php`. What would you like to know?"
+        ];
+    }
+    
+    $response = callOpenAI($apiKey, $systemPrompt, $context);
+    
+    return [
+        'success' => true,
+        'reply' => $response
+    ];
+}
+
+/**
+ * Call OpenAI API
+ */
+function callOpenAI($apiKey, $systemPrompt, $userMessage) {
+    $url = 'https://api.openai.com/v1/chat/completions';
+    
+    $data = [
+        'model' => 'gpt-3.5-turbo',
+        'messages' => [
+            ['role' => 'system', 'content' => $systemPrompt],
+            ['role' => 'user', 'content' => $userMessage]
+        ],
+        'max_tokens' => 800,
+        'temperature' => 0.8
+    ];
+    
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'Authorization: Bearer ' . $apiKey
+    ]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+    
+    // Log errors
+    if ($httpCode !== 200) {
+        error_log("OpenAI API Error - HTTP {$httpCode}: {$response}");
+        return "I apologize, but I'm having trouble connecting to the AI service right now. Please try again in a moment.";
+    }
+    
+    $result = json_decode($response, true);
+    
+    if (isset($result['choices'][0]['message']['content'])) {
+        return $result['choices'][0]['message']['content'];
+    }
+    
+    error_log("OpenAI API unexpected response: " . json_encode($result));
+    return "I apologize, but I couldn't generate a response. Please try again.";
+}
+
+/**
+ * Generate progress analysis fallback (when AI unavailable)
+ */
+function generateProgressFallback($progressData, $studentName) {
+    $modules = $progressData['modules'];
+    $quizzes = $progressData['quizzes'];
+    $overall = $progressData['overall_percent'];
+    
+    $response = "Hi {$studentName}! Here's your progress analysis:\n\n";
+    $response .= "**Overall Progress: {$overall}%**\n\n";
+    
+    $response .= "**📚 Modules:**\n";
+    $response .= "• Completed: {$modules['completed']}/{$modules['total_available']}\n";
+    $response .= "• In Progress: {$modules['in_progress']}\n";
+    $response .= "• Pending: {$modules['pending']}\n\n";
+    
+    $response .= "**📝 Quizzes:**\n";
+    $response .= "• Passed: {$quizzes['passed']}\n";
+    $response .= "• Failed: {$quizzes['failed']}\n\n";
+    
+    if ($overall >= 70) {
+        $response .= "**Great progress!** You're on track. ";
+    } elseif ($overall >= 40) {
+        $response .= "**Good effort!** Keep building momentum. ";
+    } else {
+        $response .= "**Let's build momentum!** ";
+    }
+    
+    if ($quizzes['failed'] > 0) {
+        $response .= "Consider reviewing topics from failed quizzes. ";
+    }
+    
+    if ($modules['in_progress'] > 0) {
+        $response .= "Focus on completing your in-progress modules.\n\n";
+    }
+    
+    $response .= "\n**Note:** For AI-powered personalized analysis, configure OpenAI API key in `/config/env.php`.";
+    
+    return $response;
+}
+
+/**
+ * Generate study tips fallback (when AI unavailable)
+ */
+function generateStudyTipsFallback($progressData) {
+    $quizzes = $progressData['quizzes'];
+    $overall = $progressData['overall_percent'];
+    
+    $response = "Here are personalized study tips based on your progress:\n\n";
+    
+    if ($overall < 50) {
+        $response .= "1. **Active Recall**: Test yourself regularly instead of just re-reading\n";
+        $response .= "2. **Spaced Repetition**: Review material at increasing intervals\n";
+        $response .= "3. **Practice Questions**: Focus heavily on practice problems\n";
+        $response .= "4. **Study Groups**: Discuss difficult concepts with peers\n";
+        $response .= "5. **Break It Down**: Study in 25-minute focused sessions\n";
+    } else {
+        $response .= "1. **Clinical Application**: Connect concepts to real scenarios\n";
+        $response .= "2. **Teach Others**: Explain concepts to solidify understanding\n";
+        $response .= "3. **Advanced Practice**: Challenge yourself with complex questions\n";
+        $response .= "4. **Integration**: Link new topics with previously learned material\n";
+        $response .= "5. **Review Weak Areas**: Target any remaining gaps\n";
+    }
+    
+    $response .= "\n**Note:** For personalized AI-powered tips, configure OpenAI API key in `/config/env.php`.";
+    
+    return $response;
 }
